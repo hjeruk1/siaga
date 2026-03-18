@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  siaga:
+    build: .
+    container_name: siaga-app
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    volumes:
+      # Database disimpan di luar container agar tidak hilang saat update
+      - /mnt/main/app-config/siaga/db:/data
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - DB_PATH=/data/siaga.db
+      # GANTI JWT_SECRET dengan string acak yang kuat!
+      - JWT_SECRET=01fad1a17d8c782206ee31a7f3b781ada6e14d1c82f87e71cb444482eff2fbfa9bbbf1b4587033de3a0d3794d250303e
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3001/api/kelas"]
+      interval: 30s
+      timeout: 10s
+      retries: 3

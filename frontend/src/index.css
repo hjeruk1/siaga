@@ -1,0 +1,8 @@
+@tailwind base;@tailwind components;@tailwind utilities;
+*{font-family:'DM Sans',sans-serif;}
+@keyframes slideUp{from{transform:translateY(16px);opacity:0}to{transform:translateY(0);opacity:1}}
+@keyframes bounceIn{0%{transform:scale(.85);opacity:0}60%{transform:scale(1.05)}100%{transform:scale(1);opacity:1}}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.animate-slide-up{animation:slideUp .3s ease-out}
+.animate-bounce-in{animation:bounceIn .4s ease-out}
+.animate-blink{animation:blink 1.2s ease-in-out infinite}
