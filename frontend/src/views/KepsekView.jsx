@@ -12,7 +12,7 @@ export default function KepsekView(){
   return(<div className="min-h-screen bg-[#0a0f1e] text-white p-5 flex flex-col gap-4">
     <div className="flex items-center justify-between">
       <div className="flex items-center gap-4">
-        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-2xl">🌟</div>
+        <img src="/tp_logo.png" alt="Taruna Prima" className="h-12 object-contain drop-shadow-lg"/>
         <div><div className="text-2xl font-black">KBTK Taruna Prima</div><div className="text-slate-400 text-sm">Monitoring Kehadiran & Penjemputan</div></div>
       </div>
       <div className="text-right"><LiveClock className="text-4xl font-black tabular-nums text-amber-400"/>

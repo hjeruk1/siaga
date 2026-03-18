@@ -20,7 +20,7 @@ export default function App(){
   return(<div className="min-h-screen">
     <div className="bg-white border-b border-slate-200 shadow-sm sticky top-0 z-40">
       <div className="max-w-screen-xl mx-auto px-4 py-2.5 flex items-center gap-3 flex-wrap">
-        <div className="flex items-center gap-2 mr-2"><div className="w-8 h-8 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-white font-black shadow-sm">TP</div><div><div className="font-black text-slate-800 text-sm leading-none">SIAGA</div><div className="text-slate-400 text-xs">Taruna Prima</div></div></div>
+        <div className="flex items-center gap-2 mr-2"><img src="/tp_logo.png" alt="Taruna Prima" className="h-8 object-contain"/><div className="hidden sm:block"><div className="font-black text-green-700 text-sm leading-none">SIAGA</div><div className="text-slate-400 text-xs">Taruna Prima</div></div></div>
         <div className="flex gap-1 flex-wrap flex-1">{NAV.map(n=><button key={n.id} onClick={()=>setView(n.id)} className={`px-4 py-2 rounded-xl text-sm font-bold border ${view===n.id?'bg-amber-500 text-white border-amber-500':'bg-white text-slate-600 border-slate-200 hover:border-amber-300'}`}>{n.l}</button>)}</div>
         <div className="flex items-center gap-2 ml-auto">
           <div className="text-right hidden sm:block"><div className="text-sm font-bold text-slate-700">{user.nama}</div><div className="text-xs text-slate-400">{user.role}</div></div>
