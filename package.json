@@ -1,0 +1,17 @@
+{
+  "name": "siaga",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"npm run dev --prefix backend\" \"npm run dev --prefix frontend\"",
+    "dev:stable": "concurrently \"npm run dev:stable --prefix backend\" \"npm run dev --prefix frontend\"",
+    "build": "npm run build --prefix frontend",
+    "start": "node backend/server.js",
+    "init": "node backend/init.js",
+    "smoke": "node scripts/smoke.js",
+    "test": "node --test scripts/test.js scripts/daily-record-v2.test.js",
+    "test:workflow": "node --test scripts/workflow-regression.test.js"
+  },
+  "dependencies": {
+    "concurrently": "^8.2.0"
+  }
+}

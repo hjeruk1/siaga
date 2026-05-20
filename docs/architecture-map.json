@@ -1,0 +1,3103 @@
+{
+  "name": "SIAGA Architecture Map",
+  "generatedAt": "2026-05-16T00:10:31.263Z",
+  "repositoryRoot": "C:\\Users\\Hadi\\Desktop\\siaga\\siaga",
+  "outputs": {
+    "html": "docs/architecture-map.html",
+    "json": "docs/architecture-map.json"
+  },
+  "summary": {
+    "product": "Operational dashboard for Taruna Prima multi-cabang school/care workflows",
+    "frontend": "React 18 SPA served by Vite in development and by Express static hosting in production",
+    "backend": "Express API with JWT auth, better-sqlite3 persistence, image uploads, and role/cabang scoping",
+    "database": "30 SQLite tables initialized from backend/db.js",
+    "mountedApiModules": 9,
+    "mountedEndpoints": 48,
+    "unmountedRouteModules": 4,
+    "frontendApiMethods": 46,
+    "sourceFiles": 43
+  },
+  "stack": {
+    "rootScripts": {
+      "dev": "concurrently \"npm run dev --prefix backend\" \"npm run dev --prefix frontend\"",
+      "build": "npm run build --prefix frontend",
+      "start": "node backend/server.js",
+      "init": "node backend/init.js"
+    },
+    "backend": {
+      "scripts": {
+        "dev": "node --watch server.js",
+        "start": "node server.js"
+      },
+      "dependencies": [
+        "archiver",
+        "bcryptjs",
+        "better-sqlite3",
+        "cors",
+        "csv-parse",
+        "dotenv",
+        "express",
+        "jsonwebtoken",
+        "multer",
+        "qrcode",
+        "sharp"
+      ],
+      "env": [
+        "PORT",
+        "JWT_SECRET",
+        "NODE_ENV",
+        "FRONTEND_URL",
+        "DB_PATH",
+        "ADMIN_PASSWORD"
+      ]
+    },
+    "frontend": {
+      "scripts": {
+        "design:lint": "node node_modules/@google/design.md/dist/index.js lint DESIGN.md",
+        "design:export": "node node_modules/@google/design.md/dist/index.js export --format tailwind DESIGN.md > tailwind.theme.json",
+        "predev": "npm run design:export",
+        "dev": "node dev.mjs",
+        "prebuild": "npm run design:export",
+        "build": "node build.mjs",
+        "preview": "vite preview"
+      },
+      "dependencies": [
+        "react",
+        "react-dom"
+      ],
+      "devDependencies": [
+        "@google/design.md",
+        "@vitejs/plugin-react",
+        "autoprefixer",
+        "postcss",
+        "tailwindcss",
+        "vite"
+      ],
+      "devServer": {
+        "port": 5173,
+        "host": "127.0.0.1",
+        "proxies": [
+          "/api -> 127.0.0.1:3001",
+          "/uploads -> 127.0.0.1:3001"
+        ]
+      }
+    }
+  },
+  "topology": {
+    "nodes": [
+      {
+        "id": "browser",
+        "label": "Browser SPA",
+        "files": [
+          "frontend/src/main.jsx",
+          "frontend/src/App.jsx",
+          "frontend/src/views/*"
+        ]
+      },
+      {
+        "id": "apiClient",
+        "label": "frontend/src/api.js",
+        "files": [
+          "frontend/src/api.js"
+        ]
+      },
+      {
+        "id": "express",
+        "label": "Express server",
+        "files": [
+          "backend/server.js"
+        ]
+      },
+      {
+        "id": "auth",
+        "label": "JWT auth middleware",
+        "files": [
+          "backend/middleware/auth.js"
+        ]
+      },
+      {
+        "id": "routes",
+        "label": "Route modules",
+        "files": [
+          "backend/routes/*.js"
+        ]
+      },
+      {
+        "id": "workflow",
+        "label": "Workflow helpers",
+        "files": [
+          "backend/utils/workflow.js"
+        ]
+      },
+      {
+        "id": "sqlite",
+        "label": "SQLite database",
+        "files": [
+          "backend/db.js",
+          "backend/siaga.db"
+        ]
+      },
+      {
+        "id": "uploads",
+        "label": "Image uploads/static assets",
+        "files": [
+          "backend/uploads",
+          "backend/utils/imageUpload.js"
+        ]
+      }
+    ],
+    "edges": [
+      [
+        "browser",
+        "apiClient",
+        "calls api methods"
+      ],
+      [
+        "apiClient",
+        "express",
+        "HTTP /api and /uploads"
+      ],
+      [
+        "express",
+        "auth",
+        "validates JWT and roles"
+      ],
+      [
+        "express",
+        "routes",
+        "mounts route modules"
+      ],
+      [
+        "routes",
+        "workflow",
+        "scope, dates, audit, notify"
+      ],
+      [
+        "routes",
+        "sqlite",
+        "queries and transactions"
+      ],
+      [
+        "routes",
+        "uploads",
+        "stores compressed images"
+      ],
+      [
+        "express",
+        "browser",
+        "serves frontend/dist in production"
+      ]
+    ]
+  },
+  "domains": [
+    {
+      "name": "Identity and access",
+      "tables": [
+        "pengguna",
+        "staff_profile",
+        "wali_profile",
+        "wali_siswa"
+      ],
+      "endpoints": [
+        "/api/auth",
+        "/api/pengguna"
+      ],
+      "notes": [
+        "JWT bearer auth",
+        "Role and cabang scope enforced in middleware and workflow helpers"
+      ]
+    },
+    {
+      "name": "Master data",
+      "tables": [
+        "organisasi",
+        "cabang",
+        "jenjang",
+        "rombel",
+        "guru_rombel",
+        "operasional_config",
+        "kalender_event"
+      ],
+      "endpoints": [
+        "/api/master"
+      ],
+      "notes": [
+        "Multi-cabang structure with operational configuration per cabang, jenjang, and paket"
+      ]
+    },
+    {
+      "name": "Student lifecycle",
+      "tables": [
+        "siswa",
+        "siswa_enrollment",
+        "penjemput"
+      ],
+      "endpoints": [
+        "/api/siswa"
+      ],
+      "notes": [
+        "Enrollment snapshots preserve cabang, jenjang, rombel, and paket history"
+      ]
+    },
+    {
+      "name": "Attendance and pickup",
+      "tables": [
+        "absensi",
+        "penjemput"
+      ],
+      "endpoints": [
+        "/api/absensi",
+        "/api/penjemputan"
+      ],
+      "notes": [
+        "QR pickup scan moves students to Menunggu; teacher/admin confirms Pulang"
+      ]
+    },
+    {
+      "name": "Daily record and parent portal",
+      "tables": [
+        "laporan_harian",
+        "laporan_attachment",
+        "laporan_comment",
+        "laporan_read",
+        "laporan_edit_log",
+        "notifikasi"
+      ],
+      "endpoints": [
+        "/api/daily-record",
+        "/api/notifikasi"
+      ],
+      "notes": [
+        "Draft/published daily records, attachments, comments, read receipts, notifications"
+      ]
+    },
+    {
+      "name": "Billing",
+      "tables": [
+        "biaya_tarif",
+        "diskon_siswa",
+        "tagihan",
+        "pembayaran",
+        "pembayaran_alokasi",
+        "invoice",
+        "invoice_item",
+        "sequence_counter"
+      ],
+      "endpoints": [
+        "/api/billing"
+      ],
+      "notes": [
+        "Tarif, generated charges, partial payments, allocation, invoice foundations"
+      ]
+    },
+    {
+      "name": "Auditability",
+      "tables": [
+        "audit_log"
+      ],
+      "endpoints": [],
+      "notes": [
+        "Important workflow changes write actor/action/entity/cabang/before/after metadata"
+      ]
+    }
+  ],
+  "roles": [
+    {
+      "role": "admin",
+      "scope": "Yayasan/global",
+      "frontend": [
+        "Admin",
+        "Kepsek",
+        "Guru",
+        "Gerbang"
+      ],
+      "backend": "All cabang; creates cabang, tariffs, users, billing, student operations"
+    },
+    {
+      "role": "admin_cabang",
+      "scope": "Single cabang",
+      "frontend": [
+        "Admin",
+        "Kepsek",
+        "Guru",
+        "Gerbang"
+      ],
+      "backend": "Cabang-scoped staff/wali/siswa, operational config, billing generation/payment"
+    },
+    {
+      "role": "kepsek",
+      "scope": "Single cabang",
+      "frontend": [
+        "Kepsek",
+        "Guru",
+        "Gerbang"
+      ],
+      "backend": "Dashboard and read-heavy cabang oversight; some daily record write permissions exist backend-side"
+    },
+    {
+      "role": "guru",
+      "scope": "Assigned rombel",
+      "frontend": [
+        "Guru",
+        "Gerbang"
+      ],
+      "backend": "Daily records, attendance check-in/keterangan, comments, pickup scan/pulang"
+    },
+    {
+      "role": "gerbang",
+      "scope": "Single cabang",
+      "frontend": [
+        "Gerbang"
+      ],
+      "backend": "Pickup QR scan"
+    },
+    {
+      "role": "wali",
+      "scope": "Linked siswa",
+      "frontend": [
+        "Portal Wali"
+      ],
+      "backend": "Published daily record history and comments for linked children"
+    }
+  ],
+  "flows": [
+    {
+      "name": "Login and session",
+      "steps": [
+        "LoginView posts credentials to /api/auth/login",
+        "Backend verifies bcrypt password and signs JWT",
+        "Token is stored in localStorage as siaga_token",
+        "App calls /api/auth/me on boot and routes by role",
+        "Requests attach Authorization: Bearer token"
+      ]
+    },
+    {
+      "name": "Student administration",
+      "steps": [
+        "Admin/Admin Cabang creates siswa",
+        "Backend creates siswa row plus active siswa_enrollment",
+        "Scope helpers constrain future reads by cabang, rombel, or wali_siswa",
+        "Enrollment changes close old records and create a dated new enrollment"
+      ]
+    },
+    {
+      "name": "Daily record",
+      "steps": [
+        "Guru/Kepsek/Admin views /api/daily-record/today",
+        "Guru saves draft to laporan_harian",
+        "Optional photos go through multer memory storage and sharp compression",
+        "Publish sets published timestamps and notifies linked wali",
+        "Wali opens history/detail and can comment back"
+      ]
+    },
+    {
+      "name": "Pickup",
+      "steps": [
+        "Gerbang scans penjemput QR",
+        "Backend validates active penjemput and student cabang access",
+        "Absensi status becomes Menunggu with jam_tunggu",
+        "Guru/Admin confirms pulang for selected siswa_ids"
+      ]
+    },
+    {
+      "name": "Billing",
+      "steps": [
+        "Admin defines biaya_tarif by cabang, tahun_ajaran, jenjang, jenis, nama",
+        "Admin/Admin Cabang generates monthly or kegiatan tagihan idempotently",
+        "Payments create pembayaran and pembayaran_alokasi rows",
+        "Tagihan status moves open, sebagian, or lunas based on allocations"
+      ]
+    }
+  ],
+  "frontend": {
+    "entry": "frontend/src/main.jsx",
+    "shell": "frontend/src/App.jsx",
+    "routing": "State-driven role navigation, not React Router",
+    "units": [
+      {
+        "file": "frontend/src/main.jsx",
+        "lines": 2,
+        "imports": [
+          "react",
+          "react-dom/client",
+          "./index.css",
+          "./App"
+        ],
+        "apiUses": []
+      },
+      {
+        "file": "frontend/src/App.jsx",
+        "lines": 82,
+        "imports": [
+          "react",
+          "./api",
+          "./views/LoginView",
+          "./views/AdminView",
+          "./views/GuruView",
+          "./views/KepsekView",
+          "./views/GerbangView",
+          "./views/WaliView"
+        ],
+        "apiUses": [
+          "me",
+          "changePassword"
+        ]
+      },
+      {
+        "file": "frontend/src/views/AdminView.jsx",
+        "lines": 150,
+        "imports": [
+          "react",
+          "../api"
+        ],
+        "apiUses": [
+          "cabang",
+          "jenjang",
+          "rombel",
+          "siswa",
+          "createSiswa",
+          "staff",
+          "createStaff",
+          "resetPassword",
+          "wali",
+          "createWali",
+          "createRombel",
+          "tarif",
+          "tagihan",
+          "createTarif",
+          "generateBulanan",
+          "generateKegiatan",
+          "operasionalConfig",
+          "updateOperasionalConfig"
+        ]
+      },
+      {
+        "file": "frontend/src/views/GerbangView.jsx",
+        "lines": 15,
+        "imports": [
+          "react",
+          "../api"
+        ],
+        "apiUses": [
+          "scanPenjemput"
+        ]
+      },
+      {
+        "file": "frontend/src/views/GuruView.jsx",
+        "lines": 64,
+        "imports": [
+          "react",
+          "../api"
+        ],
+        "apiUses": [
+          "dailyToday",
+          "dailyDetail",
+          "saveDaily",
+          "publishDaily",
+          "commentDaily",
+          "uploadDailyPhoto"
+        ]
+      },
+      {
+        "file": "frontend/src/views/KepsekView.jsx",
+        "lines": 20,
+        "imports": [
+          "react",
+          "../api"
+        ],
+        "apiUses": [
+          "cabang",
+          "dailyToday",
+          "notifikasi"
+        ]
+      },
+      {
+        "file": "frontend/src/views/LoginView.jsx",
+        "lines": 44,
+        "imports": [
+          "react",
+          "../api",
+          "staff"
+        ],
+        "apiUses": [
+          "login"
+        ]
+      },
+      {
+        "file": "frontend/src/views/WaliView.jsx",
+        "lines": 46,
+        "imports": [
+          "react",
+          "../api"
+        ],
+        "apiUses": [
+          "siswa",
+          "dailyHistory",
+          "dailyDetail",
+          "commentDaily"
+        ]
+      },
+      {
+        "file": "frontend/src/components/LaporanTab.jsx",
+        "lines": 357,
+        "imports": [
+          "react",
+          "../api",
+          "../components/Shared"
+        ],
+        "apiUses": [
+          "getLaporanHistory",
+          "getLaporan",
+          "saveLaporan",
+          "getLaporanToday",
+          "getReminderConfig"
+        ]
+      },
+      {
+        "file": "frontend/src/components/Shared.jsx",
+        "lines": 13,
+        "imports": [
+          "react"
+        ],
+        "apiUses": []
+      }
+    ],
+    "apiMethods": [
+      {
+        "name": "login",
+        "method": "POST",
+        "urlTemplate": "/api/auth/login",
+        "file": "frontend/src/api.js",
+        "line": 18
+      },
+      {
+        "name": "me",
+        "method": "GET",
+        "urlTemplate": "/api/auth/me",
+        "file": "frontend/src/api.js",
+        "line": 19
+      },
+      {
+        "name": "changePassword",
+        "method": "POST",
+        "urlTemplate": "/api/auth/change-password",
+        "file": "frontend/src/api.js",
+        "line": 20
+      },
+      {
+        "name": "cabang",
+        "method": "GET",
+        "urlTemplate": "/api/master/cabang",
+        "file": "frontend/src/api.js",
+        "line": 21
+      },
+      {
+        "name": "createCabang",
+        "method": "POST",
+        "urlTemplate": "/api/master/cabang",
+        "file": "frontend/src/api.js",
+        "line": 22
+      },
+      {
+        "name": "updateCabang",
+        "method": "PUT",
+        "urlTemplate": "/api/master/cabang/",
+        "file": "frontend/src/api.js",
+        "line": 23
+      },
+      {
+        "name": "jenjang",
+        "method": "GET",
+        "urlTemplate": "/api/master/jenjang",
+        "file": "frontend/src/api.js",
+        "line": 24
+      },
+      {
+        "name": "rombel",
+        "method": "GET",
+        "urlTemplate": "/api/master/rombel",
+        "file": "frontend/src/api.js",
+        "line": 25
+      },
+      {
+        "name": "createRombel",
+        "method": "POST",
+        "urlTemplate": "/api/master/rombel",
+        "file": "frontend/src/api.js",
+        "line": 26
+      },
+      {
+        "name": "operasionalConfig",
+        "method": "GET",
+        "urlTemplate": "/api/master/operasional-config",
+        "file": "frontend/src/api.js",
+        "line": 27
+      },
+      {
+        "name": "updateOperasionalConfig",
+        "method": "PUT",
+        "urlTemplate": "/api/master/operasional-config/",
+        "file": "frontend/src/api.js",
+        "line": 28
+      },
+      {
+        "name": "staff",
+        "method": "GET",
+        "urlTemplate": "/api/pengguna",
+        "file": "frontend/src/api.js",
+        "line": 29
+      },
+      {
+        "name": "createStaff",
+        "method": "POST",
+        "urlTemplate": "/api/pengguna/staff",
+        "file": "frontend/src/api.js",
+        "line": 30
+      },
+      {
+        "name": "updateStaff",
+        "method": "PUT",
+        "urlTemplate": "/api/pengguna/staff/",
+        "file": "frontend/src/api.js",
+        "line": 31
+      },
+      {
+        "name": "resetPassword",
+        "method": "POST",
+        "urlTemplate": "/api/pengguna/",
+        "file": "frontend/src/api.js",
+        "line": 32
+      },
+      {
+        "name": "wali",
+        "method": "GET",
+        "urlTemplate": "/api/pengguna/wali",
+        "file": "frontend/src/api.js",
+        "line": 33
+      },
+      {
+        "name": "createWali",
+        "method": "POST",
+        "urlTemplate": "/api/pengguna/wali",
+        "file": "frontend/src/api.js",
+        "line": 34
+      },
+      {
+        "name": "siswa",
+        "method": "GET",
+        "urlTemplate": "/api/siswa",
+        "file": "frontend/src/api.js",
+        "line": 35
+      },
+      {
+        "name": "siswaDetail",
+        "method": "GET",
+        "urlTemplate": "/api/siswa/",
+        "file": "frontend/src/api.js",
+        "line": 36
+      },
+      {
+        "name": "createSiswa",
+        "method": "POST",
+        "urlTemplate": "/api/siswa",
+        "file": "frontend/src/api.js",
+        "line": 37
+      },
+      {
+        "name": "updateSiswa",
+        "method": "PUT",
+        "urlTemplate": "/api/siswa/",
+        "file": "frontend/src/api.js",
+        "line": 38
+      },
+      {
+        "name": "moveSiswa",
+        "method": "POST",
+        "urlTemplate": "/api/siswa/",
+        "file": "frontend/src/api.js",
+        "line": 39
+      },
+      {
+        "name": "reissueNfc",
+        "method": "POST",
+        "urlTemplate": "/api/siswa/",
+        "file": "frontend/src/api.js",
+        "line": 40
+      },
+      {
+        "name": "addPenjemput",
+        "method": "POST",
+        "urlTemplate": "/api/siswa/",
+        "file": "frontend/src/api.js",
+        "line": 41
+      },
+      {
+        "name": "absensiToday",
+        "method": "GET",
+        "urlTemplate": "/api/absensi/today",
+        "file": "frontend/src/api.js",
+        "line": 42
+      },
+      {
+        "name": "checkin",
+        "method": "POST",
+        "urlTemplate": "/api/absensi/checkin",
+        "file": "frontend/src/api.js",
+        "line": 43
+      },
+      {
+        "name": "setKeterangan",
+        "method": "POST",
+        "urlTemplate": "/api/absensi/keterangan",
+        "file": "frontend/src/api.js",
+        "line": 44
+      },
+      {
+        "name": "scanPenjemput",
+        "method": "POST",
+        "urlTemplate": "/api/penjemputan/scan",
+        "file": "frontend/src/api.js",
+        "line": 45
+      },
+      {
+        "name": "pulangkan",
+        "method": "POST",
+        "urlTemplate": "/api/penjemputan/pulang",
+        "file": "frontend/src/api.js",
+        "line": 46
+      },
+      {
+        "name": "dailyToday",
+        "method": "GET",
+        "urlTemplate": "/api/daily-record/today",
+        "file": "frontend/src/api.js",
+        "line": 47
+      },
+      {
+        "name": "dailyHistory",
+        "method": "GET",
+        "urlTemplate": "/api/daily-record/history/",
+        "file": "frontend/src/api.js",
+        "line": 48
+      },
+      {
+        "name": "dailyDetail",
+        "method": "GET",
+        "urlTemplate": "/api/daily-record/",
+        "file": "frontend/src/api.js",
+        "line": 49
+      },
+      {
+        "name": "saveDaily",
+        "method": "POST",
+        "urlTemplate": "/api/daily-record",
+        "file": "frontend/src/api.js",
+        "line": 50
+      },
+      {
+        "name": "publishDaily",
+        "method": "POST",
+        "urlTemplate": "/api/daily-record/",
+        "file": "frontend/src/api.js",
+        "line": 51
+      },
+      {
+        "name": "commentDaily",
+        "method": "POST",
+        "urlTemplate": "/api/daily-record/",
+        "file": "frontend/src/api.js",
+        "line": 52
+      },
+      {
+        "name": "uploadDailyPhoto",
+        "method": "POST_UPLOAD",
+        "urlTemplate": "/api/daily-record/",
+        "file": "frontend/src/api.js",
+        "line": 53
+      },
+      {
+        "name": "notifikasi",
+        "method": "GET",
+        "urlTemplate": "/api/notifikasi",
+        "file": "frontend/src/api.js",
+        "line": 54
+      },
+      {
+        "name": "readNotif",
+        "method": "PUT",
+        "urlTemplate": "/api/notifikasi/",
+        "file": "frontend/src/api.js",
+        "line": 55
+      },
+      {
+        "name": "readAllNotif",
+        "method": "PUT",
+        "urlTemplate": "/api/notifikasi/read-all",
+        "file": "frontend/src/api.js",
+        "line": 56
+      },
+      {
+        "name": "tarif",
+        "method": "GET",
+        "urlTemplate": "/api/billing/tarif",
+        "file": "frontend/src/api.js",
+        "line": 57
+      },
+      {
+        "name": "createTarif",
+        "method": "POST",
+        "urlTemplate": "/api/billing/tarif",
+        "file": "frontend/src/api.js",
+        "line": 58
+      },
+      {
+        "name": "updateTarif",
+        "method": "PUT",
+        "urlTemplate": "/api/billing/tarif/",
+        "file": "frontend/src/api.js",
+        "line": 59
+      },
+      {
+        "name": "generateBulanan",
+        "method": "POST",
+        "urlTemplate": "/api/billing/generate-bulanan",
+        "file": "frontend/src/api.js",
+        "line": 60
+      },
+      {
+        "name": "generateKegiatan",
+        "method": "POST",
+        "urlTemplate": "/api/billing/generate-kegiatan",
+        "file": "frontend/src/api.js",
+        "line": 61
+      },
+      {
+        "name": "tagihan",
+        "method": "GET",
+        "urlTemplate": "/api/billing/tagihan",
+        "file": "frontend/src/api.js",
+        "line": 62
+      },
+      {
+        "name": "createPembayaran",
+        "method": "POST",
+        "urlTemplate": "/api/billing/pembayaran",
+        "file": "frontend/src/api.js",
+        "line": 63
+      }
+    ],
+    "missingApiUses": [
+      {
+        "file": "frontend/src/components/LaporanTab.jsx",
+        "apiMethod": "getLaporanHistory"
+      },
+      {
+        "file": "frontend/src/components/LaporanTab.jsx",
+        "apiMethod": "getLaporan"
+      },
+      {
+        "file": "frontend/src/components/LaporanTab.jsx",
+        "apiMethod": "saveLaporan"
+      },
+      {
+        "file": "frontend/src/components/LaporanTab.jsx",
+        "apiMethod": "getLaporanToday"
+      },
+      {
+        "file": "frontend/src/components/LaporanTab.jsx",
+        "apiMethod": "getReminderConfig"
+      }
+    ]
+  },
+  "backend": {
+    "entry": "backend/server.js",
+    "databaseInitializer": "backend/db.js",
+    "seedScript": "backend/init.js",
+    "mountedRoutes": [
+      {
+        "basePath": "/api/auth",
+        "module": "auth",
+        "file": "backend/routes/auth.js",
+        "endpoints": [
+          {
+            "method": "POST",
+            "routePath": "/change-password",
+            "fullPath": "/api/auth/change-password",
+            "roles": [
+              "authenticated"
+            ]
+          },
+          {
+            "method": "POST",
+            "routePath": "/login",
+            "fullPath": "/api/auth/login",
+            "roles": [
+              "public"
+            ]
+          },
+          {
+            "method": "GET",
+            "routePath": "/me",
+            "fullPath": "/api/auth/me",
+            "roles": [
+              "authenticated"
+            ]
+          }
+        ]
+      },
+      {
+        "basePath": "/api/master",
+        "module": "master",
+        "file": "backend/routes/master.js",
+        "endpoints": [
+          {
+            "method": "GET",
+            "routePath": "/cabang",
+            "fullPath": "/api/master/cabang",
+            "roles": [
+              "authenticated"
+            ]
+          },
+          {
+            "method": "POST",
+            "routePath": "/cabang",
+            "fullPath": "/api/master/cabang",
+            "roles": [
+              "admin"
+            ]
+          },
+          {
+            "method": "PUT",
+            "routePath": "/cabang/:id",
+            "fullPath": "/api/master/cabang/:id",
+            "roles": [
+              "admin"
+            ]
+          },
+          {
+            "method": "GET",
+            "routePath": "/jenjang",
+            "fullPath": "/api/master/jenjang",
+            "roles": [
+              "authenticated"
+            ]
+          },
+          {
+            "method": "GET",
+            "routePath": "/operasional-config",
+            "fullPath": "/api/master/operasional-config",
+            "roles": [
+              "authenticated"
+            ]
+          },
+          {
+            "method": "PUT",
+            "routePath": "/operasional-config/:id",
+            "fullPath": "/api/master/operasional-config/:id",
+            "roles": [
+              "admin",
+              "admin_cabang"
+            ]
+          },
+          {
+            "method": "GET",
+            "routePath": "/rombel",
+            "fullPath": "/api/master/rombel",
+            "roles": [
+              "authenticated"
+            ]
+          },
+          {
+            "method": "POST",
+            "routePath": "/rombel",
+            "fullPath": "/api/master/rombel",
+            "roles": [
+              "admin",
+              "admin_cabang"
+            ]
+          }
+        ]
+      },
+      {
+        "basePath": "/api/pengguna",
+        "module": "pengguna",
+        "file": "backend/routes/pengguna.js",
+        "endpoints": [
+          {
+            "method": "GET",
+            "routePath": "/",
+            "fullPath": "/api/pengguna",
+            "roles": [
+              "admin",
+              "admin_cabang",
+              "kepsek"
+            ]
+          },
+          {
+            "method": "POST",
+            "routePath": "/:id/reset-password",
+            "fullPath": "/api/pengguna/:id/reset-password",
+            "roles": [
+              "admin",
+              "admin_cabang"
+            ]
+          },
+          {
+            "method": "POST",
+            "routePath": "/staff",
+            "fullPath": "/api/pengguna/staff",
+            "roles": [
+              "admin",
+              "admin_cabang"
+            ]
+          },
+          {
+            "method": "PUT",
+            "routePath": "/staff/:id",
+            "fullPath": "/api/pengguna/staff/:id",
+            "roles": [
+              "admin",
+              "admin_cabang"
+            ]
+          },
+          {
+            "method": "GET",
+            "routePath": "/wali",
+            "fullPath": "/api/pengguna/wali",
+            "roles": [
+              "admin",
+              "admin_cabang",
+              "kepsek"
+            ]
+          },
+          {
+            "method": "POST",
+            "routePath": "/wali",
+            "fullPath": "/api/pengguna/wali",
+            "roles": [
+              "admin",
+              "admin_cabang"
+            ]
+          }
+        ]
+      },
+      {
+        "basePath": "/api/siswa",
+        "module": "siswa",
+        "file": "backend/routes/siswa.js",
+        "endpoints": [
+          {
+            "method": "GET",
+            "routePath": "/",
+            "fullPath": "/api/siswa",
+            "roles": [
+              "authenticated"
+            ]
+          },
+          {
+            "method": "POST",
+            "routePath": "/",
+            "fullPath": "/api/siswa",
+            "roles": [
+              "admin",
+              "admin_cabang"
+            ]
+          },
+          {
+            "method": "GET",
+            "routePath": "/:id",
+            "fullPath": "/api/siswa/:id",
+            "roles": [
+              "authenticated"
+            ]
+          },
+          {
+            "method": "PUT",
+            "routePath": "/:id",
+            "fullPath": "/api/siswa/:id",
+            "roles": [
+              "admin",
+              "admin_cabang"
+            ]
+          },
+          {
+            "method": "POST",
+            "routePath": "/:id/enrollment",
+            "fullPath": "/api/siswa/:id/enrollment",
+            "roles": [
+              "admin",
+              "admin_cabang"
+            ]
+          },
+          {
+            "method": "POST",
+            "routePath": "/:id/nfc/reissue",
+            "fullPath": "/api/siswa/:id/nfc/reissue",
+            "roles": [
+              "admin",
+              "admin_cabang"
+            ]
+          },
+          {
+            "method": "GET",
+            "routePath": "/:id/penjemput",
+            "fullPath": "/api/siswa/:id/penjemput",
+            "roles": [
+              "authenticated"
+            ]
+          },
+          {
+            "method": "POST",
+            "routePath": "/:id/penjemput",
+            "fullPath": "/api/siswa/:id/penjemput",
+            "roles": [
+              "admin",
+              "admin_cabang"
+            ]
+          },
+          {
+            "method": "PUT",
+            "routePath": "/penjemput/:id",
+            "fullPath": "/api/siswa/penjemput/:id",
+            "roles": [
+              "admin",
+              "admin_cabang"
+            ]
+          }
+        ]
+      },
+      {
+        "basePath": "/api/absensi",
+        "module": "absensi",
+        "file": "backend/routes/absensi.js",
+        "endpoints": [
+          {
+            "method": "POST",
+            "routePath": "/checkin",
+            "fullPath": "/api/absensi/checkin",
+            "roles": [
+              "guru",
+              "admin",
+              "admin_cabang"
+            ]
+          },
+          {
+            "method": "POST",
+            "routePath": "/keterangan",
+            "fullPath": "/api/absensi/keterangan",
+            "roles": [
+              "guru",
+              "admin",
+              "admin_cabang"
+            ]
+          },
+          {
+            "method": "GET",
+            "routePath": "/today",
+            "fullPath": "/api/absensi/today",
+            "roles": [
+              "authenticated"
+            ]
+          }
+        ]
+      },
+      {
+        "basePath": "/api/penjemputan",
+        "module": "penjemputan",
+        "file": "backend/routes/penjemputan.js",
+        "endpoints": [
+          {
+            "method": "POST",
+            "routePath": "/pulang",
+            "fullPath": "/api/penjemputan/pulang",
+            "roles": [
+              "guru",
+              "admin",
+              "admin_cabang"
+            ]
+          },
+          {
+            "method": "POST",
+            "routePath": "/scan",
+            "fullPath": "/api/penjemputan/scan",
+            "roles": [
+              "gerbang",
+              "guru",
+              "admin",
+              "admin_cabang"
+            ]
+          }
+        ]
+      },
+      {
+        "basePath": "/api/daily-record",
+        "module": "dailyRecord",
+        "file": "backend/routes/dailyRecord.js",
+        "endpoints": [
+          {
+            "method": "POST",
+            "routePath": "/",
+            "fullPath": "/api/daily-record",
+            "roles": [
+              "guru",
+              "admin",
+              "admin_cabang",
+              "kepsek"
+            ]
+          },
+          {
+            "method": "GET",
+            "routePath": "/:id",
+            "fullPath": "/api/daily-record/:id",
+            "roles": [
+              "authenticated"
+            ]
+          },
+          {
+            "method": "POST",
+            "routePath": "/:id/attachments",
+            "fullPath": "/api/daily-record/:id/attachments",
+            "roles": [
+              "guru",
+              "admin",
+              "admin_cabang"
+            ]
+          },
+          {
+            "method": "POST",
+            "routePath": "/:id/comment",
+            "fullPath": "/api/daily-record/:id/comment",
+            "roles": [
+              "wali",
+              "guru"
+            ]
+          },
+          {
+            "method": "POST",
+            "routePath": "/:id/publish",
+            "fullPath": "/api/daily-record/:id/publish",
+            "roles": [
+              "guru",
+              "admin",
+              "admin_cabang"
+            ]
+          },
+          {
+            "method": "GET",
+            "routePath": "/history/:siswa_id",
+            "fullPath": "/api/daily-record/history/:siswa_id",
+            "roles": [
+              "authenticated"
+            ]
+          },
+          {
+            "method": "GET",
+            "routePath": "/today",
+            "fullPath": "/api/daily-record/today",
+            "roles": [
+              "authenticated"
+            ]
+          }
+        ]
+      },
+      {
+        "basePath": "/api/notifikasi",
+        "module": "notifikasi",
+        "file": "backend/routes/notifikasi.js",
+        "endpoints": [
+          {
+            "method": "GET",
+            "routePath": "/",
+            "fullPath": "/api/notifikasi",
+            "roles": [
+              "authenticated"
+            ]
+          },
+          {
+            "method": "PUT",
+            "routePath": "/:id/read",
+            "fullPath": "/api/notifikasi/:id/read",
+            "roles": [
+              "authenticated"
+            ]
+          },
+          {
+            "method": "PUT",
+            "routePath": "/read-all",
+            "fullPath": "/api/notifikasi/read-all",
+            "roles": [
+              "authenticated"
+            ]
+          }
+        ]
+      },
+      {
+        "basePath": "/api/billing",
+        "module": "billing",
+        "file": "backend/routes/billing.js",
+        "endpoints": [
+          {
+            "method": "POST",
+            "routePath": "/generate-bulanan",
+            "fullPath": "/api/billing/generate-bulanan",
+            "roles": [
+              "admin",
+              "admin_cabang"
+            ]
+          },
+          {
+            "method": "POST",
+            "routePath": "/generate-kegiatan",
+            "fullPath": "/api/billing/generate-kegiatan",
+            "roles": [
+              "admin",
+              "admin_cabang"
+            ]
+          },
+          {
+            "method": "POST",
+            "routePath": "/pembayaran",
+            "fullPath": "/api/billing/pembayaran",
+            "roles": [
+              "admin",
+              "admin_cabang"
+            ]
+          },
+          {
+            "method": "GET",
+            "routePath": "/tagihan",
+            "fullPath": "/api/billing/tagihan",
+            "roles": [
+              "admin",
+              "admin_cabang",
+              "kepsek"
+            ]
+          },
+          {
+            "method": "GET",
+            "routePath": "/tarif",
+            "fullPath": "/api/billing/tarif",
+            "roles": [
+              "admin",
+              "admin_cabang",
+              "kepsek"
+            ]
+          },
+          {
+            "method": "POST",
+            "routePath": "/tarif",
+            "fullPath": "/api/billing/tarif",
+            "roles": [
+              "admin"
+            ]
+          },
+          {
+            "method": "PUT",
+            "routePath": "/tarif/:id",
+            "fullPath": "/api/billing/tarif/:id",
+            "roles": [
+              "admin"
+            ]
+          }
+        ]
+      }
+    ],
+    "unmountedRouteModules": [
+      {
+        "module": "guru",
+        "file": "backend/routes/guru.js",
+        "endpoints": 6
+      },
+      {
+        "module": "kelas",
+        "file": "backend/routes/kelas.js",
+        "endpoints": 4
+      },
+      {
+        "module": "laporan",
+        "file": "backend/routes/laporan.js",
+        "endpoints": 6
+      },
+      {
+        "module": "rekap",
+        "file": "backend/routes/rekap.js",
+        "endpoints": 6
+      }
+    ],
+    "endpoints": [
+      {
+        "module": "absensi",
+        "file": "backend/routes/absensi.js",
+        "mounted": true,
+        "method": "POST",
+        "routePath": "/checkin",
+        "fullPath": "/api/absensi/checkin",
+        "roles": [
+          "guru",
+          "admin",
+          "admin_cabang"
+        ]
+      },
+      {
+        "module": "absensi",
+        "file": "backend/routes/absensi.js",
+        "mounted": true,
+        "method": "POST",
+        "routePath": "/keterangan",
+        "fullPath": "/api/absensi/keterangan",
+        "roles": [
+          "guru",
+          "admin",
+          "admin_cabang"
+        ]
+      },
+      {
+        "module": "absensi",
+        "file": "backend/routes/absensi.js",
+        "mounted": true,
+        "method": "GET",
+        "routePath": "/today",
+        "fullPath": "/api/absensi/today",
+        "roles": [
+          "authenticated"
+        ]
+      },
+      {
+        "module": "auth",
+        "file": "backend/routes/auth.js",
+        "mounted": true,
+        "method": "POST",
+        "routePath": "/change-password",
+        "fullPath": "/api/auth/change-password",
+        "roles": [
+          "authenticated"
+        ]
+      },
+      {
+        "module": "auth",
+        "file": "backend/routes/auth.js",
+        "mounted": true,
+        "method": "POST",
+        "routePath": "/login",
+        "fullPath": "/api/auth/login",
+        "roles": [
+          "public"
+        ]
+      },
+      {
+        "module": "auth",
+        "file": "backend/routes/auth.js",
+        "mounted": true,
+        "method": "GET",
+        "routePath": "/me",
+        "fullPath": "/api/auth/me",
+        "roles": [
+          "authenticated"
+        ]
+      },
+      {
+        "module": "billing",
+        "file": "backend/routes/billing.js",
+        "mounted": true,
+        "method": "POST",
+        "routePath": "/generate-bulanan",
+        "fullPath": "/api/billing/generate-bulanan",
+        "roles": [
+          "admin",
+          "admin_cabang"
+        ]
+      },
+      {
+        "module": "billing",
+        "file": "backend/routes/billing.js",
+        "mounted": true,
+        "method": "POST",
+        "routePath": "/generate-kegiatan",
+        "fullPath": "/api/billing/generate-kegiatan",
+        "roles": [
+          "admin",
+          "admin_cabang"
+        ]
+      },
+      {
+        "module": "billing",
+        "file": "backend/routes/billing.js",
+        "mounted": true,
+        "method": "POST",
+        "routePath": "/pembayaran",
+        "fullPath": "/api/billing/pembayaran",
+        "roles": [
+          "admin",
+          "admin_cabang"
+        ]
+      },
+      {
+        "module": "billing",
+        "file": "backend/routes/billing.js",
+        "mounted": true,
+        "method": "GET",
+        "routePath": "/tagihan",
+        "fullPath": "/api/billing/tagihan",
+        "roles": [
+          "admin",
+          "admin_cabang",
+          "kepsek"
+        ]
+      },
+      {
+        "module": "billing",
+        "file": "backend/routes/billing.js",
+        "mounted": true,
+        "method": "GET",
+        "routePath": "/tarif",
+        "fullPath": "/api/billing/tarif",
+        "roles": [
+          "admin",
+          "admin_cabang",
+          "kepsek"
+        ]
+      },
+      {
+        "module": "billing",
+        "file": "backend/routes/billing.js",
+        "mounted": true,
+        "method": "POST",
+        "routePath": "/tarif",
+        "fullPath": "/api/billing/tarif",
+        "roles": [
+          "admin"
+        ]
+      },
+      {
+        "module": "billing",
+        "file": "backend/routes/billing.js",
+        "mounted": true,
+        "method": "PUT",
+        "routePath": "/tarif/:id",
+        "fullPath": "/api/billing/tarif/:id",
+        "roles": [
+          "admin"
+        ]
+      },
+      {
+        "module": "dailyRecord",
+        "file": "backend/routes/dailyRecord.js",
+        "mounted": true,
+        "method": "POST",
+        "routePath": "/",
+        "fullPath": "/api/daily-record",
+        "roles": [
+          "guru",
+          "admin",
+          "admin_cabang",
+          "kepsek"
+        ]
+      },
+      {
+        "module": "dailyRecord",
+        "file": "backend/routes/dailyRecord.js",
+        "mounted": true,
+        "method": "GET",
+        "routePath": "/:id",
+        "fullPath": "/api/daily-record/:id",
+        "roles": [
+          "authenticated"
+        ]
+      },
+      {
+        "module": "dailyRecord",
+        "file": "backend/routes/dailyRecord.js",
+        "mounted": true,
+        "method": "POST",
+        "routePath": "/:id/attachments",
+        "fullPath": "/api/daily-record/:id/attachments",
+        "roles": [
+          "guru",
+          "admin",
+          "admin_cabang"
+        ]
+      },
+      {
+        "module": "dailyRecord",
+        "file": "backend/routes/dailyRecord.js",
+        "mounted": true,
+        "method": "POST",
+        "routePath": "/:id/comment",
+        "fullPath": "/api/daily-record/:id/comment",
+        "roles": [
+          "wali",
+          "guru"
+        ]
+      },
+      {
+        "module": "dailyRecord",
+        "file": "backend/routes/dailyRecord.js",
+        "mounted": true,
+        "method": "POST",
+        "routePath": "/:id/publish",
+        "fullPath": "/api/daily-record/:id/publish",
+        "roles": [
+          "guru",
+          "admin",
+          "admin_cabang"
+        ]
+      },
+      {
+        "module": "dailyRecord",
+        "file": "backend/routes/dailyRecord.js",
+        "mounted": true,
+        "method": "GET",
+        "routePath": "/history/:siswa_id",
+        "fullPath": "/api/daily-record/history/:siswa_id",
+        "roles": [
+          "authenticated"
+        ]
+      },
+      {
+        "module": "dailyRecord",
+        "file": "backend/routes/dailyRecord.js",
+        "mounted": true,
+        "method": "GET",
+        "routePath": "/today",
+        "fullPath": "/api/daily-record/today",
+        "roles": [
+          "authenticated"
+        ]
+      },
+      {
+        "module": "master",
+        "file": "backend/routes/master.js",
+        "mounted": true,
+        "method": "GET",
+        "routePath": "/cabang",
+        "fullPath": "/api/master/cabang",
+        "roles": [
+          "authenticated"
+        ]
+      },
+      {
+        "module": "master",
+        "file": "backend/routes/master.js",
+        "mounted": true,
+        "method": "POST",
+        "routePath": "/cabang",
+        "fullPath": "/api/master/cabang",
+        "roles": [
+          "admin"
+        ]
+      },
+      {
+        "module": "master",
+        "file": "backend/routes/master.js",
+        "mounted": true,
+        "method": "PUT",
+        "routePath": "/cabang/:id",
+        "fullPath": "/api/master/cabang/:id",
+        "roles": [
+          "admin"
+        ]
+      },
+      {
+        "module": "master",
+        "file": "backend/routes/master.js",
+        "mounted": true,
+        "method": "GET",
+        "routePath": "/jenjang",
+        "fullPath": "/api/master/jenjang",
+        "roles": [
+          "authenticated"
+        ]
+      },
+      {
+        "module": "master",
+        "file": "backend/routes/master.js",
+        "mounted": true,
+        "method": "GET",
+        "routePath": "/operasional-config",
+        "fullPath": "/api/master/operasional-config",
+        "roles": [
+          "authenticated"
+        ]
+      },
+      {
+        "module": "master",
+        "file": "backend/routes/master.js",
+        "mounted": true,
+        "method": "PUT",
+        "routePath": "/operasional-config/:id",
+        "fullPath": "/api/master/operasional-config/:id",
+        "roles": [
+          "admin",
+          "admin_cabang"
+        ]
+      },
+      {
+        "module": "master",
+        "file": "backend/routes/master.js",
+        "mounted": true,
+        "method": "GET",
+        "routePath": "/rombel",
+        "fullPath": "/api/master/rombel",
+        "roles": [
+          "authenticated"
+        ]
+      },
+      {
+        "module": "master",
+        "file": "backend/routes/master.js",
+        "mounted": true,
+        "method": "POST",
+        "routePath": "/rombel",
+        "fullPath": "/api/master/rombel",
+        "roles": [
+          "admin",
+          "admin_cabang"
+        ]
+      },
+      {
+        "module": "notifikasi",
+        "file": "backend/routes/notifikasi.js",
+        "mounted": true,
+        "method": "GET",
+        "routePath": "/",
+        "fullPath": "/api/notifikasi",
+        "roles": [
+          "authenticated"
+        ]
+      },
+      {
+        "module": "notifikasi",
+        "file": "backend/routes/notifikasi.js",
+        "mounted": true,
+        "method": "PUT",
+        "routePath": "/:id/read",
+        "fullPath": "/api/notifikasi/:id/read",
+        "roles": [
+          "authenticated"
+        ]
+      },
+      {
+        "module": "notifikasi",
+        "file": "backend/routes/notifikasi.js",
+        "mounted": true,
+        "method": "PUT",
+        "routePath": "/read-all",
+        "fullPath": "/api/notifikasi/read-all",
+        "roles": [
+          "authenticated"
+        ]
+      },
+      {
+        "module": "pengguna",
+        "file": "backend/routes/pengguna.js",
+        "mounted": true,
+        "method": "GET",
+        "routePath": "/",
+        "fullPath": "/api/pengguna",
+        "roles": [
+          "admin",
+          "admin_cabang",
+          "kepsek"
+        ]
+      },
+      {
+        "module": "pengguna",
+        "file": "backend/routes/pengguna.js",
+        "mounted": true,
+        "method": "POST",
+        "routePath": "/:id/reset-password",
+        "fullPath": "/api/pengguna/:id/reset-password",
+        "roles": [
+          "admin",
+          "admin_cabang"
+        ]
+      },
+      {
+        "module": "pengguna",
+        "file": "backend/routes/pengguna.js",
+        "mounted": true,
+        "method": "POST",
+        "routePath": "/staff",
+        "fullPath": "/api/pengguna/staff",
+        "roles": [
+          "admin",
+          "admin_cabang"
+        ]
+      },
+      {
+        "module": "pengguna",
+        "file": "backend/routes/pengguna.js",
+        "mounted": true,
+        "method": "PUT",
+        "routePath": "/staff/:id",
+        "fullPath": "/api/pengguna/staff/:id",
+        "roles": [
+          "admin",
+          "admin_cabang"
+        ]
+      },
+      {
+        "module": "pengguna",
+        "file": "backend/routes/pengguna.js",
+        "mounted": true,
+        "method": "GET",
+        "routePath": "/wali",
+        "fullPath": "/api/pengguna/wali",
+        "roles": [
+          "admin",
+          "admin_cabang",
+          "kepsek"
+        ]
+      },
+      {
+        "module": "pengguna",
+        "file": "backend/routes/pengguna.js",
+        "mounted": true,
+        "method": "POST",
+        "routePath": "/wali",
+        "fullPath": "/api/pengguna/wali",
+        "roles": [
+          "admin",
+          "admin_cabang"
+        ]
+      },
+      {
+        "module": "penjemputan",
+        "file": "backend/routes/penjemputan.js",
+        "mounted": true,
+        "method": "POST",
+        "routePath": "/pulang",
+        "fullPath": "/api/penjemputan/pulang",
+        "roles": [
+          "guru",
+          "admin",
+          "admin_cabang"
+        ]
+      },
+      {
+        "module": "penjemputan",
+        "file": "backend/routes/penjemputan.js",
+        "mounted": true,
+        "method": "POST",
+        "routePath": "/scan",
+        "fullPath": "/api/penjemputan/scan",
+        "roles": [
+          "gerbang",
+          "guru",
+          "admin",
+          "admin_cabang"
+        ]
+      },
+      {
+        "module": "siswa",
+        "file": "backend/routes/siswa.js",
+        "mounted": true,
+        "method": "GET",
+        "routePath": "/",
+        "fullPath": "/api/siswa",
+        "roles": [
+          "authenticated"
+        ]
+      },
+      {
+        "module": "siswa",
+        "file": "backend/routes/siswa.js",
+        "mounted": true,
+        "method": "POST",
+        "routePath": "/",
+        "fullPath": "/api/siswa",
+        "roles": [
+          "admin",
+          "admin_cabang"
+        ]
+      },
+      {
+        "module": "siswa",
+        "file": "backend/routes/siswa.js",
+        "mounted": true,
+        "method": "GET",
+        "routePath": "/:id",
+        "fullPath": "/api/siswa/:id",
+        "roles": [
+          "authenticated"
+        ]
+      },
+      {
+        "module": "siswa",
+        "file": "backend/routes/siswa.js",
+        "mounted": true,
+        "method": "PUT",
+        "routePath": "/:id",
+        "fullPath": "/api/siswa/:id",
+        "roles": [
+          "admin",
+          "admin_cabang"
+        ]
+      },
+      {
+        "module": "siswa",
+        "file": "backend/routes/siswa.js",
+        "mounted": true,
+        "method": "POST",
+        "routePath": "/:id/enrollment",
+        "fullPath": "/api/siswa/:id/enrollment",
+        "roles": [
+          "admin",
+          "admin_cabang"
+        ]
+      },
+      {
+        "module": "siswa",
+        "file": "backend/routes/siswa.js",
+        "mounted": true,
+        "method": "POST",
+        "routePath": "/:id/nfc/reissue",
+        "fullPath": "/api/siswa/:id/nfc/reissue",
+        "roles": [
+          "admin",
+          "admin_cabang"
+        ]
+      },
+      {
+        "module": "siswa",
+        "file": "backend/routes/siswa.js",
+        "mounted": true,
+        "method": "GET",
+        "routePath": "/:id/penjemput",
+        "fullPath": "/api/siswa/:id/penjemput",
+        "roles": [
+          "authenticated"
+        ]
+      },
+      {
+        "module": "siswa",
+        "file": "backend/routes/siswa.js",
+        "mounted": true,
+        "method": "POST",
+        "routePath": "/:id/penjemput",
+        "fullPath": "/api/siswa/:id/penjemput",
+        "roles": [
+          "admin",
+          "admin_cabang"
+        ]
+      },
+      {
+        "module": "siswa",
+        "file": "backend/routes/siswa.js",
+        "mounted": true,
+        "method": "PUT",
+        "routePath": "/penjemput/:id",
+        "fullPath": "/api/siswa/penjemput/:id",
+        "roles": [
+          "admin",
+          "admin_cabang"
+        ]
+      },
+      {
+        "module": "guru",
+        "file": "backend/routes/guru.js",
+        "mounted": false,
+        "method": "GET",
+        "routePath": "/",
+        "fullPath": null,
+        "roles": [
+          "authenticated"
+        ]
+      },
+      {
+        "module": "guru",
+        "file": "backend/routes/guru.js",
+        "mounted": false,
+        "method": "POST",
+        "routePath": "/",
+        "fullPath": null,
+        "roles": [
+          "admin"
+        ]
+      },
+      {
+        "module": "guru",
+        "file": "backend/routes/guru.js",
+        "mounted": false,
+        "method": "PUT",
+        "routePath": "/:id",
+        "fullPath": null,
+        "roles": [
+          "admin"
+        ]
+      },
+      {
+        "module": "guru",
+        "file": "backend/routes/guru.js",
+        "mounted": false,
+        "method": "DELETE",
+        "routePath": "/:id",
+        "fullPath": null,
+        "roles": [
+          "admin"
+        ]
+      },
+      {
+        "module": "guru",
+        "file": "backend/routes/guru.js",
+        "mounted": false,
+        "method": "POST",
+        "routePath": "/:id/foto",
+        "fullPath": null,
+        "roles": [
+          "admin"
+        ]
+      },
+      {
+        "module": "guru",
+        "file": "backend/routes/guru.js",
+        "mounted": false,
+        "method": "DELETE",
+        "routePath": "/:id/foto",
+        "fullPath": null,
+        "roles": [
+          "admin"
+        ]
+      },
+      {
+        "module": "kelas",
+        "file": "backend/routes/kelas.js",
+        "mounted": false,
+        "method": "GET",
+        "routePath": "/",
+        "fullPath": null,
+        "roles": [
+          "authenticated"
+        ]
+      },
+      {
+        "module": "kelas",
+        "file": "backend/routes/kelas.js",
+        "mounted": false,
+        "method": "PUT",
+        "routePath": "/:id",
+        "fullPath": null,
+        "roles": [
+          "admin",
+          "kepsek"
+        ]
+      },
+      {
+        "module": "kelas",
+        "file": "backend/routes/kelas.js",
+        "mounted": false,
+        "method": "POST",
+        "routePath": "/:id/guru",
+        "fullPath": null,
+        "roles": [
+          "admin",
+          "kepsek"
+        ]
+      },
+      {
+        "module": "kelas",
+        "file": "backend/routes/kelas.js",
+        "mounted": false,
+        "method": "DELETE",
+        "routePath": "/:id/guru/:guru_id",
+        "fullPath": null,
+        "roles": [
+          "admin",
+          "kepsek"
+        ]
+      },
+      {
+        "module": "laporan",
+        "file": "backend/routes/laporan.js",
+        "mounted": false,
+        "method": "POST",
+        "routePath": "/",
+        "fullPath": null,
+        "roles": [
+          "guru",
+          "admin",
+          "kepsek"
+        ]
+      },
+      {
+        "module": "laporan",
+        "file": "backend/routes/laporan.js",
+        "mounted": false,
+        "method": "GET",
+        "routePath": "/:siswa_id",
+        "fullPath": null,
+        "roles": [
+          "authenticated"
+        ]
+      },
+      {
+        "module": "laporan",
+        "file": "backend/routes/laporan.js",
+        "mounted": false,
+        "method": "GET",
+        "routePath": "/config/reminder",
+        "fullPath": null,
+        "roles": [
+          "authenticated"
+        ]
+      },
+      {
+        "module": "laporan",
+        "file": "backend/routes/laporan.js",
+        "mounted": false,
+        "method": "PUT",
+        "routePath": "/config/reminder",
+        "fullPath": null,
+        "roles": [
+          "admin",
+          "kepsek"
+        ]
+      },
+      {
+        "module": "laporan",
+        "file": "backend/routes/laporan.js",
+        "mounted": false,
+        "method": "GET",
+        "routePath": "/history/:siswa_id",
+        "fullPath": null,
+        "roles": [
+          "authenticated"
+        ]
+      },
+      {
+        "module": "laporan",
+        "file": "backend/routes/laporan.js",
+        "mounted": false,
+        "method": "GET",
+        "routePath": "/today",
+        "fullPath": null,
+        "roles": [
+          "authenticated"
+        ]
+      },
+      {
+        "module": "rekap",
+        "file": "backend/routes/rekap.js",
+        "mounted": false,
+        "method": "GET",
+        "routePath": "/",
+        "fullPath": null,
+        "roles": [
+          "authenticated"
+        ]
+      },
+      {
+        "module": "rekap",
+        "file": "backend/routes/rekap.js",
+        "mounted": false,
+        "method": "GET",
+        "routePath": "/activity",
+        "fullPath": null,
+        "roles": [
+          "admin",
+          "kepsek"
+        ]
+      },
+      {
+        "module": "rekap",
+        "file": "backend/routes/rekap.js",
+        "mounted": false,
+        "method": "GET",
+        "routePath": "/backup",
+        "fullPath": null,
+        "roles": [
+          "admin"
+        ]
+      },
+      {
+        "module": "rekap",
+        "file": "backend/routes/rekap.js",
+        "mounted": false,
+        "method": "GET",
+        "routePath": "/completeness",
+        "fullPath": null,
+        "roles": [
+          "admin",
+          "kepsek"
+        ]
+      },
+      {
+        "module": "rekap",
+        "file": "backend/routes/rekap.js",
+        "mounted": false,
+        "method": "GET",
+        "routePath": "/dashboard",
+        "fullPath": null,
+        "roles": [
+          "authenticated"
+        ]
+      },
+      {
+        "module": "rekap",
+        "file": "backend/routes/rekap.js",
+        "mounted": false,
+        "method": "POST",
+        "routePath": "/restore",
+        "fullPath": null,
+        "roles": [
+          "admin"
+        ]
+      }
+    ]
+  },
+  "database": {
+    "tables": [
+      {
+        "name": "organisasi",
+        "columns": [
+          "id",
+          "nama",
+          "alamat",
+          "kontak",
+          "rekening_nama",
+          "rekening_bank",
+          "rekening_nomor",
+          "logo_url",
+          "updated_at"
+        ],
+        "references": []
+      },
+      {
+        "name": "cabang",
+        "columns": [
+          "id",
+          "nama",
+          "kode",
+          "alamat",
+          "kontak",
+          "aktif",
+          "created_at",
+          "updated_at"
+        ],
+        "references": []
+      },
+      {
+        "name": "jenjang",
+        "columns": [
+          "id",
+          "kode",
+          "nama",
+          "tipe",
+          "urutan",
+          "aktif"
+        ],
+        "references": []
+      },
+      {
+        "name": "rombel",
+        "columns": [
+          "id",
+          "cabang_id",
+          "jenjang_id",
+          "nama",
+          "aktif",
+          "created_at",
+          "updated_at",
+          "UNIQUE(cabang_id,nama)"
+        ],
+        "references": [
+          {
+            "table": "cabang",
+            "column": "id"
+          },
+          {
+            "table": "jenjang",
+            "column": "id"
+          }
+        ]
+      },
+      {
+        "name": "pengguna",
+        "columns": [
+          "id",
+          "tipe",
+          "role",
+          "display_name",
+          "username",
+          "no_wa",
+          "password_hash",
+          "status",
+          "must_change_password",
+          "created_at",
+          "updated_at"
+        ],
+        "references": []
+      },
+      {
+        "name": "staff_profile",
+        "columns": [
+          "pengguna_id",
+          "cabang_id",
+          "foto",
+          "jabatan",
+          "no_wa_kontak"
+        ],
+        "references": [
+          {
+            "table": "pengguna",
+            "column": "id"
+          },
+          {
+            "table": "cabang",
+            "column": "id"
+          }
+        ]
+      },
+      {
+        "name": "wali_profile",
+        "columns": [
+          "pengguna_id",
+          "no_wa",
+          "catatan"
+        ],
+        "references": [
+          {
+            "table": "pengguna",
+            "column": "id"
+          }
+        ]
+      },
+      {
+        "name": "siswa",
+        "columns": [
+          "id",
+          "nama",
+          "nis",
+          "nama_panggilan",
+          "gender",
+          "tanggal_lahir",
+          "alamat",
+          "catatan_khusus",
+          "foto",
+          "nfc_token",
+          "status",
+          "status_kartu",
+          "created_at",
+          "updated_at"
+        ],
+        "references": []
+      },
+      {
+        "name": "siswa_enrollment",
+        "columns": [
+          "id",
+          "siswa_id",
+          "cabang_id",
+          "jenjang_id",
+          "rombel_id",
+          "paket",
+          "tanggal_mulai",
+          "tanggal_selesai",
+          "status",
+          "alasan",
+          "created_at",
+          "created_by"
+        ],
+        "references": [
+          {
+            "table": "siswa",
+            "column": "id"
+          },
+          {
+            "table": "cabang",
+            "column": "id"
+          },
+          {
+            "table": "jenjang",
+            "column": "id"
+          },
+          {
+            "table": "rombel",
+            "column": "id"
+          },
+          {
+            "table": "pengguna",
+            "column": "id"
+          }
+        ]
+      },
+      {
+        "name": "wali_siswa",
+        "columns": [
+          "id",
+          "wali_pengguna_id",
+          "siswa_id",
+          "relasi",
+          "aktif",
+          "created_at",
+          "UNIQUE(siswa_id,aktif)"
+        ],
+        "references": [
+          {
+            "table": "pengguna",
+            "column": "id"
+          },
+          {
+            "table": "siswa",
+            "column": "id"
+          }
+        ]
+      },
+      {
+        "name": "guru_rombel",
+        "columns": [
+          "id",
+          "pengguna_id",
+          "rombel_id",
+          "role",
+          "created_at",
+          "UNIQUE(pengguna_id,rombel_id)"
+        ],
+        "references": [
+          {
+            "table": "pengguna",
+            "column": "id"
+          },
+          {
+            "table": "rombel",
+            "column": "id"
+          }
+        ]
+      },
+      {
+        "name": "penjemput",
+        "columns": [
+          "id",
+          "siswa_id",
+          "nama",
+          "no_wa",
+          "relasi",
+          "qr_code",
+          "catatan",
+          "aktif"
+        ],
+        "references": [
+          {
+            "table": "siswa",
+            "column": "id"
+          }
+        ]
+      },
+      {
+        "name": "operasional_config",
+        "columns": [
+          "id",
+          "cabang_id",
+          "jenjang_id",
+          "paket",
+          "jam_masuk",
+          "jam_pulang",
+          "hitung_terlambat",
+          "pakai_kalender",
+          "daily_record_wajib",
+          "daily_record_due_time",
+          "pickup_fleksibel",
+          "UNIQUE(cabang_id,jenjang_id,paket)"
+        ],
+        "references": [
+          {
+            "table": "cabang",
+            "column": "id"
+          },
+          {
+            "table": "jenjang",
+            "column": "id"
+          }
+        ]
+      },
+      {
+        "name": "kalender_event",
+        "columns": [
+          "id",
+          "scope",
+          "cabang_id",
+          "tanggal",
+          "tipe",
+          "nama",
+          "created_at"
+        ],
+        "references": [
+          {
+            "table": "cabang",
+            "column": "id"
+          }
+        ]
+      },
+      {
+        "name": "absensi",
+        "columns": [
+          "id",
+          "siswa_id",
+          "cabang_id",
+          "jenjang_id",
+          "rombel_id",
+          "paket",
+          "tanggal",
+          "status",
+          "jam_masuk",
+          "jam_pulang",
+          "jam_tunggu",
+          "penjemput_id",
+          "manual",
+          "catatan",
+          "created_at",
+          "updated_at",
+          "UNIQUE(siswa_id,tanggal)"
+        ],
+        "references": [
+          {
+            "table": "siswa",
+            "column": "id"
+          },
+          {
+            "table": "cabang",
+            "column": "id"
+          },
+          {
+            "table": "jenjang",
+            "column": "id"
+          },
+          {
+            "table": "rombel",
+            "column": "id"
+          },
+          {
+            "table": "penjemput",
+            "column": "id"
+          }
+        ]
+      },
+      {
+        "name": "laporan_harian",
+        "columns": [
+          "id",
+          "siswa_id",
+          "cabang_id",
+          "jenjang_id",
+          "rombel_id",
+          "paket",
+          "tanggal",
+          "guru_id",
+          "status",
+          "mood",
+          "makan",
+          "tidur",
+          "aktivitas",
+          "catatan",
+          "published_at",
+          "last_published_change_at",
+          "created_at",
+          "updated_at",
+          "UNIQUE(siswa_id,tanggal)"
+        ],
+        "references": [
+          {
+            "table": "siswa",
+            "column": "id"
+          },
+          {
+            "table": "cabang",
+            "column": "id"
+          },
+          {
+            "table": "jenjang",
+            "column": "id"
+          },
+          {
+            "table": "rombel",
+            "column": "id"
+          },
+          {
+            "table": "pengguna",
+            "column": "id"
+          }
+        ]
+      },
+      {
+        "name": "laporan_edit_log",
+        "columns": [
+          "id",
+          "laporan_id",
+          "pengguna_id",
+          "perubahan",
+          "reason",
+          "created_at"
+        ],
+        "references": [
+          {
+            "table": "laporan_harian",
+            "column": "id"
+          },
+          {
+            "table": "pengguna",
+            "column": "id"
+          }
+        ]
+      },
+      {
+        "name": "laporan_attachment",
+        "columns": [
+          "id",
+          "laporan_id",
+          "url",
+          "filename",
+          "size_bytes",
+          "sort_order",
+          "created_by",
+          "created_at"
+        ],
+        "references": [
+          {
+            "table": "laporan_harian",
+            "column": "id"
+          },
+          {
+            "table": "pengguna",
+            "column": "id"
+          }
+        ]
+      },
+      {
+        "name": "laporan_read",
+        "columns": [
+          "id",
+          "laporan_id",
+          "wali_pengguna_id",
+          "read_at",
+          "UNIQUE(laporan_id,wali_pengguna_id)"
+        ],
+        "references": [
+          {
+            "table": "laporan_harian",
+            "column": "id"
+          },
+          {
+            "table": "pengguna",
+            "column": "id"
+          }
+        ]
+      },
+      {
+        "name": "laporan_comment",
+        "columns": [
+          "id",
+          "laporan_id",
+          "siswa_id",
+          "cabang_id",
+          "author_pengguna_id",
+          "body",
+          "created_at"
+        ],
+        "references": [
+          {
+            "table": "laporan_harian",
+            "column": "id"
+          },
+          {
+            "table": "siswa",
+            "column": "id"
+          },
+          {
+            "table": "cabang",
+            "column": "id"
+          },
+          {
+            "table": "pengguna",
+            "column": "id"
+          }
+        ]
+      },
+      {
+        "name": "notifikasi",
+        "columns": [
+          "id",
+          "recipient_pengguna_id",
+          "tipe",
+          "title",
+          "body",
+          "entity_type",
+          "entity_id",
+          "cabang_id",
+          "read_at",
+          "created_at"
+        ],
+        "references": [
+          {
+            "table": "pengguna",
+            "column": "id"
+          },
+          {
+            "table": "cabang",
+            "column": "id"
+          }
+        ]
+      },
+      {
+        "name": "audit_log",
+        "columns": [
+          "id",
+          "actor_pengguna_id",
+          "action",
+          "entity_type",
+          "entity_id",
+          "cabang_id",
+          "before_json",
+          "after_json",
+          "reason",
+          "created_at"
+        ],
+        "references": [
+          {
+            "table": "pengguna",
+            "column": "id"
+          },
+          {
+            "table": "cabang",
+            "column": "id"
+          }
+        ]
+      },
+      {
+        "name": "biaya_tarif",
+        "columns": [
+          "id",
+          "cabang_id",
+          "tahun_ajaran",
+          "jenjang_id",
+          "jenis",
+          "nama",
+          "nominal",
+          "aktif",
+          "created_at",
+          "updated_at",
+          "UNIQUE(cabang_id,tahun_ajaran,jenjang_id,jenis,nama)"
+        ],
+        "references": [
+          {
+            "table": "cabang",
+            "column": "id"
+          },
+          {
+            "table": "jenjang",
+            "column": "id"
+          }
+        ]
+      },
+      {
+        "name": "diskon_siswa",
+        "columns": [
+          "id",
+          "siswa_id",
+          "cabang_id",
+          "tahun_ajaran",
+          "jenis",
+          "tipe",
+          "nilai",
+          "catatan",
+          "aktif",
+          "created_by",
+          "created_at"
+        ],
+        "references": [
+          {
+            "table": "siswa",
+            "column": "id"
+          },
+          {
+            "table": "cabang",
+            "column": "id"
+          },
+          {
+            "table": "pengguna",
+            "column": "id"
+          }
+        ]
+      },
+      {
+        "name": "tagihan",
+        "columns": [
+          "id",
+          "siswa_id",
+          "cabang_id",
+          "jenjang_id",
+          "rombel_id",
+          "paket",
+          "tahun_ajaran",
+          "periode",
+          "jenis",
+          "nama",
+          "nominal_awal",
+          "prorata_amount",
+          "koreksi_amount",
+          "diskon_amount",
+          "nominal_final",
+          "status",
+          "koreksi_reason",
+          "created_by",
+          "created_at",
+          "updated_at",
+          "UNIQUE(siswa_id,cabang_id,tahun_ajaran,periode,jenis,nama)"
+        ],
+        "references": [
+          {
+            "table": "siswa",
+            "column": "id"
+          },
+          {
+            "table": "cabang",
+            "column": "id"
+          },
+          {
+            "table": "jenjang",
+            "column": "id"
+          },
+          {
+            "table": "rombel",
+            "column": "id"
+          },
+          {
+            "table": "pengguna",
+            "column": "id"
+          }
+        ]
+      },
+      {
+        "name": "pembayaran",
+        "columns": [
+          "id",
+          "cabang_id",
+          "siswa_id",
+          "receipt_no",
+          "tanggal_bayar",
+          "nominal",
+          "metode",
+          "status",
+          "reference",
+          "catatan",
+          "verified_by",
+          "verified_at",
+          "void_reason",
+          "created_by",
+          "created_at",
+          "updated_at"
+        ],
+        "references": [
+          {
+            "table": "cabang",
+            "column": "id"
+          },
+          {
+            "table": "siswa",
+            "column": "id"
+          },
+          {
+            "table": "pengguna",
+            "column": "id"
+          },
+          {
+            "table": "pengguna",
+            "column": "id"
+          }
+        ]
+      },
+      {
+        "name": "pembayaran_alokasi",
+        "columns": [
+          "id",
+          "pembayaran_id",
+          "tagihan_id",
+          "nominal",
+          "created_at"
+        ],
+        "references": [
+          {
+            "table": "pembayaran",
+            "column": "id"
+          },
+          {
+            "table": "tagihan",
+            "column": "id"
+          }
+        ]
+      },
+      {
+        "name": "invoice",
+        "columns": [
+          "id",
+          "cabang_id",
+          "siswa_id",
+          "invoice_no",
+          "tahun_ajaran",
+          "status",
+          "created_by",
+          "created_at"
+        ],
+        "references": [
+          {
+            "table": "cabang",
+            "column": "id"
+          },
+          {
+            "table": "siswa",
+            "column": "id"
+          },
+          {
+            "table": "pengguna",
+            "column": "id"
+          }
+        ]
+      },
+      {
+        "name": "invoice_item",
+        "columns": [
+          "id",
+          "invoice_id",
+          "tagihan_id"
+        ],
+        "references": [
+          {
+            "table": "invoice",
+            "column": "id"
+          },
+          {
+            "table": "tagihan",
+            "column": "id"
+          }
+        ]
+      },
+      {
+        "name": "sequence_counter",
+        "columns": [
+          "key",
+          "value"
+        ],
+        "references": []
+      }
+    ],
+    "indexes": [
+      {
+        "name": "idx_pengguna_staff_username",
+        "table": "pengguna",
+        "unique": true,
+        "columns": [
+          "username"
+        ]
+      },
+      {
+        "name": "idx_pengguna_wali_wa",
+        "table": "pengguna",
+        "unique": true,
+        "columns": [
+          "no_wa"
+        ]
+      },
+      {
+        "name": "idx_siswa_nis_unique",
+        "table": "siswa",
+        "unique": true,
+        "columns": [
+          "nis"
+        ]
+      },
+      {
+        "name": "idx_siswa_nfc_unique",
+        "table": "siswa",
+        "unique": true,
+        "columns": [
+          "nfc_token"
+        ]
+      },
+      {
+        "name": "idx_enrollment_siswa",
+        "table": "siswa_enrollment",
+        "unique": false,
+        "columns": [
+          "siswa_id",
+          "status",
+          "tanggal_mulai"
+        ]
+      }
+    ]
+  },
+  "docs": [
+    "docs/multi-cabang-dan-portal-wali.md",
+    "docs/future-features.md",
+    "frontend/DESIGN.md"
+  ],
+  "notableFindings": [
+    "4 route modules exist but are not mounted by backend/server.js: guru, kelas, laporan, rekap.",
+    "5 frontend API calls reference methods missing from frontend/src/api.js, all currently in components such as LaporanTab.",
+    "Runtime artifacts are present in the repo tree, including SQLite database files and uploaded images; these are mapped as runtime state rather than source architecture.",
+    "No dedicated test files were found in the app source tree during this scan."
+  ],
+  "sourceInventory": {
+    "sourceFiles": [
+      "backend/db.js",
+      "backend/init.js",
+      "backend/middleware/auth.js",
+      "backend/package.json",
+      "backend/routes/absensi.js",
+      "backend/routes/auth.js",
+      "backend/routes/billing.js",
+      "backend/routes/dailyRecord.js",
+      "backend/routes/guru.js",
+      "backend/routes/kelas.js",
+      "backend/routes/laporan.js",
+      "backend/routes/master.js",
+      "backend/routes/notifikasi.js",
+      "backend/routes/pengguna.js",
+      "backend/routes/penjemputan.js",
+      "backend/routes/rekap.js",
+      "backend/routes/siswa.js",
+      "backend/server.js",
+      "backend/utils/imageUpload.js",
+      "backend/utils/workflow.js",
+      "docs/future-features.md",
+      "docs/multi-cabang-dan-portal-wali.md",
+      "frontend/build.mjs",
+      "frontend/DESIGN.md",
+      "frontend/dev.mjs",
+      "frontend/package.json",
+      "frontend/postcss.config.js",
+      "frontend/src/api.js",
+      "frontend/src/App.jsx",
+      "frontend/src/components/LaporanTab.jsx",
+      "frontend/src/components/Shared.jsx",
+      "frontend/src/index.css",
+      "frontend/src/main.jsx",
+      "frontend/src/views/AdminView.jsx",
+      "frontend/src/views/GerbangView.jsx",
+      "frontend/src/views/GuruView.jsx",
+      "frontend/src/views/KepsekView.jsx",
+      "frontend/src/views/LoginView.jsx",
+      "frontend/src/views/WaliView.jsx",
+      "frontend/tailwind.config.js",
+      "frontend/tailwind.theme.json",
+      "frontend/vite.config.js",
+      "package.json"
+    ],
+    "runtimeArtifacts": [
+      "backend/restore-upload-1778778294294.db",
+      "backend/restore-upload-1778778316917.db",
+      "backend/restore-upload-1778778316917.db-shm",
+      "backend/restore-upload-1778778316917.db-wal",
+      "backend/siaga.db",
+      "backend/siaga.db-shm",
+      "backend/siaga.db-wal",
+      "backend/uploads/guru/3.jpg",
+      "backend/uploads/siswa/2.jpg",
+      "backend/uploads/siswa/3.jpg",
+      "frontend/public/apple-touch-icon.png",
+      "frontend/public/favicon-96x96.png",
+      "frontend/public/favicon.ico",
+      "frontend/public/favicon.svg",
+      "frontend/public/web-app-manifest-192x192.png",
+      "frontend/public/web-app-manifest-512x512.png"
+    ]
+  }
+}
