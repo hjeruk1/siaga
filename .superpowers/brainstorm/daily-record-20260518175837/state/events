@@ -1,0 +1,6 @@
+{"type":"click","text":"1\n    \n      Butuh objek baru: Modul Ajar\n      Dimiliki akademik, periodenya mingguan, menjadi sumber referensi guru.","choice":"module-master","id":null,"timestamp":1779163075654}
+{"type":"click","text":"2\n    \n      Butuh objek baru: Focus Theme\n      Dibuat guru per tanggal/rombel, ditautkan ke modul ajar, lalu menjadi konteks daily record.","choice":"focus-theme","id":null,"timestamp":1779163077017}
+{"type":"click","text":"2\n    \n      Butuh objek baru: Focus Theme\n      Dibuat guru per tanggal/rombel, ditautkan ke modul ajar, lalu menjadi konteks daily record.","choice":"focus-theme","id":null,"timestamp":1779163079857}
+{"type":"click","text":"2\n    \n      Butuh objek baru: Focus Theme\n      Dibuat guru per tanggal/rombel, ditautkan ke modul ajar, lalu menjadi konteks daily record.","choice":"focus-theme","id":null,"timestamp":1779163081503}
+{"type":"click","text":"3\n    \n      Daily record mengambil prefill dari focus theme\n      Guru tidak perlu mengetik tema inti berulang untuk setiap anak.","choice":"daily-prefill","id":null,"timestamp":1779163086355}
+{"type":"click","text":"4\n    \n      Yang individual tetap catatan anak\n      Focus theme menjelaskan pembelajaran hari ini; catatan anak menjelaskan bagaimana anak merespons.","choice":"child-note","id":null,"timestamp":1779163088163}
