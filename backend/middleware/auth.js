@@ -7,7 +7,7 @@ const SECRET = process.env.JWT_SECRET || 'siaga-dev';
 function loadUser(id) {
   const user = db.prepare(`
     SELECT p.id,p.tipe,p.role,p.display_name,p.username,p.no_wa,p.status,p.must_change_password,
-           sp.cabang_id,c.nama AS cabang_nama,c.kode AS cabang_kode
+           sp.cabang_id,c.nama AS cabang_nama,c.kode AS cabang_kode,sp.foto
     FROM pengguna p
     LEFT JOIN staff_profile sp ON sp.pengguna_id=p.id
     LEFT JOIN cabang c ON c.id=sp.cabang_id

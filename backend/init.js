@@ -14,7 +14,8 @@ const tables = [
   'audit_log','notifikasi','laporan_comment','laporan_read','laporan_attachment','laporan_edit_log',
   'laporan_harian','absensi','kalender_event','operasional_config','penjemput','guru_rombel',
   'wali_siswa','siswa_enrollment','siswa','wali_profile','staff_profile','pengguna','rombel',
-  'jenjang','cabang','sequence_counter'
+  'jenjang','cabang','sequence_counter','organisasi','early_release','tutup_hari','penjemputan_log',
+  'qr_reissue_log','nfc_scan_log','modul_ajar','focus_theme','kenaikan_batch','saldo_kredit'
 ];
 
 db.exec('PRAGMA foreign_keys = OFF');

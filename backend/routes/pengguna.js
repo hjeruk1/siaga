@@ -5,7 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const db = require('../db');
 const auth = require('../middleware/auth');
-const { uploadImage, saveSquareJpeg, ensureDir } = require('../utils/imageUpload');
+const { uploadImage, saveSquareJpeg, ensureDir } = require('../utils/image-upload');
 const { nowUtc, audit, requireCabang, requireActiveCabang } = require('../utils/workflow');
 
 const FOTO_DIR = path.join(__dirname, '../uploads/foto');
@@ -33,6 +33,34 @@ function canAccessWali(actor, waliId) {
     WHERE ws.wali_pengguna_id=? AND e.cabang_id=?
     LIMIT 1
   `).get(waliId, actor.cabang_id);
+}
+
+function staffDeleteBlockers(id) {
+  const checks = [
+    ['tutup_hari', 'closed_by', 'tutup hari'],
+    ['penjemputan_log', 'guru_id', 'log penjemputan'],
+    ['qr_reissue_log', 'admin_id', 'riwayat reissue QR'],
+    ['nfc_scan_log', 'pengguna_id', 'log scan NFC'],
+    ['modul_ajar', 'created_by', 'modul ajar'],
+    ['focus_theme', 'created_by', 'focus theme'],
+    ['laporan_harian', 'guru_id', 'daily record'],
+    ['laporan_edit_log', 'pengguna_id', 'riwayat edit daily record'],
+    ['laporan_attachment', 'created_by', 'lampiran daily record'],
+    ['laporan_comment', 'author_pengguna_id', 'komentar daily record'],
+    ['audit_log', 'actor_pengguna_id', 'audit tindakan'],
+    ['early_release', 'created_by', 'early release'],
+    ['siswa_enrollment', 'created_by', 'enrollment siswa'],
+    ['diskon_siswa', 'created_by', 'diskon siswa'],
+    ['tagihan', 'created_by', 'tagihan'],
+    ['pembayaran', 'created_by', 'pembayaran'],
+    ['pembayaran', 'verified_by', 'verifikasi pembayaran'],
+    ['invoice', 'created_by', 'invoice'],
+    ['kenaikan_batch', 'created_by', 'kenaikan tahun ajar']
+  ];
+  return checks.map(([table, column, label]) => {
+    const count = db.prepare(`SELECT COUNT(*) AS cnt FROM ${table} WHERE ${column}=?`).get(id).cnt;
+    return { table, column, label, count };
+  }).filter(x => x.count > 0);
 }
 
 router.get('/', auth(['admin', 'admin_cabang', 'kepsek']), (req, res) => {
@@ -106,6 +134,42 @@ router.put('/staff/:id', auth(['admin', 'admin_cabang']), (req, res) => {
   res.json({ success: true });
 });
 
+router.delete('/staff/:id', auth(['admin', 'admin_cabang']), (req, res) => {
+  const before = db.prepare(`
+    SELECT p.*,sp.cabang_id,sp.foto,c.nama AS cabang_nama
+    FROM pengguna p
+    LEFT JOIN staff_profile sp ON sp.pengguna_id=p.id
+    LEFT JOIN cabang c ON c.id=sp.cabang_id
+    WHERE p.id=? AND p.tipe='staff'
+  `).get(req.params.id);
+  if (!before) return res.status(404).json({ error: 'Staff tidak ditemukan' });
+  if (Number(before.id) === Number(req.user.id)) return res.status(400).json({ error: 'Tidak bisa menghapus akun sendiri' });
+  if (!canManageRole(req.user, before.role, before.cabang_id)) return res.status(403).json({ error: 'Tidak boleh menghapus staff ini' });
+  if (before.role === 'admin' && before.status === 'aktif') {
+    const activeAdmins = db.prepare("SELECT COUNT(*) AS cnt FROM pengguna WHERE role='admin' AND status='aktif' AND id!=?").get(before.id);
+    if (activeAdmins.cnt === 0) return res.status(400).json({ error: 'Harus ada minimal satu admin aktif' });
+  }
+  const blockers = staffDeleteBlockers(before.id);
+  if (blockers.length) {
+    return res.status(409).json({
+      error: 'Staff sudah punya histori operasional. Gunakan nonaktifkan agar riwayat tetap utuh.',
+      blockers
+    });
+  }
+  const tx = db.transaction(() => {
+    db.prepare('DELETE FROM guru_rombel WHERE pengguna_id=?').run(before.id);
+    db.prepare('DELETE FROM notifikasi WHERE recipient_pengguna_id=?').run(before.id);
+    db.prepare('DELETE FROM staff_profile WHERE pengguna_id=?').run(before.id);
+    db.prepare('DELETE FROM pengguna WHERE id=?').run(before.id);
+  });
+  tx();
+  if (before.foto) {
+    try { fs.unlinkSync(path.join(FOTO_DIR, path.basename(before.foto))); } catch {}
+  }
+  audit(req.user, 'delete', 'pengguna', before.id, { cabang_id: before.cabang_id || null, before });
+  res.json({ success: true });
+});
+
 router.post('/:id/reset-password', auth(['admin', 'admin_cabang']), (req, res) => {
   const user = db.prepare('SELECT p.*,sp.cabang_id FROM pengguna p LEFT JOIN staff_profile sp ON sp.pengguna_id=p.id WHERE p.id=?').get(req.params.id);
   if (!user) return res.status(404).json({ error: 'Pengguna tidak ditemukan' });
@@ -122,18 +186,63 @@ router.get('/wali', auth(['admin', 'admin_cabang', 'kepsek']), (req, res) => {
   const cabangId = req.user.role === 'admin' ? req.query.cabang_id : req.user.cabang_id;
   const params = [];
   let where = "WHERE p.tipe='wali'";
-  if (cabangId) { where += ' AND e.cabang_id=? AND e.status=\'aktif\''; params.push(cabangId); }
-  res.json(db.prepare(`
-    SELECT p.id,p.display_name,p.no_wa,p.status,p.must_change_password,
-           GROUP_CONCAT(s.nama, ', ') AS siswa_nama
+  if (cabangId) {
+    where += " AND EXISTS (SELECT 1 FROM wali_siswa ws2 JOIN siswa_enrollment e2 ON e2.siswa_id=ws2.siswa_id AND e2.status='aktif' WHERE ws2.wali_pengguna_id=p.id AND e2.cabang_id=?)";
+    params.push(cabangId);
+  }
+
+  const walis = db.prepare(`
+    SELECT p.id, p.display_name, p.no_wa, p.status, p.must_change_password
     FROM pengguna p
     JOIN wali_profile wp ON wp.pengguna_id=p.id
-    LEFT JOIN wali_siswa ws ON ws.wali_pengguna_id=p.id AND ws.aktif=1
-    LEFT JOIN siswa s ON s.id=ws.siswa_id
-    LEFT JOIN siswa_enrollment e ON e.siswa_id=s.id AND e.status='aktif'
     ${where}
-    GROUP BY p.id ORDER BY p.display_name
-  `).all(...params));
+    ORDER BY p.display_name
+  `).all(...params);
+
+  const result = walis.map(w => {
+    const children = db.prepare(`
+      SELECT s.id, s.nama, s.foto, r.nama AS rombel_nama, c.nama AS cabang_nama, r.id AS rombel_id
+      FROM wali_siswa ws
+      JOIN siswa s ON s.id=ws.siswa_id
+      LEFT JOIN siswa_enrollment e ON e.siswa_id=s.id AND e.status='aktif'
+      LEFT JOIN rombel r ON r.id=e.rombel_id
+      LEFT JOIN cabang c ON c.id=e.cabang_id
+      WHERE ws.wali_pengguna_id=? AND ws.aktif=1
+    `).all(w.id);
+
+    const childrenWithGurus = children.map(ch => {
+      let gurus = [];
+      if (ch.rombel_id) {
+        gurus = db.prepare(`
+          SELECT p.id, p.display_name, sp.foto, gr.role
+          FROM guru_rombel gr
+          JOIN pengguna p ON p.id=gr.pengguna_id
+          LEFT JOIN staff_profile sp ON sp.pengguna_id=p.id
+          WHERE gr.rombel_id=? AND p.status='aktif'
+        `).all(ch.rombel_id);
+      }
+      return {
+        id: ch.id,
+        nama: ch.nama,
+        foto: ch.foto,
+        rombel_nama: ch.rombel_nama,
+        cabang_nama: ch.cabang_nama,
+        gurus
+      };
+    });
+
+    const siswa_nama = children.map(ch => ch.nama).join(', ');
+    const cabang_nama = [...new Set(children.map(ch => ch.cabang_nama).filter(Boolean))].join(', ');
+
+    return {
+      ...w,
+      siswa_nama: siswa_nama || '-',
+      cabang_nama: cabang_nama || '-',
+      children: childrenWithGurus
+    };
+  });
+
+  res.json(result);
 });
 
 router.post('/wali', auth(['admin', 'admin_cabang']), (req, res) => {

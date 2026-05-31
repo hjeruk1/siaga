@@ -4,8 +4,8 @@ const path = require('path');
 const fs = require('fs');
 const db = require('../db');
 const auth = require('../middleware/auth');
-const { uploadImage, saveSquareJpeg, ensureDir } = require('../utils/imageUpload');
-const { nowUtc, todayWIB, activeEnrollment, siswaScopeSql, requireCabang, requireActiveCabang, audit } = require('../utils/workflow');
+const { uploadImage, saveSquareJpeg, ensureDir } = require('../utils/image-upload');
+const { nowUtc, todayWIB, schoolYearForDate, activeEnrollment, siswaScopeSql, requireCabang, requireActiveCabang, audit } = require('../utils/workflow');
 
 const FOTO_DIR = path.join(__dirname, '../uploads/foto');
 ensureDir(FOTO_DIR);
@@ -31,6 +31,7 @@ function dateBefore(date) {
 }
 
 const SISWA_STATUSES = new Set(['aktif', 'keluar', 'lulus']);
+const KENAIKAN_ACTIONS = new Set(['naik', 'tinggal', 'lulus', 'tetap', 'skip']);
 
 function normalizeSiswaStatus(value, fallback = 'aktif') {
   const status = value || fallback;
@@ -40,6 +41,36 @@ function normalizeSiswaStatus(value, fallback = 'aktif') {
     throw error;
   }
   return status;
+}
+
+function kenaikanContext(req) {
+  const cabangId = Number(req.user.role === 'admin' ? req.body.cabang_id : req.user.cabang_id);
+  const tanggalEfektif = req.body.tanggal_efektif || todayWIB();
+  const tahunAjaran = String(req.body.tahun_ajaran || schoolYearForDate(tanggalEfektif));
+  return { cabangId, tanggalEfektif, tahunAjaran };
+}
+
+function kenaikanTarget(row, jenjang, rombel, action = null) {
+  if (row.jenjang_tipe === 'care') {
+    return { action: action || 'tetap', target_jenjang: row.jenjang_nama, target_jenjang_id: row.jenjang_id, target_rombel: row.rombel_nama, target_rombel_id: row.rombel_id };
+  }
+  const nextIdx = jenjang.findIndex(j => Number(j.id) === Number(row.jenjang_id)) + 1;
+  if (nextIdx >= jenjang.length || jenjang[nextIdx].tipe === 'care') {
+    return { action: action || 'lulus', target_jenjang: 'Lulus', target_jenjang_id: null, target_rombel: '-', target_rombel_id: null };
+  }
+  const nextJenjang = jenjang[nextIdx];
+  const targetRombel = rombel.find(r => Number(r.jenjang_id) === Number(nextJenjang.id));
+  if (!targetRombel) {
+    return { action: 'error', target_jenjang: nextJenjang.nama, target_jenjang_id: nextJenjang.id, target_rombel: '-', target_rombel_id: null, error: `Rombel tujuan ${nextJenjang.nama} belum tersedia` };
+  }
+  return { action: action || 'naik', target_jenjang: nextJenjang.nama, target_jenjang_id: nextJenjang.id, target_rombel: targetRombel.nama, target_rombel_id: targetRombel.id };
+}
+
+function summarizeKenaikan(items) {
+  return items.reduce((acc, item) => {
+    acc[item.action] = (acc[item.action] || 0) + 1;
+    return acc;
+  }, { naik: 0, tinggal: 0, lulus: 0, tetap: 0, skip: 0, error: 0 });
 }
 
 function managementEnrollment(siswaId) {
@@ -90,7 +121,25 @@ router.get('/wali/children', auth(['wali']), (req, res) => {
     WHERE ws.wali_pengguna_id=? AND ws.aktif=1
     ORDER BY s.nama
   `).all(req.user.id);
-  res.json(rows);
+
+  const result = rows.map(ch => {
+    let gurus = [];
+    if (ch.rombel_id) {
+      gurus = db.prepare(`
+        SELECT p.id, p.display_name, p.no_wa, sp.foto, gr.role
+        FROM guru_rombel gr
+        JOIN pengguna p ON p.id=gr.pengguna_id
+        LEFT JOIN staff_profile sp ON sp.pengguna_id=p.id
+        WHERE gr.rombel_id=? AND p.status='aktif'
+      `).all(ch.rombel_id);
+    }
+    return {
+      ...ch,
+      gurus
+    };
+  });
+
+  res.json(result);
 });
 
 router.get('/:id', auth(), (req, res) => {
@@ -222,8 +271,23 @@ router.put('/penjemput/:id', auth(['admin', 'admin_cabang']), (req, res) => {
   res.json({ success: true });
 });
 
+router.post('/penjemput/:id/qr/reissue', auth(['admin', 'admin_cabang']), (req, res) => {
+  const p = db.prepare('SELECT * FROM penjemput WHERE id=?').get(req.params.id);
+  if (!p) return res.status(404).json({ error: 'Penjemput tidak ditemukan' });
+  const e = managementEnrollment(p.siswa_id);
+  if (!e) return res.status(404).json({ error: 'Enrollment siswa tidak ditemukan' });
+  if (!requireCabang(req, res, e.cabang_id)) return;
+  const qr = makeQr(p.siswa_id);
+  const reason = String(req.body?.reason || 'Reissue QR penjemput').trim();
+  db.prepare('UPDATE penjemput SET qr_code=? WHERE id=?').run(qr, p.id);
+  db.prepare('INSERT INTO qr_reissue_log(siswa_id,penjemput_id,admin_id,cabang_id,old_qr_code,new_qr_code,reason,created_at) VALUES(?,?,?,?,?,?,?,?)')
+    .run(p.siswa_id, p.id, req.user.id, e.cabang_id, p.qr_code, qr, reason, nowUtc());
+  audit(req.user, 'reissue_qr', 'penjemput', p.id, { cabang_id: e.cabang_id, before: { qr_code: p.qr_code }, after: { qr_code: qr, reason } });
+  res.json({ id: p.id, qr_code: qr });
+});
+
 router.post('/kenaikan/preview', auth(['admin', 'admin_cabang']), (req, res) => {
-  const cabangId = req.user.role === 'admin' ? req.body.cabang_id : req.user.cabang_id;
+  const { cabangId, tanggalEfektif, tahunAjaran } = kenaikanContext(req);
   if (!cabangId) return res.status(400).json({ error: 'Cabang wajib' });
   if (!requireActiveCabang(req, res, cabangId)) return;
   const jenjang = db.prepare('SELECT * FROM jenjang WHERE aktif=1 ORDER BY urutan').all();
@@ -239,56 +303,89 @@ router.post('/kenaikan/preview', auth(['admin', 'admin_cabang']), (req, res) => 
   `).all(cabangId);
   const preview = [];
   for (const s of siswa) {
-    if (s.jenjang_tipe === 'care') { preview.push({ ...s, action: 'tetap', target_jenjang: s.jenjang_nama, target_rombel: s.rombel_nama }); continue; }
-    const nextIdx = jenjang.findIndex(j => j.id === s.jenjang_id) + 1;
-    if (nextIdx >= jenjang.length || jenjang[nextIdx].tipe === 'care') {
-      preview.push({ ...s, action: 'lulus', target_jenjang: 'Lulus', target_rombel: '-' });
-      continue;
-    }
-    const nextJenjang = jenjang[nextIdx];
-    const targetRombel = rombel.find(r => r.jenjang_id === nextJenjang.id) || rombel[0];
-    preview.push({ ...s, action: 'naik', target_jenjang: nextJenjang.nama, target_jenjang_id: nextJenjang.id, target_rombel: targetRombel?.nama || '-', target_rombel_id: targetRombel?.id });
+    preview.push({ ...s, ...kenaikanTarget(s, jenjang, rombel) });
   }
-  res.json({ preview, cabang_id: cabangId });
+  res.json({ preview, cabang_id: cabangId, tanggal_efektif: tanggalEfektif, tahun_ajaran: tahunAjaran, summary: summarizeKenaikan(preview) });
 });
 
 router.post('/kenaikan', auth(['admin', 'admin_cabang']), (req, res) => {
-  const cabangId = req.user.role === 'admin' ? req.body.cabang_id : req.user.cabang_id;
+  const { cabangId, tanggalEfektif, tahunAjaran } = kenaikanContext(req);
   if (!cabangId) return res.status(400).json({ error: 'Cabang wajib' });
   if (!requireActiveCabang(req, res, cabangId)) return;
-  const tanggal = req.body.tanggal_efektif || todayWIB();
   const jenjang = db.prepare('SELECT * FROM jenjang WHERE aktif=1 ORDER BY urutan').all();
   const rombel = db.prepare('SELECT * FROM rombel WHERE cabang_id=? AND aktif=1 ORDER BY nama').all(cabangId);
   const siswa = db.prepare(`
-    SELECT s.*,e.id AS enrollment_id,e.jenjang_id,e.rombel_id,e.paket,j.tipe AS jenjang_tipe,j.urutan AS jenjang_urutan
+    SELECT s.*,e.id AS enrollment_id,e.jenjang_id,e.rombel_id,e.paket,j.nama AS jenjang_nama,j.tipe AS jenjang_tipe,j.urutan AS jenjang_urutan,r.nama AS rombel_nama
     FROM siswa s
     JOIN siswa_enrollment e ON e.siswa_id=s.id AND e.status='aktif'
     JOIN jenjang j ON j.id=e.jenjang_id
+    JOIN rombel r ON r.id=e.rombel_id
     WHERE s.status='aktif' AND e.cabang_id=?
   `).all(cabangId);
+  const byId = new Map(siswa.map(s => [Number(s.id), s]));
+  const requestedItems = Array.isArray(req.body.items) ? req.body.items : null;
+  const items = requestedItems && requestedItems.length ? requestedItems : siswa.map(s => ({ siswa_id: s.id, ...kenaikanTarget(s, jenjang, rombel) }));
+  const normalizedItems = [];
+  for (const raw of items) {
+    const siswaId = Number(raw.siswa_id || raw.id);
+    const row = byId.get(siswaId);
+    if (!row) return res.status(400).json({ error: `Siswa ${siswaId || '-'} tidak aktif di cabang ini` });
+    const action = raw.action || kenaikanTarget(row, jenjang, rombel).action;
+    if (!KENAIKAN_ACTIONS.has(action)) return res.status(400).json({ error: `Aksi kenaikan tidak valid untuk ${row.nama}` });
+    if (action === 'skip' || action === 'tetap') {
+      normalizedItems.push({ row, action });
+      continue;
+    }
+    if (action === 'lulus') {
+      normalizedItems.push({ row, action });
+      continue;
+    }
+    let targetJenjangId = Number(raw.target_jenjang_id);
+    let targetRombelId = Number(raw.target_rombel_id);
+    if (action === 'naik' && (!targetJenjangId || !targetRombelId)) {
+      const target = kenaikanTarget(row, jenjang, rombel);
+      if (target.action === 'error') return res.status(400).json({ error: `${row.nama}: ${target.error}` });
+      targetJenjangId = Number(target.target_jenjang_id);
+      targetRombelId = Number(target.target_rombel_id);
+    }
+    if (action === 'tinggal') {
+      targetJenjangId = targetJenjangId || Number(row.jenjang_id);
+    }
+    const targetRombel = rombel.find(r => Number(r.id) === targetRombelId && Number(r.jenjang_id) === targetJenjangId);
+    const targetJenjang = jenjang.find(j => Number(j.id) === targetJenjangId);
+    if (!targetJenjang || !targetRombel) return res.status(400).json({ error: `${row.nama}: Rombel tujuan tidak sesuai cabang/jenjang` });
+    normalizedItems.push({ row, action, targetJenjang, targetRombel, paket: raw.paket || row.paket });
+  }
   const results = [];
   const tx = db.transaction(() => {
-    for (const s of siswa) {
-      if (s.jenjang_tipe === 'care') { results.push({ siswa: s.nama, action: 'tetap' }); continue; }
-      const nextIdx = jenjang.findIndex(j => j.id === s.jenjang_id) + 1;
-      if (nextIdx >= jenjang.length || jenjang[nextIdx].tipe === 'care') {
-        db.prepare("UPDATE siswa SET status='lulus',updated_at=? WHERE id=?").run(nowUtc(), s.id);
-        db.prepare("UPDATE siswa_enrollment SET status='selesai',tanggal_selesai=? WHERE id=?").run(tanggal, s.enrollment_id);
-        results.push({ siswa: s.nama, action: 'lulus' });
+    db.prepare('INSERT INTO kenaikan_batch(cabang_id,tahun_ajaran,tanggal_efektif,summary_json,created_by,created_at) VALUES(?,?,?,?,?,?)')
+      .run(cabangId, tahunAjaran, tanggalEfektif, JSON.stringify(summarizeKenaikan(normalizedItems)), req.user.id, nowUtc());
+    for (const item of normalizedItems) {
+      const s = item.row;
+      if (item.action === 'skip' || item.action === 'tetap') {
+        results.push({ siswa: s.nama, siswa_id: s.id, action: item.action });
         continue;
       }
-      const nextJenjang = jenjang[nextIdx];
-      const targetRombel = rombel.find(r => r.jenjang_id === nextJenjang.id) || rombel[0];
-      if (!targetRombel) { results.push({ siswa: s.nama, action: 'error', error: 'Rombel tujuan tidak ditemukan' }); continue; }
-      db.prepare("UPDATE siswa_enrollment SET status='selesai',tanggal_selesai=? WHERE id=?").run(tanggal, s.enrollment_id);
+      if (item.action === 'lulus') {
+        db.prepare("UPDATE siswa SET status='lulus',updated_at=? WHERE id=?").run(nowUtc(), s.id);
+        db.prepare("UPDATE siswa_enrollment SET status='selesai',tanggal_selesai=? WHERE id=?").run(tanggalEfektif, s.enrollment_id);
+        results.push({ siswa: s.nama, siswa_id: s.id, action: 'lulus' });
+        continue;
+      }
+      db.prepare("UPDATE siswa_enrollment SET status='selesai',tanggal_selesai=? WHERE id=?").run(tanggalEfektif, s.enrollment_id);
       db.prepare('INSERT INTO siswa_enrollment(siswa_id,cabang_id,jenjang_id,rombel_id,paket,tanggal_mulai,status,alasan,created_at,created_by) VALUES(?,?,?,?,?,?,?,?,?,?)')
-        .run(s.id, cabangId, nextJenjang.id, targetRombel.id, s.paket, tanggal, 'aktif', 'Kenaikan tahun ajaran', nowUtc(), req.user.id);
-      results.push({ siswa: s.nama, action: 'naik', target: nextJenjang.nama });
+        .run(s.id, cabangId, item.targetJenjang.id, item.targetRombel.id, item.paket, tanggalEfektif, 'aktif', item.action === 'tinggal' ? 'Tinggal kelas' : 'Kenaikan tahun ajaran', nowUtc(), req.user.id);
+      results.push({ siswa: s.nama, siswa_id: s.id, action: item.action, target: item.targetJenjang.nama, target_rombel: item.targetRombel.nama });
     }
-    audit(req.user, 'kenaikan_tahun_ajaran', 'siswa', null, { cabang_id: cabangId, after: { tanggal, count: results.length } });
+    audit(req.user, 'kenaikan_tahun_ajaran', 'siswa', null, { cabang_id: cabangId, after: { tanggal: tanggalEfektif, tahun_ajaran: tahunAjaran, count: results.length, results } });
   });
-  tx();
-  res.json({ success: true, results });
+  try {
+    tx();
+    res.json({ success: true, results, cabang_id: cabangId, tanggal_efektif: tanggalEfektif, tahun_ajaran: tahunAjaran, summary: summarizeKenaikan(normalizedItems) });
+  } catch (e) {
+    if (e.code === 'SQLITE_CONSTRAINT_UNIQUE') return res.status(409).json({ error: 'Kenaikan tahun ajaran untuk cabang dan tahun ajaran ini sudah pernah diproses' });
+    res.status(400).json({ error: e.message || 'Gagal memproses kenaikan tahun ajaran' });
+  }
 });
 
 router.post('/:id/foto', auth(['admin', 'admin_cabang']), uploadImage.single('foto'), async (req, res) => {

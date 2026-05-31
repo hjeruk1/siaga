@@ -9,3 +9,9 @@ backend/.env
 frontend/dist/
 *.log
 frontend/tailwind.theme.json
+backend/uploads/
+.agents/
+.interface-design/
+scratch/
+modul-ajar/
+

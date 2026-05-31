@@ -19,7 +19,8 @@ function publicUser(u) {
     must_change_password: !!u.must_change_password,
     cabang_id: u.cabang_id,
     cabang_nama: u.cabang_nama,
-    cabang_kode: u.cabang_kode
+    cabang_kode: u.cabang_kode,
+    foto: u.foto
   };
 }
 

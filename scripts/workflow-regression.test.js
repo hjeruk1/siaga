@@ -59,6 +59,33 @@ async function pickMaster(adminToken, cabangId = null) {
   return { cabang: activeCabang, jenjang: kb, rombel: targetRombel };
 }
 
+async function pickBranchSchoolMasters(adminToken, cabangId = null) {
+  const cabang = await req('GET', '/api/master/cabang', undefined, adminToken);
+  const jenjang = await req('GET', '/api/master/jenjang', undefined, adminToken);
+  assert.equal(cabang.status, 200);
+  assert.equal(jenjang.status, 200);
+  const activeCabang = (cabangId ? cabang.body.find(c => Number(c.id) === Number(cabangId)) : null) || cabang.body.find(c => c.aktif) || cabang.body[0];
+  const masters = {
+    cabang: activeCabang,
+    kbA: jenjang.body.find(j => j.nama === 'KB A'),
+    kbB: jenjang.body.find(j => j.nama === 'KB B'),
+    tkA: jenjang.body.find(j => j.nama === 'TK A'),
+    tkB: jenjang.body.find(j => j.nama === 'TK B')
+  };
+  assert.ok(masters.cabang);
+  assert.ok(masters.kbA);
+  assert.ok(masters.kbB);
+  assert.ok(masters.tkA);
+  assert.ok(masters.tkB);
+  const rombel = await req('GET', `/api/master/rombel?cabang_id=${masters.cabang.id}`, undefined, adminToken);
+  assert.equal(rombel.status, 200);
+  for (const key of ['kbA', 'kbB', 'tkA', 'tkB']) {
+    masters[`${key}Rombel`] = rombel.body.find(r => Number(r.jenjang_id) === Number(masters[key].id));
+    assert.ok(masters[`${key}Rombel`], `rombel ${key} is required`);
+  }
+  return masters;
+}
+
 async function loginWali(noWa, password) {
   const response = await req('POST', '/api/auth/login', { tipe: 'wali', no_wa: noWa, password });
   assert.equal(response.status, 200, `login wali ${noWa}: ${JSON.stringify(response.body)}`);
@@ -327,5 +354,77 @@ describe('workflow regressions', () => {
     const detail = await req('GET', `/api/daily-record/${daily.body.id}`, undefined, activeWaliToken);
     assert.equal(detail.status, 200, JSON.stringify(detail.body));
     assert.equal(detail.body.status, 'published');
+  });
+
+  it('processes tinggal kelas as a new same-jenjang enrollment and blocks duplicate tahun ajaran batches', async () => {
+    const master = await pickBranchSchoolMasters(adminToken);
+    const siswa = await createSiswa(adminToken, 'repeat-grade', {
+      master: { cabang: master.cabang, jenjang: master.tkA, rombel: master.tkARombel },
+      jenjang_id: master.tkA.id,
+      rombel_id: master.tkARombel.id,
+      tanggal_mulai: '2097-07-01'
+    });
+    const tahunAjaran = `2097/${Date.now()}`;
+    const tanggalEfektif = '2098-07-01';
+
+    const processed = await req('POST', '/api/siswa/kenaikan', {
+      cabang_id: master.cabang.id,
+      tahun_ajaran: tahunAjaran,
+      tanggal_efektif: tanggalEfektif,
+      items: [{
+        siswa_id: siswa.id,
+        action: 'tinggal',
+        target_jenjang_id: master.tkA.id,
+        target_rombel_id: master.tkARombel.id,
+        paket: 'reguler'
+      }]
+    }, adminToken);
+    assert.equal(processed.status, 200, JSON.stringify(processed.body));
+    assert.equal(processed.body.results[0].action, 'tinggal');
+
+    const active = db.prepare("SELECT * FROM siswa_enrollment WHERE siswa_id=? AND status='aktif' ORDER BY id DESC LIMIT 1").get(siswa.id);
+    assert.equal(Number(active.jenjang_id), Number(master.tkA.id));
+    assert.equal(Number(active.rombel_id), Number(master.tkARombel.id));
+    assert.equal(active.tanggal_mulai, tanggalEfektif);
+    const oldEnrollment = db.prepare("SELECT * FROM siswa_enrollment WHERE siswa_id=? AND status='selesai' ORDER BY id DESC LIMIT 1").get(siswa.id);
+    assert.equal(oldEnrollment.tanggal_selesai, tanggalEfektif);
+
+    const duplicate = await req('POST', '/api/siswa/kenaikan', {
+      cabang_id: master.cabang.id,
+      tahun_ajaran: tahunAjaran,
+      tanggal_efektif: tanggalEfektif,
+      items: [{ siswa_id: siswa.id, action: 'skip' }]
+    }, adminToken);
+    assert.equal(duplicate.status, 409, JSON.stringify(duplicate.body));
+  });
+
+  it('marks kenaikan preview rows as error when the target rombel for the next jenjang is missing', async () => {
+    const suffix = unique('no-target');
+    const branch = await req('POST', '/api/master/cabang', {
+      nama: `Cabang ${suffix}`,
+      kode: `NT${suffix.slice(-4)}`,
+      alamat: 'Testing kenaikan target',
+      kontak: '000'
+    }, adminToken);
+    assert.equal(branch.status, 200, JSON.stringify(branch.body));
+    const master = await pickBranchSchoolMasters(adminToken, branch.body.id);
+    db.prepare('UPDATE rombel SET aktif=0 WHERE cabang_id=? AND jenjang_id=?').run(master.cabang.id, master.kbB.id);
+    const siswa = await createSiswa(adminToken, 'missing-target', {
+      master: { cabang: master.cabang, jenjang: master.kbA, rombel: master.kbARombel },
+      jenjang_id: master.kbA.id,
+      rombel_id: master.kbARombel.id,
+      tanggal_mulai: '2097-07-01'
+    });
+
+    const preview = await req('POST', '/api/siswa/kenaikan/preview', {
+      cabang_id: master.cabang.id,
+      tahun_ajaran: `2098/${suffix}`,
+      tanggal_efektif: '2098-07-01'
+    }, adminToken);
+    assert.equal(preview.status, 200, JSON.stringify(preview.body));
+    const row = preview.body.preview.find(r => r.id === siswa.id);
+    assert.ok(row, 'preview row for test student is required');
+    assert.equal(row.action, 'error', JSON.stringify(row));
+    assert.match(row.error, /Rombel tujuan/i);
   });
 });

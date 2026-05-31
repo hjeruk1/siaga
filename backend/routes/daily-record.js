@@ -3,7 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const db = require('../db');
 const auth = require('../middleware/auth');
-const { uploadImage, saveSquareJpeg, ensureDir } = require('../utils/imageUpload');
+const { uploadImage, saveSquareJpeg, ensureDir } = require('../utils/image-upload');
 const { nowUtc, todayWIB, nowTimeWIB, activeEnrollment, canAccessSiswa, canWaliAccessSiswa, siswaScopeSql, requireCabang, requireActiveCabang, audit, notify, isSchoolDay } = require('../utils/workflow');
 
 const UPLOAD_DIR = path.join(__dirname, '../uploads/laporan');
@@ -83,6 +83,7 @@ router.get('/today', auth(), (req, res) => {
            l.id AS laporan_id,l.status AS laporan_status,l.published_at,l.last_published_change_at,l.updated_at,
            ft.id AS focus_theme_id,ft.title AS focus_theme_title,
            ft.activity_summary AS focus_theme_activity_summary,ft.suggested_domains AS focus_theme_domains,
+           ft.menu_makanan AS focus_theme_menu_makanan,
            l.mood,l.makan,l.tidur,l.aktivitas,l.catatan,l.observation_domain,l.observation_note,l.parent_note
     FROM siswa s
     ${scope.join}
@@ -118,7 +119,7 @@ router.get('/history/:siswa_id', auth(), (req, res) => {
   const rows = db.prepare(`
     SELECT l.*,s.nama AS siswa_nama,c.nama AS cabang_nama,r.nama AS rombel_nama,j.nama AS jenjang_nama,p.display_name AS guru_nama,
            ft.title AS focus_theme_title,ft.activity_summary AS focus_theme_activity_summary,
-           ft.suggested_domains AS focus_theme_domains,ma.title AS modul_ajar_title
+           ft.suggested_domains AS focus_theme_domains,ft.menu_makanan AS focus_theme_menu_makanan,ma.title AS modul_ajar_title
     FROM laporan_harian l
     JOIN siswa s ON s.id=l.siswa_id
     JOIN cabang c ON c.id=l.cabang_id
@@ -137,7 +138,7 @@ router.get('/:id', auth(), (req, res) => {
   const l = db.prepare(`
     SELECT l.*,s.nama AS siswa_nama,c.nama AS cabang_nama,r.nama AS rombel_nama,j.nama AS jenjang_nama,p.display_name AS guru_nama,
            ft.title AS focus_theme_title,ft.activity_summary AS focus_theme_activity_summary,
-           ft.suggested_domains AS focus_theme_domains,ma.title AS modul_ajar_title
+           ft.suggested_domains AS focus_theme_domains,ft.menu_makanan AS focus_theme_menu_makanan,ma.title AS modul_ajar_title
     FROM laporan_harian l
     JOIN siswa s ON s.id=l.siswa_id
     JOIN cabang c ON c.id=l.cabang_id
@@ -331,7 +332,7 @@ router.get('/admin/history', auth(['admin', 'admin_cabang', 'kepsek']), (req, re
     SELECT l.*,s.nama AS siswa_nama,c.nama AS cabang_nama,r.nama AS rombel_nama,j.nama AS jenjang_nama,
            p.display_name AS guru_nama,
            ft.title AS focus_theme_title,ft.activity_summary AS focus_theme_activity_summary,
-           ft.suggested_domains AS focus_theme_domains,ma.title AS modul_ajar_title
+           ft.suggested_domains AS focus_theme_domains,ft.menu_makanan AS focus_theme_menu_makanan,ma.title AS modul_ajar_title
     FROM laporan_harian l
     JOIN siswa s ON s.id=l.siswa_id
     JOIN cabang c ON c.id=l.cabang_id

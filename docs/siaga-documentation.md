@@ -1,16 +1,17 @@
 # SIAGA Master Documentation
 
 Tanggal konsolidasi: 2026-05-17
+Tanggal refresh dokumentasi: 2026-05-25
 
-Dokumen ini adalah sumber dokumentasi utama SIAGA. Isinya menggabungkan dan merapikan dokumentasi sebelumnya:
+Dokumen ini adalah sumber dokumentasi utama SIAGA. Isinya menggabungkan dan merapikan dokumentasi sebelumnya, yang sekarang dipindahkan ke `docs/archive/2026-05-consolidated/`:
 
-- `docs/multi-cabang-dan-portal-wali.md`
-- `docs/implementation-tracker.md`
-- `docs/attendance-gate-recovery-plan.md`
-- `docs/future-features.md`
-- `docs/ui-ux-workflow-logic-audit-report.md`
+- `docs/archive/2026-05-consolidated/multi-cabang-dan-portal-wali.md`
+- `docs/archive/2026-05-consolidated/implementation-tracker.md`
+- `docs/archive/2026-05-consolidated/attendance-gate-recovery-plan.md`
+- `docs/archive/2026-05-consolidated/future-features.md`
+- `docs/archive/2026-05-consolidated/ui-ux-workflow-logic-audit-report.md`
 - `docs/superpowers/plans/2026-05-17-ui-workflow-logic-repairs.md`
-- `docs/architecture-map.json` dan `docs/architecture-map.html` sebagai artifact arsitektur
+- `docs/archive/2026-05-consolidated/architecture-map.json` dan `docs/archive/2026-05-consolidated/architecture-map.html` sebagai artifact arsitektur lama
 
 ## 1. Ringkasan Produk
 
@@ -25,11 +26,14 @@ Tujuan utama:
 - Billing mendukung perbedaan biaya cabang, jenjang, paket, diskon, koreksi, invoice, kuitansi, dan pembayaran parsial.
 - Wali murid dapat melihat daily record published dan memberi feedback.
 
-Status umum per 2026-05-17:
+Status umum per 2026-05-25:
 
 - Fitur inti sudah cukup luas dan berjalan.
 - Wave 1 audit repair sudah diterapkan untuk role, akses, status, billing, wali history, test workflow, key warning, dan mobile header pressure.
-- Gap terbesar yang tersisa ada pada UX safety confirmation, mobile card-first layout yang lebih matang, URL/deep-link state, cleanup mojibake, dan beberapa proteksi lanjutan.
+- Admin CRUD utama sudah makin matang: cabang, siswa, staff, wali, laporan, modul ajar, dan billing memakai modal/confirmation yang lebih aman.
+- Daily Record V2 sudah mengakomodasi modul ajar mingguan, focus theme harian, dan observasi anak.
+- Billing sudah memiliki preview generate, edit alokasi pembayaran, diskon/tarif yang bisa dikelola, dan saldo kredit pembayaran.
+- Gap terbesar yang tersisa ada pada update dokumentasi berkelanjutan, beberapa UI historis lintas cabang, cleanup artifact lama, dan audit detail yang belum seragam untuk semua aksi.
 
 ## 2. Stack dan Arsitektur
 
@@ -43,7 +47,7 @@ Ringkasan arsitektur dari architecture map:
 - Endpoint terpasang pada scan awal: 48.
 - Frontend API methods pada scan awal: 46.
 
-Catatan: `architecture-map.json/html` dibuat sebelum sebagian repair 2026-05-17. Angka script/API pada artifact lama bisa sedikit berbeda dari kondisi sekarang karena sudah ditambahkan `dev:stable`, `test:workflow`, `waliChildren`, dan regression test.
+Catatan: `architecture-map.json/html` sudah dipindahkan ke archive karena dibuat sebelum sebagian repair 2026-05-17 dan belum mencerminkan fitur terbaru seperti Daily Record V2, saldo kredit billing, QR penjemput PNG, dan guarded staff delete.
 
 ### 2.1 Topologi
 
@@ -252,6 +256,7 @@ Catatan:
 - `must_change_password` dipakai setelah aktivasi awal dan reset password.
 - Password sementara ditampilkan sekali saja melalui modal/tombol salin undangan.
 - Staff historis tidak dihapus permanen, gunakan nonaktif.
+- Staff yang baru dibuat karena salah input dapat dihapus permanen jika belum punya histori operasional. Backend menolak hard delete jika staff sudah muncul di daily record, modul ajar, absensi, billing, audit tindakan, atau creator/verifier field lain.
 - Akun wali tetap dapat aktif untuk histori walaupun anak sudah keluar/lulus, kecuali dinonaktifkan manual.
 
 ### 4.4 Hak Kelola Akun
@@ -261,7 +266,7 @@ Catatan:
 - `admin_cabang` tidak membuat/mengedit `admin`, `admin_cabang`, atau `kepsek`.
 - `kepsek`, `guru`, dan `gerbang` tidak mengelola akun.
 - Reset password dilakukan oleh admin yang berwenang.
-- Minimal satu admin aktif adalah kebutuhan keamanan. Status tracker saat ini menandai proteksi ini sebagian, perlu penguatan endpoint update.
+- Minimal satu admin aktif diproteksi pada update dan guarded delete staff admin.
 
 ## 5. Struktur Cabang, Jenjang, Rombel, Paket
 
@@ -685,7 +690,10 @@ Aturan:
 - Mendukung pembayaran parsial/cicilan.
 - `pembayaran` mencatat transaksi uang masuk.
 - `pembayaran_alokasi` mencatat alokasi ke tagihan.
+- `saldo_kredit` mencatat sisa pembayaran yang belum dialokasikan ke tagihan.
 - Default alokasi ke tagihan tertua, tetapi admin dapat memilih/mengedit alokasi.
+- Edit alokasi pembayaran memuat alokasi existing sehingga admin tidak perlu mengisi ulang dari nol.
+- Total alokasi boleh lebih kecil dari nominal pembayaran; sisa dana menjadi saldo kredit dan belum mengurangi tagihan lain.
 - Metode: tunai, transfer, qris, lainnya.
 - Pembayaran tidak dihapus, gunakan void/pembatalan dengan alasan.
 - Kuitansi resmi hanya untuk `confirmed`.
@@ -705,6 +713,13 @@ Repair 2026-05-17:
 - Allocation edit hanya untuk confirmed atau pending.
 - Rejected dan void menjadi terminal untuk allocation edit.
 - UI payment action diselaraskan dengan backend state.
+
+Refresh 2026-05-25:
+
+- UI tarif mendukung edit dan nonaktif tarif.
+- UI diskon/keringanan mendukung daftar, edit, dan nonaktif diskon.
+- List pembayaran menampilkan nominal teralokasi dan saldo kredit.
+- Seleksi invoice di UI dijaga agar tidak mencampur siswa/cabang.
 
 ### 9.5 Akses Keuangan
 
@@ -734,8 +749,9 @@ Aturan:
 - Invoice dapat menggabungkan beberapa tagihan selama siswa dan cabang pemilik tagihan sama.
 - Invoice tidak boleh lintas cabang.
 - Kuitansi hanya untuk pembayaran `confirmed`.
-- PDF memakai kop yayasan dan identitas cabang.
-- Kop/logo final masih backlog menunggu logo/kop resmi.
+- PDF memakai header resmi Taruna Prima dengan logo, identitas yayasan, identitas cabang, nomor dokumen, panel ringkasan, tabel rapi, footer legal, dan blok penerbit.
+- Header invoice dan kuitansi memakai asset logo Taruna Prima dari `frontend/public/tp_logo.png`.
+- Kartu QR penjemput dibuat dari profil siswa, memakai template Taruna Prima, dan dapat diunduh sebagai PNG.
 
 ## 10. Audit, Waktu, dan Keamanan
 
@@ -990,12 +1006,13 @@ Legenda:
 - [x] Reset password staff/wali sesuai kewenangan.
 - [x] Aktif/nonaktif staff dan wali.
 - [x] Admin dapat edit staff, role, status, dan cabang.
+- [x] Staff yang salah input dapat dihapus permanen dengan konfirmasi ketik username, selama belum punya histori operasional.
 - [x] Guru pindah cabang memakai akun yang sama dan assignment rombel lama dilepas.
 - [x] Admin dapat edit nomor WA login wali.
 - [x] Satu akun wali dapat dikaitkan ke beberapa siswa.
 - [x] Satu siswa dibatasi satu wali aktif.
 - [x] Password sementara ditampilkan via modal dengan tombol salin teks undangan.
-- [~] Minimal satu admin aktif belum diproteksi kuat di endpoint update.
+- [x] Minimal satu admin aktif diproteksi pada update staff dan guarded delete.
 
 ### 13.3 Siswa, Enrollment, dan Rombel
 
@@ -1006,7 +1023,7 @@ Legenda:
 - [x] Siswa dapat pindah cabang/jenjang/rombel/paket dengan tanggal efektif.
 - [x] Histori enrollment tetap tersimpan.
 - [x] Future-dated enrollment tetap bisa dikelola admin.
-- [x] Penjemput dapat ditambah dan QR dibuat.
+- [x] Penjemput dapat ditambah/diedit, dinonaktifkan/diaktifkan, QR dapat di-reissue, dan kartu QR dapat diunduh PNG.
 - [x] NFC siswa dapat di-reissue.
 - [x] Kenaikan tahun ajaran semi-manual dengan preview.
 - [x] Catatan sekolah luar untuk anak care dibuat sebagai field khusus.
@@ -1075,6 +1092,9 @@ Legenda:
 - [x] Kepsek dapat melihat billing tanpa input.
 - [x] Generate tagihan punya preview sebelum eksekusi.
 - [x] Admin bisa memilih/mengedit alokasi pembayaran spesifik dari UI.
+- [x] Edit alokasi pembayaran memuat alokasi existing.
+- [x] Sisa pembayaran yang belum dialokasikan disimpan sebagai saldo kredit.
+- [x] Tarif dan diskon/keringanan dapat diedit/nonaktif dari UI.
 - [x] Scope billing by `siswa_id` dan payment ownership diperketat.
 - [x] Konfigurasi rekening yayasan/global punya UI.
 - [x] Laporan keuangan/tunggakan untuk kepsek.
@@ -1088,8 +1108,8 @@ Legenda:
 - [x] Invoice tidak boleh lintas siswa/cabang.
 - [x] Kuitansi hanya untuk pembayaran confirmed.
 - [x] PDF invoice dan kuitansi dapat dibuka dari UI billing.
-- [~] Kop PDF masih teks yayasan/cabang, belum memakai logo.
-- [~] Detail desain PDF final menunggu logo/kop resmi.
+- [x] PDF invoice dan kuitansi memakai logo Taruna Prima dari asset repo dan header branded.
+- [x] Header PDF menampilkan identitas yayasan, cabang, nomor dokumen, label resmi SIAGA, metadata dokumen, tabel terstruktur, footer legal, dan blok penerbit.
 
 ### 13.9 Audit, Waktu, dan Keamanan
 
@@ -1161,19 +1181,28 @@ Prioritas tinggi berikutnya:
 
 - Apakah daily record lama cabang lama dapat dilihat admin cabang lama selamanya, atau hanya melalui laporan historis tertentu.
 - Detail UI modul cabang, jenjang, rombel, dan paket bila ingin dibuat lebih granular.
-- Format final invoice/kuitansi PDF setelah logo/kop resmi tersedia.
+- Detail variasi desain invoice/kuitansi PDF bila nanti ada brand guide resmi baru.
 - Batas ukuran upload foto sebelum dan sesudah kompres.
 - Strategi migrasi dari schema/data lama ke schema baru untuk production.
 - Apakah admin cabang baru boleh melihat semua histori billing cabang lama, atau hanya ringkasan read-only di profil siswa.
 
 ## 17. Source Artifact Notes
 
-File lama tetap dipertahankan untuk audit trail, tetapi dokumen ini menjadi file utama yang dibaca terlebih dahulu.
+File lama tetap dipertahankan untuk audit trail, tetapi dokumen ini menjadi file utama yang dibaca terlebih dahulu. Dokumen yang sudah terserap dipindahkan ke `docs/archive/2026-05-consolidated/`.
 
 Artifact arsitektur:
 
-- `docs/architecture-map.json`: data mesin hasil scan arsitektur.
-- `docs/architecture-map.html`: visualisasi HTML hasil scan arsitektur.
+- `docs/archive/2026-05-consolidated/architecture-map.json`: data mesin hasil scan arsitektur lama.
+- `docs/archive/2026-05-consolidated/architecture-map.html`: visualisasi HTML hasil scan arsitektur lama.
+
+File yang tetap dipisahkan:
+
+- `docs/tencent-lighthouse-hermes-deploy.md`: runbook deploy dan maintenance VPS.
+- `docs/superpowers/specs/`: catatan desain/keputusan per fitur.
+- `docs/superpowers/plans/`: execution plan historis.
+- `docs/siaga-interface-harmony-guidelines.md`: panduan referensi harmonisasi UI/UX (Quiet Craft & Unified Filter/Card).
+- `frontend/DESIGN.md`: token dan guideline UI frontend.
+- `.interface-design/system.md`: catatan desain untuk agent, bukan dokumentasi produk utama.
 
 Temuan architecture map awal:
 
