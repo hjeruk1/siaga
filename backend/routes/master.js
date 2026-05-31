@@ -165,6 +165,45 @@ router.post('/rombel', auth(['admin','admin_cabang']), (req, res) => {
   }
 });
 
+router.put('/rombel/:id', auth(['admin','admin_cabang']), (req, res) => {
+  const rombel = db.prepare('SELECT * FROM rombel WHERE id=?').get(req.params.id);
+  if (!rombel) return res.status(404).json({ error: 'Rombel tidak ditemukan' });
+  if (!requireActiveCabang(req, res, rombel.cabang_id)) return;
+
+  const { jenjang_id, nama, aktif } = req.body || {};
+  if (!jenjang_id || !nama) return res.status(400).json({ error: 'Jenjang dan nama rombel wajib' });
+
+  try {
+    db.prepare('UPDATE rombel SET jenjang_id=?, nama=?, aktif=?, updated_at=? WHERE id=?')
+      .run(Number(jenjang_id), nama, aktif ? 1 : 0, nowUtc(), rombel.id);
+    audit(req.user, 'update', 'rombel', rombel.id, { cabang_id: rombel.cabang_id, before: rombel, after: req.body });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(400).json({ error: 'Nama rombel sudah dipakai di cabang ini' });
+  }
+});
+
+router.delete('/rombel/:id', auth(['admin','admin_cabang']), (req, res) => {
+  const rombel = db.prepare('SELECT * FROM rombel WHERE id=?').get(req.params.id);
+  if (!rombel) return res.status(404).json({ error: 'Rombel tidak ditemukan' });
+  if (!requireActiveCabang(req, res, rombel.cabang_id)) return;
+
+  // Check if there are active enrollments in this Rombel
+  const activeSiswa = db.prepare('SELECT COUNT(*) as count FROM siswa_enrollment WHERE rombel_id=? AND status=\'aktif\'').get(rombel.id);
+  if (activeSiswa && activeSiswa.count > 0) {
+    return res.status(400).json({ error: 'Rombel tidak bisa dihapus karena masih memiliki siswa terdaftar. Pindahkan siswa terlebih dahulu.' });
+  }
+
+  // Delete matching guru assignments in guru_rombel
+  db.prepare('DELETE FROM guru_rombel WHERE rombel_id=?').run(rombel.id);
+
+  // Delete the rombel itself
+  db.prepare('DELETE FROM rombel WHERE id=?').run(rombel.id);
+
+  audit(req.user, 'delete', 'rombel', rombel.id, { cabang_id: rombel.cabang_id, before: rombel });
+  res.json({ success: true });
+});
+
 router.post('/rombel/:id/guru', auth(['admin', 'admin_cabang']), (req, res) => {
   const rombel = db.prepare('SELECT * FROM rombel WHERE id=?').get(req.params.id);
   if (!rombel) return res.status(404).json({ error: 'Rombel tidak ditemukan' });
@@ -289,7 +328,7 @@ router.put('/kalender/:id', auth(['admin', 'admin_cabang']), (req, res) => {
   const ev = db.prepare('SELECT * FROM kalender_event WHERE id=?').get(req.params.id);
   if (!ev) return res.status(404).json({ error: 'Event tidak ditemukan' });
   if (ev.scope === 'cabang' && !requireCabang(req, res, ev.cabang_id)) return;
-  if (ev.scope === 'yayasan' && req.user.role !== 'admin') return res.status(403).json({ error: 'Hanya admin yang bisa edit event yayasan' });
+  if (ev.scope === 'yayasan' && req.user.role !== 'admin') return res.status(403).json({ error: 'Hanya admin yang bisa edit event Taruna Prima' });
   const d = req.body || {};
   db.prepare('UPDATE kalender_event SET tanggal=?,tipe=?,nama=? WHERE id=?')
     .run(d.tanggal || ev.tanggal, d.tipe || ev.tipe, d.nama || ev.nama, req.params.id);
@@ -301,7 +340,7 @@ router.delete('/kalender/:id', auth(['admin', 'admin_cabang']), (req, res) => {
   const ev = db.prepare('SELECT * FROM kalender_event WHERE id=?').get(req.params.id);
   if (!ev) return res.status(404).json({ error: 'Event tidak ditemukan' });
   if (ev.scope === 'cabang' && !requireCabang(req, res, ev.cabang_id)) return;
-  if (ev.scope === 'yayasan' && req.user.role !== 'admin') return res.status(403).json({ error: 'Hanya admin yang bisa hapus event yayasan' });
+  if (ev.scope === 'yayasan' && req.user.role !== 'admin') return res.status(403).json({ error: 'Hanya admin yang bisa hapus event Taruna Prima' });
   db.prepare('DELETE FROM kalender_event WHERE id=?').run(req.params.id);
   audit(req.user, 'delete', 'kalender_event', req.params.id, { cabang_id: ev.cabang_id, before: ev });
   res.json({ success: true });

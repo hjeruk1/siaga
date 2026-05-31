@@ -9,7 +9,7 @@ db.pragma('foreign_keys = ON');
 db.exec(`
 CREATE TABLE IF NOT EXISTS organisasi (
   id INTEGER PRIMARY KEY CHECK(id=1),
-  nama TEXT NOT NULL DEFAULT 'Yayasan Taruna Prima',
+  nama TEXT NOT NULL DEFAULT 'Taruna Prima',
   alamat TEXT,
   kontak TEXT,
   rekening_nama TEXT,
@@ -225,6 +225,18 @@ CREATE TABLE IF NOT EXISTS penjemputan_log (
   durasi_menit INTEGER,
   sumber TEXT NOT NULL DEFAULT 'manual' CHECK(sumber IN ('manual','nfc','qr')),
   catatan TEXT,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS qr_reissue_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  siswa_id INTEGER NOT NULL REFERENCES siswa(id),
+  penjemput_id INTEGER REFERENCES penjemput(id),
+  admin_id INTEGER REFERENCES pengguna(id),
+  cabang_id INTEGER REFERENCES cabang(id),
+  old_qr_code TEXT,
+  new_qr_code TEXT,
+  reason TEXT,
   created_at TEXT NOT NULL
 );
 
@@ -446,6 +458,17 @@ CREATE TABLE IF NOT EXISTS pembayaran_alokasi (
   created_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS saldo_kredit (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  siswa_id INTEGER NOT NULL REFERENCES siswa(id),
+  cabang_id INTEGER NOT NULL REFERENCES cabang(id),
+  pembayaran_id INTEGER REFERENCES pembayaran(id) ON DELETE CASCADE,
+  nominal INTEGER NOT NULL,
+  tipe TEXT NOT NULL CHECK(tipe IN ('credit','used','void')),
+  catatan TEXT,
+  created_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS invoice (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   cabang_id INTEGER NOT NULL REFERENCES cabang(id),
@@ -461,6 +484,17 @@ CREATE TABLE IF NOT EXISTS invoice_item (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   invoice_id INTEGER NOT NULL REFERENCES invoice(id) ON DELETE CASCADE,
   tagihan_id INTEGER NOT NULL REFERENCES tagihan(id)
+);
+
+CREATE TABLE IF NOT EXISTS kenaikan_batch (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  cabang_id INTEGER NOT NULL REFERENCES cabang(id),
+  tahun_ajaran TEXT NOT NULL,
+  tanggal_efektif TEXT NOT NULL,
+  summary_json TEXT,
+  created_by INTEGER REFERENCES pengguna(id),
+  created_at TEXT NOT NULL,
+  UNIQUE(cabang_id,tahun_ajaran)
 );
 
 CREATE TABLE IF NOT EXISTS sequence_counter (
@@ -483,6 +517,14 @@ try { db.prepare("ALTER TABLE penjemputan_log ADD COLUMN sumber TEXT NOT NULL DE
 try { db.prepare('ALTER TABLE penjemputan_log ADD COLUMN catatan TEXT').run(); } catch {}
 try { db.prepare('ALTER TABLE penjemputan_log ADD COLUMN created_at TEXT').run(); } catch {}
 try { db.prepare('CREATE INDEX IF NOT EXISTS idx_penjemputan_log_tanggal ON penjemputan_log(tanggal,cabang_id)').run(); } catch {}
+try { db.prepare('ALTER TABLE qr_reissue_log ADD COLUMN siswa_id INTEGER REFERENCES siswa(id)').run(); } catch {}
+try { db.prepare('ALTER TABLE qr_reissue_log ADD COLUMN penjemput_id INTEGER REFERENCES penjemput(id)').run(); } catch {}
+try { db.prepare('ALTER TABLE qr_reissue_log ADD COLUMN admin_id INTEGER REFERENCES pengguna(id)').run(); } catch {}
+try { db.prepare('ALTER TABLE qr_reissue_log ADD COLUMN cabang_id INTEGER REFERENCES cabang(id)').run(); } catch {}
+try { db.prepare('ALTER TABLE qr_reissue_log ADD COLUMN old_qr_code TEXT').run(); } catch {}
+try { db.prepare('ALTER TABLE qr_reissue_log ADD COLUMN new_qr_code TEXT').run(); } catch {}
+try { db.prepare('ALTER TABLE qr_reissue_log ADD COLUMN reason TEXT').run(); } catch {}
+try { db.prepare('ALTER TABLE qr_reissue_log ADD COLUMN created_at TEXT').run(); } catch {}
 try { db.prepare('ALTER TABLE nfc_scan_log ADD COLUMN pengguna_id INTEGER REFERENCES pengguna(id)').run(); } catch {}
 try { db.prepare('ALTER TABLE nfc_scan_log ADD COLUMN cabang_id INTEGER REFERENCES cabang(id)').run(); } catch {}
 try { db.prepare('ALTER TABLE nfc_scan_log ADD COLUMN siswa_id INTEGER REFERENCES siswa(id)').run(); } catch {}
@@ -502,7 +544,8 @@ try { db.prepare('ALTER TABLE laporan_harian ADD COLUMN observation_note TEXT').
 try { db.prepare('ALTER TABLE laporan_harian ADD COLUMN parent_note TEXT').run(); } catch {}
 try { db.prepare("ALTER TABLE laporan_harian ADD COLUMN structured_observation_json TEXT NOT NULL DEFAULT '{}'").run(); } catch {}
 try { db.prepare('CREATE INDEX IF NOT EXISTS idx_laporan_focus_theme ON laporan_harian(focus_theme_id)').run(); } catch {}
+try { db.prepare('ALTER TABLE focus_theme ADD COLUMN menu_makanan TEXT').run(); } catch {}
 
-db.prepare("INSERT OR IGNORE INTO organisasi(id,nama,updated_at) VALUES(1,'Yayasan Taruna Prima',?)").run(new Date().toISOString());
+db.prepare("INSERT OR IGNORE INTO organisasi(id,nama,updated_at) VALUES(1,'Taruna Prima',?)").run(new Date().toISOString());
 
 module.exports = db;

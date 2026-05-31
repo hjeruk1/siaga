@@ -10,12 +10,12 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads'), { maxAge: '1
 
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/master', require('./routes/master'));
-app.use('/api/modul-ajar', require('./routes/modulAjar'));
+app.use('/api/modul-ajar', require('./routes/modul-ajar'));
 app.use('/api/pengguna', require('./routes/pengguna'));
 app.use('/api/siswa', require('./routes/siswa'));
 app.use('/api/absensi', require('./routes/absensi'));
 app.use('/api/penjemputan', require('./routes/penjemputan'));
-app.use('/api/daily-record', require('./routes/dailyRecord'));
+app.use('/api/daily-record', require('./routes/daily-record'));
 app.use('/api/notifikasi', require('./routes/notifikasi'));
 app.use('/api/billing', require('./routes/billing'));
 app.use('/api/rekap', require('./routes/rekap'));

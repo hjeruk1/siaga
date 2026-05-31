@@ -1,7 +1,7 @@
 const router = require('express').Router();
 const db = require('../db');
 const auth = require('../middleware/auth');
-const { nowUtc, todayWIB, nowTimeWIB, activeEnrollment, canAccessSiswa, siswaScopeSql, requireCabang, requireActiveCabang, audit, isSchoolDay, isDayClosed } = require('../utils/workflow');
+const { nowUtc, todayWIB, nowTimeWIB, activeEnrollment, canAccessSiswa, siswaScopeSql, requireCabang, requireActiveCabang, audit, notify, isSchoolDay, isDayClosed } = require('../utils/workflow');
 
 function configFor(e) {
   return db.prepare('SELECT * FROM operasional_config WHERE cabang_id=? AND jenjang_id=? AND paket=?').get(e.cabang_id, e.jenjang_id, e.paket) || {};
@@ -38,6 +38,17 @@ function logNfc({ siswaId = null, penggunaId = null, cabangId = null, action, st
   db.prepare(`INSERT INTO nfc_scan_log(siswa_id,pengguna_id,cabang_id,action,status,reason,token_masked,tab,tanggal,jam,created_at)
     VALUES(?,?,?,?,?,?,?,?,?,?,?)`)
     .run(siswaId, penggunaId, cabangId, action || 'unknown', status, reason, maskToken(token), tab, tanggal, jam, nowUtc());
+}
+function notifyKepsek(cabangId, tipe, title, body, entityType, entityId, skipId) {
+  const recipients = db.prepare(`
+    SELECT p.id FROM pengguna p
+    JOIN staff_profile sp ON sp.pengguna_id=p.id
+    WHERE p.role='kepsek' AND p.status='aktif' AND sp.cabang_id=?
+  `).all(cabangId);
+  for (const r of recipients) {
+    if (skipId && Number(r.id) === Number(skipId)) continue;
+    notify(r.id, tipe, title, body, entityType, entityId, cabangId);
+  }
 }
 function minutesBetween(start, end) {
   if (!start || !end) return null;
@@ -117,6 +128,7 @@ router.post('/keterangan', auth(['guru','admin','admin_cabang']), (req, res) => 
   if (!canSetKeterangan(item.row.status)) return res.status(400).json({ error: `Status ${item.row.status} tidak boleh ditimpa oleh keterangan` });
   db.prepare('UPDATE absensi SET status=?,catatan=?,manual=1,updated_at=? WHERE id=?').run(status, catatan || null, nowUtc(), item.row.id);
   audit(req.user, 'set_keterangan', 'absensi', item.row.id, { cabang_id: item.enrollment.cabang_id, after: { status, catatan } });
+  notifyKepsek(item.enrollment.cabang_id, 'absensi_keterangan', `${access.siswa.nama} ${status}`, catatan || `Status absensi diubah menjadi ${status}.`, 'absensi', item.row.id, req.user.id);
   res.json({ success: true });
 });
 
@@ -177,6 +189,7 @@ router.post('/early-release', auth(['admin', 'admin_cabang', 'kepsek']), (req, r
     const r = db.prepare('INSERT INTO early_release(siswa_id,cabang_id,tanggal,alasan,created_by,created_at) VALUES(?,?,?,?,?,?)')
       .run(d.siswa_id, access.enrollment.cabang_id, d.tanggal, d.alasan, req.user.id, nowUtc());
     audit(req.user, 'create_early_release', 'early_release', r.lastInsertRowid, { cabang_id: access.enrollment.cabang_id, after: d });
+    notifyKepsek(access.enrollment.cabang_id, 'early_release', `Pulang dini: ${access.siswa.nama}`, d.alasan, 'early_release', r.lastInsertRowid, req.user.id);
     res.json({ id: r.lastInsertRowid });
   } catch {
     res.status(400).json({ error: 'Izin pulang dini sudah ada untuk siswa ini di tanggal tersebut' });

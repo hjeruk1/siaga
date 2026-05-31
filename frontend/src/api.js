@@ -1,4 +1,23 @@
-function token(){return localStorage.getItem('siaga_token');}
+let tokenCache = null;
+function token(){
+  if(tokenCache === null){
+    tokenCache = (typeof localStorage !== 'undefined' ? localStorage.getItem('siaga_token') : null) || '';
+  }
+  return tokenCache || null;
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (e) => {
+    if (e.key === 'siaga_token') {
+      tokenCache = e.newValue || '';
+    }
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      tokenCache = null;
+    }
+  });
+}
 
 async function req(method,url,body){
   const r=await fetch(url,{method,headers:{'Content-Type':'application/json',...(token()?{Authorization:'Bearer '+token()}:{})},body:body!==undefined?JSON.stringify(body):undefined});
@@ -21,6 +40,14 @@ async function blob(url){
 }
 
 export const api={
+  setToken:t=>{
+    if(typeof localStorage !== 'undefined') localStorage.setItem('siaga_token',t);
+    tokenCache=t;
+  },
+  clearToken:()=>{
+    if(typeof localStorage !== 'undefined') localStorage.removeItem('siaga_token');
+    tokenCache='';
+  },
   login:d=>req('POST','/api/auth/login',d),
   me:()=>req('GET','/api/auth/me'),
   changePassword:d=>req('POST','/api/auth/change-password',d),
@@ -30,6 +57,8 @@ export const api={
   jenjang:()=>req('GET','/api/master/jenjang'),
   rombel:cabangId=>req('GET','/api/master/rombel'+(cabangId?'?cabang_id='+cabangId:'')),
   createRombel:d=>req('POST','/api/master/rombel',d),
+  updateRombel:(id,d)=>req('PUT','/api/master/rombel/'+id,d),
+  deleteRombel:id=>req('DELETE','/api/master/rombel/'+id),
   assignGuruRombel:(rombelId,d)=>req('POST','/api/master/rombel/'+rombelId+'/guru',d),
   removeGuruRombel:(rombelId,guruId)=>req('DELETE','/api/master/rombel/'+rombelId+'/guru/'+guruId),
   operasionalConfig:cabangId=>req('GET','/api/master/operasional-config'+(cabangId?'?cabang_id='+cabangId:'')),
@@ -44,6 +73,7 @@ export const api={
   staff:cabangId=>req('GET','/api/pengguna'+(cabangId?'?cabang_id='+cabangId:'')),
   createStaff:d=>req('POST','/api/pengguna/staff',d),
   updateStaff:(id,d)=>req('PUT','/api/pengguna/staff/'+id,d),
+  deleteStaff:id=>req('DELETE','/api/pengguna/staff/'+id),
   resetPassword:id=>req('POST','/api/pengguna/'+id+'/reset-password',{}),
   uploadStaffFoto:(id,file)=>{const f=new FormData();f.append('foto',file);return upload('/api/pengguna/staff/'+id+'/foto',f);},
   deleteStaffFoto:id=>req('DELETE','/api/pengguna/staff/'+id+'/foto'),
@@ -60,6 +90,8 @@ export const api={
   uploadSiswaFoto:(id,file)=>{const f=new FormData();f.append('foto',file);return upload('/api/siswa/'+id+'/foto',f);},
   deleteSiswaFoto:id=>req('DELETE','/api/siswa/'+id+'/foto'),
   addPenjemput:(id,d)=>req('POST','/api/siswa/'+id+'/penjemput',d),
+  updatePenjemput:(id,d)=>req('PUT','/api/siswa/penjemput/'+id,d),
+  reissuePenjemputQr:(id,reason)=>req('POST','/api/siswa/penjemput/'+id+'/qr/reissue',{reason}),
   kenaikanPreview:d=>req('POST','/api/siswa/kenaikan/preview',d),
   kenaikan:d=>req('POST','/api/siswa/kenaikan',d),
   absensiToday:(p={})=>req('GET','/api/absensi/today'+qs(p)),
@@ -88,6 +120,7 @@ export const api={
   updateModulAjar:(id,d)=>req('PUT','/api/modul-ajar/'+id,d),
   focusTheme:(params={})=>req('GET','/api/modul-ajar/focus-theme'+qs(params)),
   saveFocusTheme:d=>req('POST','/api/modul-ajar/focus-theme',d),
+  parseModulAjar:file=>{const f=new FormData();f.append('file',file);return upload('/api/modul-ajar/parse-file',f);},
   notifikasi:()=>req('GET','/api/notifikasi'),
   readNotif:id=>req('PUT','/api/notifikasi/'+id+'/read'),
   readAllNotif:()=>req('PUT','/api/notifikasi/read-all'),
@@ -96,6 +129,7 @@ export const api={
   updateTarif:(id,d)=>req('PUT','/api/billing/tarif/'+id,d),
   diskon:p=>req('GET','/api/billing/diskon'+qs(p||{})),
   createDiskon:d=>req('POST','/api/billing/diskon',d),
+  updateDiskon:(id,d)=>req('PUT','/api/billing/diskon/'+id,d),
   generateBulanan:d=>req('POST','/api/billing/generate-bulanan',d),
   generateBulananPreview:d=>req('POST','/api/billing/generate-bulanan/preview',d),
   generateKegiatan:d=>req('POST','/api/billing/generate-kegiatan',d),
@@ -105,6 +139,7 @@ export const api={
   voidTagihan:(id,reason)=>req('POST','/api/billing/tagihan/'+id+'/void',{reason}),
   pembayaran:p=>req('GET','/api/billing/pembayaran'+qs(p||{})),
   createPembayaran:d=>req('POST','/api/billing/pembayaran',d),
+  alokasiPembayaran:id=>req('GET','/api/billing/pembayaran/'+id+'/alokasi'),
   previewAlokasi:p=>req('GET','/api/billing/pembayaran/preview-alokasi'+qs(p||{})),
   updateAlokasi:(id,d)=>req('PUT','/api/billing/pembayaran/'+id+'/alokasi',d),
   verifyPembayaran:id=>req('POST','/api/billing/pembayaran/'+id+'/verify',{}),
@@ -116,6 +151,8 @@ export const api={
   receiptPdf:id=>blob('/api/billing/pembayaran/'+id+'/pdf'),
   laporan:p=>req('GET','/api/billing/laporan'+qs(p||{})),
   dashboard:p=>req('GET','/api/rekap/dashboard'+qs(p||{})),
+  waliBilling:siswaId=>req('GET','/api/billing/wali/siswa/'+siswaId),
+  exportRekap:p=>blob('/api/rekap/export'+qs(p||{})),
 };
 
 function qs(params){

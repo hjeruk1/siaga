@@ -3,6 +3,8 @@ name: SIAGA Design System
 description: The baseline visual identity for the SIAGA application.
 colors:
   primary: "#f59e0b"
+  primary-hover: "#d97706"
+  primary-active: "#b45309"
   primary-container: "#fffbeb"
   text-main: "#0f172a"
   surface-disabled: "#f8fafc"
@@ -13,6 +15,10 @@ typography:
     fontFamily: "DM Sans"
 rounded:
   sm: "4px"
+  md: "8px"
+  lg: "12px"
+  xl: "16px"
+  2xl: "20px"
 spacing:
   sm: "4px"
 ---

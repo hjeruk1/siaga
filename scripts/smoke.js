@@ -114,7 +114,26 @@ async function main() {
   await req('GET', `/api/billing/pembayaran/${payment.id}/pdf`, null, admin, true);
 
   step = 'daily record and wali feedback';
-  const daily = await req('POST', '/api/daily-record', { siswa_id: siswa.id, tanggal: '2026-07-15', mood: 'ceria', makan: 'habis', tidur: 1, aktivitas: ['Bermain', 'Membaca'], catatan: 'Smoke daily' }, admin);
+  const focusTheme = await req('POST', '/api/modul-ajar/focus-theme', {
+    cabang_id: gdn.id,
+    rombel_id: rkb.id,
+    tanggal: '2026-07-15',
+    title: 'Tema Belajar Asik',
+    activity_summary: 'Bermain puzzle dan mewarnai',
+    suggested_domains: ['kognitif', 'motorik_halus']
+  }, admin);
+  const daily = await req('POST', '/api/daily-record', {
+    siswa_id: siswa.id,
+    tanggal: '2026-07-15',
+    mood: 'ceria',
+    makan: 'habis',
+    tidur: 1,
+    aktivitas: ['Bermain', 'Membaca'],
+    catatan: 'Smoke daily',
+    focus_theme_id: focusTheme.id,
+    observation_domain: 'Kognitif',
+    observation_note: 'Anak mampu menyusun puzzle 12 keping secara mandiri.'
+  }, admin);
   const photo = await uploadPhoto(`/api/daily-record/${daily.id}/attachments`, admin);
   await req('POST', `/api/daily-record/${daily.id}/publish`, {}, admin);
   let waliLogin = await req('POST', '/api/auth/login', { tipe: 'wali', no_wa: '62822222222', password: waliReset.temporary_password });

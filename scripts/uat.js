@@ -148,10 +148,40 @@ async function main() {
   await check('Guru daily record workflow', async () => {
     const today = await req('GET', `/api/daily-record/today?tanggal=${uatDate}`, undefined, ctx.guru);
     if (!today.body.rows.some(r => r.siswa_id === ctx.siswaA.body.id)) throw new Error('assigned siswa missing from guru daily today');
-    const daily = await req('POST', '/api/daily-record', { siswa_id: ctx.siswaA.body.id, tanggal: uatDate, mood: 'ceria', makan: 'habis', tidur: 1, aktivitas: ['Membaca'], catatan: `UAT daily ${suffix}` }, ctx.guru);
+    const focusTheme = await req('POST', '/api/modul-ajar/focus-theme', {
+      cabang_id: ctx.gdn.id,
+      rombel_id: ctx.rkb.id,
+      tanggal: uatDate,
+      title: 'Tema Belajar Asik',
+      activity_summary: 'Bermain puzzle dan mewarnai',
+      suggested_domains: ['kognitif', 'motorik_halus']
+    }, ctx.guru);
+    const daily = await req('POST', '/api/daily-record', {
+      siswa_id: ctx.siswaA.body.id,
+      tanggal: uatDate,
+      mood: 'ceria',
+      makan: 'habis',
+      tidur: 1,
+      aktivitas: ['Membaca'],
+      catatan: `UAT daily ${suffix}`,
+      focus_theme_id: focusTheme.body.id,
+      observation_domain: 'Kognitif',
+      observation_note: 'Anak mampu menyusun puzzle 12 keping secara mandiri.'
+    }, ctx.guru);
     ctx.dailyId = daily.body.id;
     await req('POST', `/api/daily-record/${ctx.dailyId}/publish`, {}, ctx.guru);
-    await req('POST', '/api/daily-record', { siswa_id: ctx.siswaA.body.id, tanggal: uatDate, mood: 'biasa', makan: 'setengah', tidur: 0, aktivitas: ['Membaca', 'Bermain'], catatan: `UAT daily updated ${suffix}` }, ctx.guru);
+    await req('POST', '/api/daily-record', {
+      siswa_id: ctx.siswaA.body.id,
+      tanggal: uatDate,
+      mood: 'biasa',
+      makan: 'setengah',
+      tidur: 0,
+      aktivitas: ['Membaca', 'Bermain'],
+      catatan: `UAT daily updated ${suffix}`,
+      focus_theme_id: focusTheme.body.id,
+      observation_domain: 'Kognitif',
+      observation_note: 'Anak mampu menyusun puzzle 12 keping secara mandiri.'
+    }, ctx.guru);
     const edits = await req('GET', `/api/daily-record/${ctx.dailyId}/edits`, undefined, admin);
     if (!edits.body.length) throw new Error('daily edit log missing');
     return `daily ${ctx.dailyId}`;
