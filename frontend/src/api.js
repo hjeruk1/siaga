@@ -22,21 +22,26 @@ if (typeof window !== 'undefined') {
 async function req(method,url,body){
   const r=await fetch(url,{method,headers:{'Content-Type':'application/json',...(token()?{Authorization:'Bearer '+token()}:{})},body:body!==undefined?JSON.stringify(body):undefined});
   const d=await r.json().catch(()=>({}));
-  if(!r.ok){const e=new Error(d.error||'Server error');Object.assign(e,d);throw e;}
+  if(!r.ok){if(r.status===401&&url!=='/api/auth/login')handleUnauthorized();const e=new Error(d.error||'Server error');Object.assign(e,d,{status:r.status});throw e;}
   return d;
 }
 
 async function upload(url,formData){
   const r=await fetch(url,{method:'POST',headers:{...(token()?{Authorization:'Bearer '+token()}:{})},body:formData});
   const d=await r.json().catch(()=>({}));
-  if(!r.ok){const e=new Error(d.error||'Upload error');Object.assign(e,d);throw e;}
+  if(!r.ok){if(r.status===401)handleUnauthorized();const e=new Error(d.error||'Upload error');Object.assign(e,d,{status:r.status});throw e;}
   return d;
 }
 
 async function blob(url){
   const r=await fetch(url,{headers:{...(token()?{Authorization:'Bearer '+token()}:{})}});
-  if(!r.ok){let msg='Download error';try{msg=(await r.json()).error||msg;}catch{}throw new Error(msg);}
+  if(!r.ok){if(r.status===401)handleUnauthorized();let msg='Download error';try{msg=(await r.json()).error||msg;}catch{}const e=new Error(msg);e.status=r.status;throw e;}
   return r.blob();
+}
+
+function handleUnauthorized(){
+  api.clearToken();
+  if(typeof window!=='undefined')window.dispatchEvent(new Event('siaga:unauthorized'));
 }
 
 export const api={
@@ -49,6 +54,7 @@ export const api={
     tokenCache='';
   },
   login:d=>req('POST','/api/auth/login',d),
+  logout:()=>req('POST','/api/auth/logout',{}),
   me:()=>req('GET','/api/auth/me'),
   changePassword:d=>req('POST','/api/auth/change-password',d),
   cabang:()=>req('GET','/api/master/cabang'),

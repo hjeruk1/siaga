@@ -1,7 +1,7 @@
 import{useEffect,useMemo,useRef,useState}from'react';
 import QRCode from'react-qr-code';
 import{api}from'../api';
-import{ActionButton,ConfirmActionModal,IconButton,LogoMark,Modal,CustomSelect,SearchableSelect,EmptyState}from'../components/Shared';
+import{ActionButton,ConfirmActionModal,IconButton,LogoMark,Modal,CustomSelect,CustomDatePicker,CustomMonthPicker,CustomTimePicker,SearchableSelect,EmptyState}from'../components/Shared';
 import{todayWIB}from'../utils/date';
 import{AlertCircle,Ban,Banknote,BarChart3,BookOpen,CalendarPlus,Check,CheckCircle2,ChevronDown,Clock,Copy,CreditCard,Download,Eye,EyeOff,FilePenLine,FilePlus,FileText,GraduationCap,ImagePlus,KeyRound,Loader2,Pencil,Plus,Power,PowerOff,QrCode,Receipt,RefreshCw,RotateCcw,Save,Search,Settings,Smartphone,Trash2,TrendingUp,Upload,UserCheck,UserMinus,UserPlus,Users,Wallet,X}from'lucide-react';
 
@@ -256,7 +256,7 @@ function CabangTab({user,toast}){
   }
   const right=user.role==='admin'?<ActionButton icon={Plus} onClick={()=>{setForm(empty);setOpenForm(true);}}>Tambah Cabang</ActionButton>:null;
   return <Panel title="Cabang Taruna Prima" right={right}>
-    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 items-start">{list.map(c=><div key={c.id} className="bg-white border border-slate-200 rounded-lg p-3 space-y-2.5">
+    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 items-start">{list.map(c=><div key={c.id} className="bg-white border border-slate-200 rounded-2xl p-3 space-y-2.5 shadow-sm">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2 min-w-0"><div className="font-black text-text-main truncate">{c.nama}</div><span className="px-2 py-1 rounded bg-slate-100 text-[11px] font-black text-slate-500">{c.kode}</span></div>
@@ -274,6 +274,7 @@ function CabangTab({user,toast}){
       </div>
       {user.role==='admin'&&<div className="flex justify-end gap-2 pt-1 border-t border-slate-100"><IconButton icon={Pencil} label={`Edit ${c.nama}`} onClick={()=>setEditing(c)} size="sm"/><IconButton icon={c.aktif?PowerOff:Power} label={c.aktif?'Nonaktifkan':'Aktifkan'} onClick={()=>toggle(c)} size="sm" variant={c.aktif?'danger':'ghost'}/></div>}
     </div>)}</div>
+    {list.length===0&&<div className="mt-3 rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center text-sm font-bold text-slate-400">Belum ada cabang terdaftar.</div>}
     {openForm&&<CabangModal title="Tambah Cabang" form={form} setForm={setForm} onClose={()=>setOpenForm(false)} onSubmit={add} submitLabel="Tambah Cabang"/>}
     {editing&&<CabangModal title="Edit Cabang" form={editing} setForm={setEditing} onClose={()=>setEditing(null)} onSubmit={saveEdit} submitLabel="Simpan Perubahan" showStatus/>}
     {cabangConfirm&&<ConfirmActionModal
@@ -348,9 +349,9 @@ function BranchMetricRow({title,total,items}){return <div className="flex flex-c
   </div>
 </div>;}
 
-function CabangFilter({user,cabang,cabangId,setCabangId,className='',plain=false}){
+function CabangFilter({user,cabang,cabangId,setCabangId,className=''}){
   if(user.role!=='admin')return null;
-  const classes=plain?className:`px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm ${className}`;
+  const classes=className||'w-full sm:w-56';
   return <CustomSelect value={cabangId} onChange={e=>setCabangId(e.target.value)} className={classes}><option value="">Semua Cabang</option>{cabang.map(c=><option key={c.id} value={c.id}>{c.nama}</option>)}</CustomSelect>;
 }
 
@@ -615,7 +616,7 @@ function SiswaTab({user,toast}){
       <div className="hidden md:block">
         <SiswaTable list={filteredList} selected={selected} open={open} />
         {filteredList.length === 0 && (
-          <div className="bg-white border border-t-0 border-slate-200 rounded-b-xl p-8 text-center text-slate-400 text-sm font-bold">
+          <div className="bg-slate-50 border border-dashed border-slate-200 rounded-2xl p-8 text-center text-slate-400 text-sm font-bold">
             Tidak ada data siswa yang ditemukan.
           </div>
         )}
@@ -627,7 +628,7 @@ function SiswaTab({user,toast}){
           <SiswaCard key={s.id} siswa={s} active={selected?.id === s.id} open={open} />
         ))}
         {filteredList.length === 0 && (
-          <div className="bg-white border border-slate-200 rounded-xl p-8 text-center text-slate-400 text-sm font-bold">
+          <div className="bg-slate-50 border border-dashed border-slate-200 rounded-2xl p-8 text-center text-slate-400 text-sm font-bold">
             Tidak ada data siswa yang ditemukan.
           </div>
         )}
@@ -690,7 +691,7 @@ function SiswaTab({user,toast}){
               </label>
               <label className="block sm:col-span-3">
                 <span className="label">Tanggal Lahir <span className="text-rose-500">*</span></span>
-                <input type="date" value={form.tanggal_lahir} onChange={e=>setForm(f=>({...f,tanggal_lahir:e.target.value}))} className="input w-full" />
+                <CustomDatePicker value={form.tanggal_lahir} onChange={v=>setForm(f=>({...f,tanggal_lahir:v}))} className="input w-full" />
               </label>
               <label className="block sm:col-span-3">
                 <span className="label">Status Siswa <span className="text-rose-500">*</span></span>
@@ -743,7 +744,7 @@ function SiswaTab({user,toast}){
               </label>
               <label className="block sm:col-span-3">
                 <span className="label">Tanggal Mulai <span className="text-rose-500">*</span></span>
-                <input type="date" value={form.tanggal_mulai} onChange={e=>setForm(f=>({...f,tanggal_mulai:e.target.value}))} className="input w-full" />
+                <CustomDatePicker value={form.tanggal_mulai} onChange={v=>setForm(f=>({...f,tanggal_mulai:v}))} className="input w-full" />
               </label>
               <label className="block sm:col-span-3">
                 <span className="label">Alasan Enrollment</span>
@@ -795,7 +796,7 @@ function SiswaTab({user,toast}){
             <div className="text-[10px] font-black text-slate-400 uppercase">Cabang</div>
             <div className="font-black text-text-main text-sm truncate">{m.cabang.find(c=>String(c.id)===String(kenaikanPreview.cabang_id))?.nama||kenaikanPreview.cabang_id}</div>
           </div>
-          <label className="block"><div className="label">Tanggal efektif</div><input type="date" value={kenaikanForm.tanggal_efektif} onChange={e=>setKenaikanForm(f=>({...f,tanggal_efektif:e.target.value}))} className="input w-full text-sm"/></label>
+          <label className="block"><div className="label">Tanggal efektif</div><CustomDatePicker value={kenaikanForm.tanggal_efektif} onChange={v=>setKenaikanForm(f=>({...f,tanggal_efektif:v}))} className="input w-full text-sm"/></label>
           <label className="block"><div className="label">Tahun ajaran</div><input value={kenaikanForm.tahun_ajaran} onChange={e=>setKenaikanForm(f=>({...f,tahun_ajaran:e.target.value}))} className="input w-full text-sm"/></label>
           <ActionButton icon={RefreshCw} onClick={previewKenaikan} variant="secondary" className="w-full lg:w-auto whitespace-nowrap">Refresh Preview</ActionButton>
         </div>
@@ -906,8 +907,8 @@ function SiswaTab({user,toast}){
 }
 
 function SiswaDrawer({children,onClose}){
-  return <div className="fixed inset-0 z-50 flex justify-end bg-slate-950/35" onClick={onClose}>
-    <div className="w-full sm:max-w-2xl xl:max-w-3xl h-full bg-slate-100 border-l border-slate-300 overflow-y-auto p-3 sm:p-4 animate-slide-left" onClick={e=>e.stopPropagation()}>
+  return <div className="fixed inset-0 z-50 flex justify-end bg-slate-950/45 backdrop-blur-sm" onClick={onClose}>
+    <div className="w-full sm:max-w-2xl xl:max-w-3xl h-full bg-slate-100 border-l border-slate-200 overflow-y-auto custom-scrollbar p-3 sm:p-4 animate-slide-left shadow-2xl shadow-slate-950/25" onClick={e=>e.stopPropagation()}>
       {children}
     </div>
   </div>;
@@ -980,7 +981,7 @@ function SiswaDetailPanel({user,m,detail,setDetail,toast,refresh,close}){
   async function copyNfc(){try{await navigator.clipboard.writeText(detail.nfc_token);toast('ok','NFC token disalin');}catch{toast('err','Gagal menyalin NFC token');}}
   async function downloadPickupCard(p){try{await downloadQrCard({siswa:detail,pickup:p});toast('ok','Kartu QR diunduh');}catch(e){toast('err',e.message||'Gagal mengunduh kartu');}}
   return <div className="space-y-4">
-    <div className="bg-white border border-slate-200 rounded-xl p-4">
+    <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-[0_18px_60px_rgba(15,23,42,.06)]">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-4 min-w-0">
           <FotoUpload
@@ -1013,7 +1014,7 @@ function SiswaDetailPanel({user,m,detail,setDetail,toast,refresh,close}){
     </div>
 
     <div className="space-y-4">
-      <div className="bg-white border border-slate-200 rounded-xl p-4 sm:p-5 space-y-6">
+      <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 space-y-6 shadow-[0_18px_60px_rgba(15,23,42,.05)]">
         {/* Section 1: Profil Dasar */}
         <div className="space-y-3">
           <div className="text-[11px] font-black text-primary uppercase tracking-wider border-b border-slate-100 pb-1.5 flex items-center gap-1.5">
@@ -1043,7 +1044,7 @@ function SiswaDetailPanel({user,m,detail,setDetail,toast,refresh,close}){
             </label>
             <label className="block sm:col-span-3">
               <span className="label">Tanggal Lahir <span className="text-rose-500">*</span></span>
-              <input type="date" value={detail.tanggal_lahir||''} onChange={e=>d('tanggal_lahir',e.target.value)} className="input w-full" />
+              <CustomDatePicker value={detail.tanggal_lahir||''} onChange={v=>d('tanggal_lahir',v)} className="input w-full" />
             </label>
             <label className="block sm:col-span-3">
               <span className="label">Status Siswa <span className="text-rose-500">*</span></span>
@@ -1120,7 +1121,7 @@ function SiswaDetailPanel({user,m,detail,setDetail,toast,refresh,close}){
       </div>
 
       {/* Section 3: Enrollment */}
-      <div className="bg-white border border-slate-200 rounded-xl p-4 sm:p-5 flex items-start gap-4">
+      <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 flex items-start gap-4 shadow-[0_18px_60px_rgba(15,23,42,.05)]">
         <div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-200/60 flex items-center justify-center text-slate-400 shrink-0">
           <UserCheck className="w-5 h-5" />
         </div>
@@ -1147,7 +1148,7 @@ function SiswaDetailPanel({user,m,detail,setDetail,toast,refresh,close}){
         </div>
       </div>
 
-        <div className="bg-white border border-slate-200 rounded-xl p-4">
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-[0_18px_60px_rgba(15,23,42,.05)]">
           <div className="flex items-center justify-between gap-3 mb-3"><div><div className="font-black text-text-main">Penjemput</div><div className="text-xs text-slate-400">{(detail.penjemput||[]).filter(p=>p.aktif).length} aktif</div></div><ActionButton icon={UserPlus} onClick={()=>openPickup()} variant="secondary">Tambah</ActionButton></div>
           <div className="divide-y divide-slate-100 rounded-xl border border-slate-100 overflow-hidden">{(detail.penjemput||[]).map(p=><div key={p.id} className={`p-3 text-sm ${p.aktif?'bg-white':'bg-slate-50 opacity-70'}`}>
             <div className="grid grid-cols-[1fr_auto] gap-3 items-center">
@@ -1162,7 +1163,7 @@ function SiswaDetailPanel({user,m,detail,setDetail,toast,refresh,close}){
                 {p.aktif?<IconButton icon={Trash2} label={`Hapus ${p.nama}`} onClick={()=>setPickupStatus(p,0)} size="sm" variant="danger"/>:<IconButton icon={Power} label={`Aktifkan ${p.nama}`} onClick={()=>setPickupStatus(p,1)} size="sm"/>}
               </div>
             </div>
-          </div>)}{(!detail.penjemput||detail.penjemput.length===0)&&<div className="text-sm text-slate-400 p-3">Belum ada penjemput.</div>}</div>
+          </div>)}{(!detail.penjemput||detail.penjemput.length===0)&&<div className="m-3 rounded-xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-sm font-bold text-slate-400">Belum ada penjemput.</div>}</div>
         </div>
     </div>
 
@@ -1265,7 +1266,7 @@ function SiswaDetailPanel({user,m,detail,setDetail,toast,refresh,close}){
             </label>
             <label className="block">
               <span className="label">Tanggal Mulai <span className="text-rose-500">*</span></span>
-              <input type="date" value={move.tanggal_mulai} onChange={e=>setMove(x=>({...x,tanggal_mulai:e.target.value}))} className="input w-full" />
+              <CustomDatePicker value={move.tanggal_mulai} onChange={v=>setMove(x=>({...x,tanggal_mulai:v}))} className="input w-full" />
             </label>
             <label className="block sm:col-span-2">
               <span className="label">Alasan Pemindahan <span className="text-rose-500">*</span></span>
@@ -1292,11 +1293,11 @@ function SiswaDetailPanel({user,m,detail,setDetail,toast,refresh,close}){
           </div>
         </div>
       </Modal>}
-    <div className="bg-white border border-slate-200 rounded-xl p-4">
+    <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-[0_18px_60px_rgba(15,23,42,.05)]">
       <div className="font-black text-text-main mb-3">Riwayat Tagihan</div>
-      {tagihanSiswa===null?<div className="text-sm text-slate-400">Memuat…</div>:
-      tagihanSiswa.length===0?<div className="text-sm text-slate-400">Belum ada tagihan.</div>:
-      <div className="overflow-x-auto border border-slate-100 rounded-xl"><table className="w-full text-sm"><thead><tr><th className="text-left py-2 px-3 bg-slate-50 text-slate-500 font-black">Cabang</th><th className="text-left py-2 px-3 bg-slate-50 text-slate-500 font-black">Jenis</th><th className="text-left py-2 px-3 bg-slate-50 text-slate-500 font-black">Periode</th><th className="text-right py-2 px-3 bg-slate-50 text-slate-500 font-black">Final</th><th className="text-right py-2 px-3 bg-slate-50 text-slate-500 font-black">Terbayar</th><th className="text-left py-2 px-3 bg-slate-50 text-slate-500 font-black">Status</th></tr></thead><tbody className="divide-y divide-slate-100">{tagihanSiswa.map(t=><tr key={t.id}><td className="py-2 px-3 text-slate-700">{t.cabang_nama}</td><td className="py-2 px-3 text-slate-700">{t.nama}</td><td className="py-2 px-3 text-slate-700">{t.periode||'-'}</td><td className="py-2 px-3 text-right tabular-nums font-semibold text-slate-700">{money(t.nominal_final)}</td><td className="py-2 px-3 text-right tabular-nums font-semibold text-slate-700">{money(t.paid_amount)}</td><td className="py-2 px-3 text-slate-700">{t.status}</td></tr>)}</tbody></table></div>}
+      {tagihanSiswa===null?<div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-sm font-bold text-slate-400">Memuat...</div>:
+      tagihanSiswa.length===0?<div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-sm font-bold text-slate-400">Belum ada tagihan.</div>:
+      <div className="overflow-x-auto custom-scrollbar border border-slate-100 rounded-xl"><table className="w-full text-sm"><thead><tr><th className="text-left py-2 px-3 bg-slate-50 text-slate-500 font-black">Cabang</th><th className="text-left py-2 px-3 bg-slate-50 text-slate-500 font-black">Jenis</th><th className="text-left py-2 px-3 bg-slate-50 text-slate-500 font-black">Periode</th><th className="text-right py-2 px-3 bg-slate-50 text-slate-500 font-black">Final</th><th className="text-right py-2 px-3 bg-slate-50 text-slate-500 font-black">Terbayar</th><th className="text-left py-2 px-3 bg-slate-50 text-slate-500 font-black">Status</th></tr></thead><tbody className="divide-y divide-slate-100">{tagihanSiswa.map(t=><tr key={t.id}><td className="py-2 px-3 text-slate-700">{t.cabang_nama}</td><td className="py-2 px-3 text-slate-700">{t.nama}</td><td className="py-2 px-3 text-slate-700">{t.periode||'-'}</td><td className="py-2 px-3 text-right tabular-nums font-semibold text-slate-700">{money(t.nominal_final)}</td><td className="py-2 px-3 text-right tabular-nums font-semibold text-slate-700">{money(t.paid_amount)}</td><td className="py-2 px-3 text-slate-700">{t.status}</td></tr>)}</tbody></table></div>}
     </div>
   </div>;
 }
@@ -1574,7 +1575,7 @@ function StaffTab({user,toast}){
           ))}
         </Table>
         {filteredList.length === 0 && (
-          <div className="bg-white border border-t-0 border-slate-200 rounded-b-xl p-8 text-center text-slate-400 text-sm font-bold">
+          <div className="mt-3 bg-slate-50 border border-dashed border-slate-200 rounded-2xl p-8 text-center text-slate-400 text-sm font-bold">
             Tidak ada data staff yang ditemukan.
           </div>
         )}
@@ -1594,7 +1595,7 @@ function StaffTab({user,toast}){
           />
         ))}
         {filteredList.length === 0 && (
-          <div className="bg-white border border-slate-200 rounded-xl p-8 text-center text-slate-400 text-sm font-bold">
+          <div className="bg-slate-50 border border-dashed border-slate-200 rounded-2xl p-8 text-center text-slate-400 text-sm font-bold">
             Tidak ada data staff yang ditemukan.
           </div>
         )}
@@ -2020,7 +2021,7 @@ function WaliTab({user,toast}){
             ))}
           </Table>
           {filteredWali.length === 0 && (
-            <div className="bg-white border border-t-0 border-slate-200 rounded-b-xl p-8 text-center text-slate-400 text-sm font-bold">Tidak ada akun wali yang ditemukan.</div>
+            <div className="mt-3 bg-slate-50 border border-dashed border-slate-200 rounded-2xl p-8 text-center text-slate-400 text-sm font-bold">Tidak ada akun wali yang ditemukan.</div>
           )}
         </div>
         <div className="block md:hidden space-y-3">
@@ -2028,7 +2029,7 @@ function WaliTab({user,toast}){
             <WaliCard key={v.id} wali={v} onEdit={setEditing} onReset={setResetConfirm} onStatusToggle={setStatusConfirm} />
           ))}
           {filteredWali.length === 0 && (
-            <div className="bg-white border border-slate-200 rounded-xl p-8 text-center text-slate-400 text-sm font-bold">Tidak ada akun wali yang ditemukan.</div>
+            <div className="bg-slate-50 border border-dashed border-slate-200 rounded-2xl p-8 text-center text-slate-400 text-sm font-bold">Tidak ada akun wali yang ditemukan.</div>
           )}
         </div>
       </div>
@@ -2387,7 +2388,7 @@ function RombelTab({user,toast}){
           return (
             <div
               key={r.id}
-              className="relative bg-white border border-slate-200/80 rounded-xl p-3 shadow-sm transition-all duration-200 flex flex-col justify-between"
+              className="relative bg-white border border-slate-200/80 rounded-2xl p-3 shadow-sm transition-all duration-200 flex flex-col justify-between"
             >
               <div>
                 <div className="flex justify-between items-start gap-2">
@@ -2419,7 +2420,7 @@ function RombelTab({user,toast}){
                     </div>
                   </div>
                   <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
-                    <span className="bg-indigo-50/70 text-indigo-600 border border-indigo-100/50 rounded-full px-2 py-0.5 text-[11px] font-semibold">
+                    <span className="bg-primary-container text-primary-active border border-primary/20 rounded-full px-2 py-0.5 text-[11px] font-semibold">
                       {r.jenjang_nama}
                     </span>
                     <span
@@ -2447,7 +2448,7 @@ function RombelTab({user,toast}){
         })}
       </div>
       {filteredRombel.length === 0 && (
-        <div className="bg-white border border-slate-200 rounded-xl p-8 text-center text-slate-400 text-sm font-bold">
+        <div className="bg-slate-50 border border-dashed border-slate-200 rounded-2xl p-8 text-center text-slate-400 text-sm font-bold">
           Tidak ada data rombel yang ditemukan.
         </div>
       )}
@@ -2524,7 +2525,7 @@ function RombelTab({user,toast}){
                 <StudentAvatar name={g.display_name} url={g.foto} size="sm" />
                 <div className="min-w-0">
                   <div className="truncate text-xs font-black text-slate-700">{g.display_name}</div>
-                  <button onClick={()=>setRoleConfirm({rombel:selectedAssignRombel,guru:g})} className={`mt-0.5 rounded px-1.5 py-0.5 text-[10px] font-black ${g.role==='utama'?'bg-indigo-50 text-indigo-600':'bg-slate-100 text-slate-500'}`}>{g.role==='utama'?'Utama':'Bantu'}</button>
+                  <button onClick={()=>setRoleConfirm({rombel:selectedAssignRombel,guru:g})} className={`mt-0.5 rounded px-1.5 py-0.5 text-[10px] font-black ${g.role==='utama'?'bg-primary-container text-primary-active':'bg-slate-100 text-slate-500'}`}>{g.role==='utama'?'Utama':'Bantu'}</button>
                 </div>
               </div>
               <IconButton icon={UserMinus} label={`Lepas ${g.display_name}`} onClick={()=>removeGuru(selectedAssignRombel,g)} size="sm" variant="danger"/>
@@ -2557,7 +2558,7 @@ function RombelTab({user,toast}){
               <StudentAvatar name={g.display_name} url={g.foto} size="sm" />
               <div className="min-w-0">
                 <div className="truncate text-sm font-black text-slate-800">{g.display_name}</div>
-                <button onClick={()=>setRoleConfirm({rombel:guruDetailRombel,guru:g})} className={`mt-1 rounded px-1.5 py-0.5 text-[10px] font-black ${g.role==='utama'?'bg-indigo-50 text-indigo-600':'bg-slate-100 text-slate-500'}`}>{g.role==='utama'?'Utama':'Bantu'}</button>
+                <button onClick={()=>setRoleConfirm({rombel:guruDetailRombel,guru:g})} className={`mt-1 rounded px-1.5 py-0.5 text-[10px] font-black ${g.role==='utama'?'bg-primary-container text-primary-active':'bg-slate-100 text-slate-500'}`}>{g.role==='utama'?'Utama':'Bantu'}</button>
               </div>
             </div>
             <IconButton icon={UserMinus} label={`Lepas ${g.display_name}`} onClick={()=>removeGuru(guruDetailRombel,g)} size="sm" variant="danger"/>
@@ -3211,69 +3212,65 @@ const active = filteredTagihan.filter(t => t.status !== 'void');
   const renderTagihanTab = () => (
     <>
       {/* Control Panel / Toolbar */}
-      <div className="bg-white border border-slate-200/80 rounded-2xl p-4 sm:p-5 shadow-sm mb-6 flex flex-col gap-4">
+      <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm mb-6">
         {/* Row 1: Filters */}
-        <div className="grid grid-cols-2 md:flex md:items-center gap-3 md:gap-4">
-          <div className="flex flex-col">
-            <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Tahun Ajaran</span>
-            <CustomSelect value={filterTahunAjaran} onChange={e=>setFilterTahunAjaran(e.target.value)} className="w-full md:max-w-[150px] shadow-sm">
-              <option value="2025/2026">2025/2026</option>
-              <option value="2026/2027">2026/2027</option>
-              {filterTahunAjaran !== '2025/2026' && filterTahunAjaran !== '2026/2027' && (
-                <option value={filterTahunAjaran}>{filterTahunAjaran}</option>
-              )}
-            </CustomSelect>
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+          <div className="grid grid-cols-2 gap-3 sm:flex sm:items-end">
+            <div className="flex flex-col">
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Tahun Ajaran</span>
+              <CustomSelect value={filterTahunAjaran} onChange={e=>setFilterTahunAjaran(e.target.value)} className="w-full sm:w-40 shadow-sm">
+                <option value="2025/2026">2025/2026</option>
+                <option value="2026/2027">2026/2027</option>
+                {filterTahunAjaran !== '2025/2026' && filterTahunAjaran !== '2026/2027' && (
+                  <option value={filterTahunAjaran}>{filterTahunAjaran}</option>
+                )}
+              </CustomSelect>
+            </div>
+            <div className="flex flex-col">
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Filter Periode</span>
+              <CustomSelect value={filterPeriode} onChange={e=>setFilterPeriode(e.target.value)} className="w-full sm:w-48 shadow-sm">
+                <option value="">Semua Periode</option>
+                {billingStats.uniquePeriods.map(p=><option key={p} value={p}>{p}</option>)}
+              </CustomSelect>
+            </div>
           </div>
-          <div className="flex flex-col">
-            <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Filter Periode</span>
-            <CustomSelect value={filterPeriode} onChange={e=>setFilterPeriode(e.target.value)} className="w-full md:min-w-[160px] shadow-sm">
-              <option value="">Semua Periode</option>
-              {billingStats.uniquePeriods.map(p=><option key={p} value={p}>{p}</option>)}
-            </CustomSelect>
-          </div>
-        </div>
 
-        {/* Generate Tagihan Button & Collapsible Panel */}
-        <div className="border-t border-slate-100 pt-3">
+          {/* Generate Tagihan Button & Collapsible Panel */}
           <button
             type="button"
             onClick={() => setShowGenerate(!showGenerate)}
-            className="w-full flex items-center justify-between py-2 px-3.5 rounded-xl border border-slate-150 bg-slate-50/50 hover:bg-slate-50 text-xs font-bold text-slate-600 transition duration-150 active:scale-[0.99] shadow-sm"
+            className="flex h-10 w-full items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3.5 text-xs font-black text-slate-600 shadow-sm transition duration-150 hover:bg-slate-100 active:scale-[0.99] sm:w-auto sm:min-w-[18rem]"
           >
             <span className="flex items-center gap-2">
-              <FilePlus className="w-4 h-4 text-slate-450" />
-              Generate Tagihan Baru (Bulanan / Kegiatan)
+              <FilePlus className="w-4 h-4 text-slate-500" />
+              Generate Tagihan
             </span>
             <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${showGenerate ? 'rotate-180' : ''}`} />
           </button>
+        </div>
 
-          {showGenerate && (
-            <div className="mt-3 bg-slate-50/30 border border-slate-150 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-end justify-between gap-4 animate-slide-up">
+        {showGenerate && (
+          <div className="mt-4 grid w-full gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 animate-slide-up sm:grid-cols-2 lg:ml-auto lg:w-fit lg:grid-cols-[13rem_12rem_auto] lg:items-end">
               {user.role === 'admin' && (
-                <div className="flex flex-col w-full sm:w-auto">
+                <div className="flex flex-col">
                   <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1.5">Pilih Cabang</span>
                   <CustomSelect
                     value={generateCabangId}
                     onChange={e => setGenerateCabangId(e.target.value)}
-                    className="w-full sm:min-w-[160px] shadow-sm bg-white"
+                    className="w-full shadow-sm bg-white"
                   >
-                    <option value="">Pilih Cabang…</option>
+                    <option value="">Pilih Cabang...</option>
                     {m.cabang.map(c => (
                       <option key={c.id} value={c.id}>{c.nama}</option>
                     ))}
                   </CustomSelect>
                 </div>
               )}
-              <div className="flex flex-col w-full sm:w-auto">
+              <div className="flex flex-col">
                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1.5">Pilih Bulan Tagihan</span>
-                <input
-                  type="month"
-                  value={form.periode||''}
-                  onChange={e=>setForm(f=>({...f,periode:e.target.value}))}
-                  className="input h-9 px-3 text-sm w-full sm:max-w-[160px] border border-slate-200 rounded-xl shadow-sm bg-white focus:border-primary/50 focus:ring-primary/20"
-                />
+                <CustomMonthPicker value={form.periode||''} onChange={v=>setForm(f=>({...f,periode:v}))} className="input w-full shadow-sm"/>
               </div>
-              <div className="flex flex-col w-full sm:w-auto">
+              <div className={`flex flex-col ${user.role === 'admin' ? 'sm:col-span-2 lg:col-span-1' : ''}`}>
                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1.5">Aksi Pembuatan</span>
                 <div className="flex gap-2">
                   <button
@@ -3294,12 +3291,11 @@ const active = filteredTagihan.filter(t => t.status !== 'void');
                   </button>
                 </div>
               </div>
-            </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {selectedBills.length > 0 && (
-          <div className="flex items-center gap-2 border-t border-slate-100 pt-3 animate-bounce-in">
+          <div className="mt-4 flex items-center gap-2 border-t border-slate-100 pt-3 animate-bounce-in">
             <ActionButton icon={Receipt} onClick={invoice} variant="primary" className="bg-primary hover:bg-primary-hover shadow-md font-black text-xs px-4 py-2 rounded-xl">
               Buat Invoice ({selectedBills.length} Terpilih)
             </ActionButton>
@@ -3353,46 +3349,81 @@ const active = filteredTagihan.filter(t => t.status !== 'void');
         <EmptyState icon="💸" title="Belum Ada Tagihan" description="Silakan generate tagihan bulanan atau kegiatan terlebih dahulu." />
       ) : (
         <>
-          <div className="hidden md:block bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-sm">
-            <Table headers={['','Siswa','Jenis','Periode','Final','Terbayar','Status','Aksi']}>
-              {filteredTagihan.map(t=>{
-                const student = siswa.find(x => x.id === t.siswa_id);
-                return (
-                  <tr key={t.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/10 transition-colors">
-                    <Td className="w-10"><input type="checkbox" checked={selectedBills.includes(t.id)} onChange={()=>toggleBill(t.id)} disabled={!canSelectBill(t)} className="rounded border-slate-300 text-primary focus:ring-primary disabled:opacity-40 cursor-pointer"/></Td>
-                    <Td>
-                      <div className="flex items-center gap-3 py-1">
-                        <StudentAvatar name={t.siswa_nama} url={student?.foto} size="sm" />
-                        <span className="font-semibold text-slate-855">{t.siswa_nama}</span>
-                      </div>
-                    </Td>
-                    <Td className="font-medium text-slate-600">{t.nama}</Td>
-                    <Td className="font-medium text-slate-500">{t.periode || '-'}</Td>
-                    <MoneyCell>{money(t.nominal_final)}</MoneyCell>
-                    <MoneyCell className="text-emerald-600 dark:text-emerald-400">{money(t.paid_amount)}</MoneyCell>
-                    <Td><BillingStatusBadge status={t.status}/></Td>
-                    <Td>
-                      <div className="flex gap-1.5 justify-end">
-                        <IconButton icon={FilePenLine} label={`Koreksi tagihan ${t.siswa_nama}`} onClick={()=>correctBill(t)} size="sm" className="hover:bg-slate-100 text-slate-600"/>
-                        <IconButton icon={Ban} label={`Void tagihan ${t.siswa_nama}`} onClick={()=>voidBill(t)} size="sm" variant="danger"/>
-                      </div>
-                    </Td>
+          <div className="hidden md:block overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
+            <div className="overflow-x-auto custom-scrollbar">
+              <table className="w-full min-w-[1040px] table-fixed text-sm">
+                <colgroup>
+                  <col className="w-12" />
+                  <col className="w-[260px]" />
+                  <col className="w-[190px]" />
+                  <col className="w-28" />
+                  <col className="w-36" />
+                  <col className="w-36" />
+                  <col className="w-36" />
+                  <col className="w-24" />
+                </colgroup>
+                <thead>
+                  <tr className="border-b border-slate-100">
+                    <th className="bg-slate-50 px-3 py-3 text-left text-[11px] font-black uppercase tracking-wide text-slate-400"></th>
+                    <th className="bg-slate-50 px-3 py-3 text-left text-[11px] font-black uppercase tracking-wide text-slate-500">Siswa</th>
+                    <th className="bg-slate-50 px-3 py-3 text-left text-[11px] font-black uppercase tracking-wide text-slate-500">Jenis</th>
+                    <th className="bg-slate-50 px-3 py-3 text-left text-[11px] font-black uppercase tracking-wide text-slate-500">Periode</th>
+                    <th className="bg-slate-50 px-3 py-3 text-right text-[11px] font-black uppercase tracking-wide text-slate-500">Final</th>
+                    <th className="bg-slate-50 px-3 py-3 text-right text-[11px] font-black uppercase tracking-wide text-slate-500">Terbayar</th>
+                    <th className="bg-slate-50 px-3 py-3 text-center text-[11px] font-black uppercase tracking-wide text-slate-500">Status</th>
+                    <th className="sticky right-0 z-10 border-l border-slate-200/80 bg-slate-50 px-3 py-3 text-right text-[11px] font-black uppercase tracking-wide text-slate-500">Aksi</th>
                   </tr>
-                );
-              })}
-              <tr className="bg-slate-50/80 dark:bg-slate-800/40 font-bold border-t border-slate-200 dark:border-slate-700">
-                <Td></Td>
-                <Td colSpan={3} className="text-slate-755 font-black uppercase text-xs tracking-wider">TOTAL RINGKASAN</Td>
-                <MoneyCell className="text-slate-900 font-extrabold">{money(totals.totalFinal)}</MoneyCell>
-                <MoneyCell className="text-emerald-600 dark:text-emerald-400 font-extrabold">{money(totals.totalPaid)}</MoneyCell>
-                <Td className="text-center">
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-black bg-primary-container text-primary">
-                    {totals.collectionRate}% Terkoleksi
-                  </span>
-                </Td>
-                <Td></Td>
-              </tr>
-            </Table>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredTagihan.map(t=>{
+                    const student = siswa.find(x => x.id === t.siswa_id);
+                    return (
+                      <tr key={t.id} className={selectedBills.includes(t.id)?'bg-primary-container/55':'bg-white hover:bg-slate-50/70'}>
+                        <td className="px-3 py-3 align-middle">
+                          <input type="checkbox" checked={selectedBills.includes(t.id)} onChange={()=>toggleBill(t.id)} disabled={!canSelectBill(t)} className="rounded border-slate-300 text-primary focus:ring-primary disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"/>
+                        </td>
+                        <td className="px-3 py-3 align-middle">
+                          <div className="flex min-w-0 items-center gap-3">
+                            <StudentAvatar name={t.siswa_nama} url={student?.foto} size="sm" />
+                            <div className="min-w-0">
+                              <div className="truncate font-black text-text-main" title={t.siswa_nama}>{t.siswa_nama}</div>
+                              <div className="mt-0.5 truncate text-[11px] font-semibold text-slate-400" title={t.cabang_nama||''}>{t.cabang_nama||'Cabang'}</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-3 py-3 align-middle">
+                          <div className="truncate font-bold text-slate-700" title={t.nama}>{t.nama}</div>
+                        </td>
+                        <td className="px-3 py-3 align-middle font-bold text-slate-500">{t.periode || '-'}</td>
+                        <td className="px-3 py-3 text-right align-middle font-black tabular-nums text-slate-900">{money(t.nominal_final)}</td>
+                        <td className="px-3 py-3 text-right align-middle font-black tabular-nums text-emerald-600">{money(t.paid_amount)}</td>
+                        <td className="px-3 py-3 text-center align-middle"><BillingStatusBadge status={t.status}/></td>
+                        <td className="sticky right-0 z-10 border-l border-slate-200/80 bg-inherit px-3 py-3 align-middle">
+                          <div className="flex justify-end gap-1.5">
+                            <IconButton icon={FilePenLine} label={`Koreksi tagihan ${t.siswa_nama}`} onClick={()=>correctBill(t)} size="sm" className="hover:bg-slate-100 text-slate-600"/>
+                            <IconButton icon={Ban} label={`Void tagihan ${t.siswa_nama}`} onClick={()=>voidBill(t)} size="sm" variant="danger"/>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t border-slate-200 bg-slate-50">
+                    <td className="px-3 py-3"></td>
+                    <td colSpan={3} className="px-3 py-3 text-xs font-black uppercase tracking-wide text-slate-500">Total ringkasan</td>
+                    <td className="px-3 py-3 text-right font-black tabular-nums text-slate-900">{money(totals.totalFinal)}</td>
+                    <td className="px-3 py-3 text-right font-black tabular-nums text-emerald-600">{money(totals.totalPaid)}</td>
+                    <td className="px-3 py-3 text-center">
+                      <span className="inline-flex items-center rounded-full bg-primary-container px-2.5 py-0.5 text-xs font-black text-primary">
+                        {totals.collectionRate}% Terkoleksi
+                      </span>
+                    </td>
+                    <td className="sticky right-0 z-10 border-l border-slate-200/80 bg-slate-50 px-3 py-3"></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
           </div>
           <div className="block md:hidden space-y-3">
             {filteredTagihan.map(t => {
@@ -3920,8 +3951,8 @@ const active = filteredTagihan.filter(t => t.status !== 'void');
             <div className="font-black text-text-main">Tagihan baru ({newItems.length})</div>
             <div className="overflow-x-auto max-h-64"><table className="w-full text-sm"><thead><tr><th className="text-left py-2 px-3 bg-slate-50 text-slate-500 font-black">Siswa</th><th className="text-left py-2 px-3 bg-slate-50 text-slate-500 font-black">Jenis</th><th className="text-left py-2 px-3 bg-slate-50 text-slate-500 font-black">Jenjang</th><th className="text-left py-2 px-3 bg-slate-50 text-slate-500 font-black">Paket</th><th className="text-right py-2 px-3 bg-slate-50 text-slate-500 font-black">Awal</th><th className="text-right py-2 px-3 bg-slate-50 text-slate-500 font-black">Diskon</th><th className="text-right py-2 px-3 bg-slate-50 text-slate-500 font-black">Final</th></tr></thead><tbody className="divide-y divide-slate-100">{newItems.map((p,i)=><tr key={i}><td className="py-2 px-3 text-slate-700">{p.siswa_nama}</td><td className="py-2 px-3 text-slate-700">{p.nama}</td><td className="py-2 px-3 text-slate-700">{p.jenjang_nama}</td><td className="py-2 px-3 text-slate-700">{p.paket}</td><td className="py-2 px-3 text-right tabular-nums font-semibold text-slate-700">{money(p.nominal_awal)}</td><td className="py-2 px-3 text-right tabular-nums font-semibold text-slate-700">{money(p.diskon_amount)}</td><td className="py-2 px-3 text-right tabular-nums font-black text-slate-900">{money(p.nominal_final)}</td></tr>)}</tbody></table></div>
           </>}
-          {existingItems.length>0&&<div className="text-sm text-primary">⚠ {existingItems.length} tagihan sudah ada and akan dilewati.</div>}
-          {newItems.length===0&&existingItems.length===0&&<div className="text-sm text-slate-400">Tidak ada tagihan yang akan dibuat.</div>}
+          {existingItems.length>0&&<div className="rounded-xl border border-primary/20 bg-primary-container px-3 py-2 text-sm font-bold text-primary-active">{existingItems.length} tagihan sudah ada dan akan dilewati.</div>}
+          {newItems.length===0&&existingItems.length===0&&<div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-sm font-bold text-slate-400">Tidak ada tagihan yang akan dibuat.</div>}
           <div className="flex gap-2">
             <ActionButton icon={CheckCircle2} onClick={confirmGenerate} disabled={newItems.length===0}>Konfirmasi Generate</ActionButton>
             <ActionButton icon={X} onClick={()=>setPreview(null)} variant="secondary">Batal</ActionButton>
@@ -4391,7 +4422,7 @@ const active = filteredTagihan.filter(t => t.status !== 'void');
 
   return (
     <Panel title="Billing" right={<CabangFilter user={user} {...m}/>}>
-      <div className="flex gap-1 p-1 bg-slate-100/80 rounded-xl mb-5 overflow-x-auto scrollbar-none">
+      <div className="flex gap-1 p-1 bg-slate-100/80 rounded-xl mb-5 overflow-x-auto custom-scrollbar">
         {[
           {key:'ringkasan',label:'Ringkasan',icon:BarChart3},
           {key:'tagihan',label:'Tagihan',icon:Receipt},
@@ -4447,8 +4478,8 @@ function LaporanTab({user,toast}){
   const showCabangColumn=user.role==='admin';
   const statusClass=status=>status==='published'?'bg-emerald-100 text-emerald-700':'bg-primary-container text-primary-active';
   const toolbar=<div className="grid w-full min-w-0 grid-cols-2 gap-2 xl:flex xl:w-auto xl:items-center xl:justify-end">
-    <input type="date" value={tanggal} onChange={e=>setTanggal(e.target.value)} className="input h-9 w-full min-w-0 text-xs xl:w-40 xl:text-sm"/>
-    <CabangFilter user={user} {...m} plain className="h-9 w-full min-w-0 xl:w-64"/>
+    <CustomDatePicker value={tanggal} onChange={setTanggal} className="input h-9 w-full min-w-0 text-xs xl:w-40 xl:text-sm"/>
+    <CabangFilter user={user} {...m} className="h-9 w-full min-w-0 xl:w-64"/>
     <CustomSelect value={rombelId} onChange={e=>setRombelId(e.target.value)} className="input h-9 w-full min-w-0 xl:w-48">
       <option value="">Semua rombel</option>{m.rombel.map(r=><option key={r.id} value={r.id}>{showCabangColumn&&!m.cabangId?`${r.cabang_nama} - ${r.nama}`:r.nama}</option>)}
     </CustomSelect>
@@ -4477,11 +4508,12 @@ function LaporanTab({user,toast}){
         </button>)}
         {rows.length===0&&<EmptyState icon="clipboard" title="Belum Ada Laporan" description="Tidak ada laporan yang cocok dengan filter saat ini."/>}
       </div>
-      <div className="hidden overflow-x-auto max-w-full md:block"><table className="w-full min-w-[860px] text-sm"><thead><tr><th className="text-left py-2 px-3 bg-slate-50 text-slate-500 font-black">Tanggal</th><th className="text-left py-2 px-3 bg-slate-50 text-slate-500 font-black">Siswa</th>{showCabangColumn&&<th className="text-left py-2 px-3 bg-slate-50 text-slate-500 font-black">Cabang</th>}<th className="text-left py-2 px-3 bg-slate-50 text-slate-500 font-black">Rombel</th><th className="text-left py-2 px-3 bg-slate-50 text-slate-500 font-black">Status</th><th className="text-left py-2 px-3 bg-slate-50 text-slate-500 font-black">Guru</th><th className="text-left py-2 px-3 bg-slate-50 text-slate-500 font-black sticky right-0 z-10 border-l border-slate-200/80"></th></tr></thead><tbody className="divide-y divide-slate-100">{rows.map(r=><tr key={r.id} className={detail?.id===r.id?'bg-primary-container':''}><td className="py-2 px-3 text-slate-700">{r.tanggal}</td><td className="py-2 px-3 font-bold text-text-main">{r.siswa_nama}</td>{showCabangColumn&&<td className="py-2 px-3 text-slate-600">{r.cabang_nama||'-'}</td>}<td className="py-2 px-3 text-slate-600">{r.rombel_nama}</td><td className="py-2 px-3"><span className={`text-xs font-black px-2 py-1 rounded-full ${statusClass(r.status)}`}>{r.status||'draft'}</span></td><td className="py-2 px-3 text-slate-600">{r.guru_nama||'-'}</td><td className="py-2 px-3 sticky right-0 z-10 bg-white border-l border-slate-200/80"><IconButton icon={FilePenLine} label={`Lihat atau edit laporan ${r.siswa_nama}`} onClick={()=>open(r)} size="sm"/></td></tr>)}</tbody></table></div>
+      <div className="hidden overflow-x-auto custom-scrollbar max-w-full rounded-xl border border-slate-100 md:block"><table className="w-full min-w-[860px] text-sm"><thead><tr><th className="text-left py-2 px-3 bg-slate-50 text-slate-500 font-black">Tanggal</th><th className="text-left py-2 px-3 bg-slate-50 text-slate-500 font-black">Siswa</th>{showCabangColumn&&<th className="text-left py-2 px-3 bg-slate-50 text-slate-500 font-black">Cabang</th>}<th className="text-left py-2 px-3 bg-slate-50 text-slate-500 font-black">Rombel</th><th className="text-left py-2 px-3 bg-slate-50 text-slate-500 font-black">Status</th><th className="text-left py-2 px-3 bg-slate-50 text-slate-500 font-black">Guru</th><th className="text-left py-2 px-3 bg-slate-50 text-slate-500 font-black sticky right-0 z-10 border-l border-slate-200/80"></th></tr></thead><tbody className="divide-y divide-slate-100">{rows.map(r=><tr key={r.id} className={detail?.id===r.id?'bg-primary-container':''}><td className="py-2 px-3 text-slate-700">{r.tanggal}</td><td className="py-2 px-3 font-bold text-text-main">{r.siswa_nama}</td>{showCabangColumn&&<td className="py-2 px-3 text-slate-600">{r.cabang_nama||'-'}</td>}<td className="py-2 px-3 text-slate-600">{r.rombel_nama}</td><td className="py-2 px-3"><span className={`text-xs font-black px-2 py-1 rounded-full ${statusClass(r.status)}`}>{r.status||'draft'}</span></td><td className="py-2 px-3 text-slate-600">{r.guru_nama||'-'}</td><td className="py-2 px-3 sticky right-0 z-10 bg-white border-l border-slate-200/80"><IconButton icon={FilePenLine} label={`Lihat atau edit laporan ${r.siswa_nama}`} onClick={()=>open(r)} size="sm"/></td></tr>)}</tbody></table></div>
+      {rows.length===0&&<div className="hidden md:block"><EmptyState icon="clipboard" title="Belum Ada Laporan" description="Tidak ada laporan yang cocok dengan filter saat ini."/></div>}
       {detail&&<Modal title={`Koreksi Laporan - ${detail.siswa_nama}`} onClose={()=>{setDetail(null);setEdits(null);}}>
       <div className="space-y-3">
         <div className="text-sm text-slate-500">{detail.tanggal} - {detail.cabang_nama} - {detail.rombel_nama}</div>
-        <div className="bg-white border border-slate-200 rounded-xl p-3">
+        <div className="bg-white border border-slate-200 rounded-2xl p-3">
           <div className="label">Focus Theme</div>
           <div className="font-black text-text-main">{detail.focus_theme_title||'-'}</div>
           {detail.modul_ajar_title&&<div className="text-xs text-slate-500 mt-1">Modul: {detail.modul_ajar_title}</div>}
@@ -4680,7 +4712,7 @@ function ConfigTab({user,toast}){
         </div>
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-start gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700"><Wallet className="h-5 w-5"/></div>
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-container text-primary-active"><Wallet className="h-5 w-5"/></div>
             <div className="min-w-0">
               <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">Rekening pembayaran</div>
               <div className="truncate text-base font-black text-text-main">{org.rekening_bank||'Bank belum diisi'}</div>
@@ -4703,7 +4735,7 @@ function ConfigTab({user,toast}){
             </div>
           </div>
           <div className="space-y-3 border-t border-slate-100 pt-5">
-            <div className="flex items-center gap-2 text-sm font-black text-text-main"><Banknote className="h-4 w-4 text-emerald-700"/>Rekening pembayaran</div>
+            <div className="flex items-center gap-2 text-sm font-black text-text-main"><Banknote className="h-4 w-4 text-primary"/>Rekening pembayaran</div>
             <div className="grid gap-3 sm:grid-cols-2">
               <ConfigTextField label="Nama bank" value={org.rekening_bank||''} onChange={v=>setOrg(o=>({...o,rekening_bank:v}))}/>
               <ConfigTextField label="Nomor rekening" value={org.rekening_nomor||''} onChange={v=>setOrg(o=>({...o,rekening_nomor:v}))}/>
@@ -5021,7 +5053,7 @@ function AuditTab({user,toast}){
       </div>
 
       {filteredRows.length === 0 && (
-        <div className="bg-white border border-slate-200 rounded-xl p-8 text-center text-slate-400 text-sm font-bold">
+        <div className="bg-slate-50 border border-dashed border-slate-200 rounded-2xl p-8 text-center text-slate-400 text-sm font-bold">
           Tidak ada log audit yang ditemukan.
         </div>
       )}
@@ -5029,10 +5061,10 @@ function AuditTab({user,toast}){
   </Panel>;
 }
 
-function Panel({title,right,children,className=''}){return <section className={`bg-white border border-slate-200 rounded-2xl p-3 sm:p-4 max-w-full overflow-hidden ${className}`}><div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4"><h2 className="text-lg font-black text-text-main">{title}</h2>{right}</div>{children}</section>;}
-function Input({value,onChange,placeholder,className='',...props}){return <input value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder} className={`input w-full ${className}`} {...props}/>;}
+function Panel({title,right,children,className=''}){return <section className={`bg-white border border-slate-200 rounded-2xl p-3 sm:p-4 max-w-full overflow-hidden shadow-[0_18px_60px_rgba(15,23,42,.05)] ${className}`}><div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4"><div><div className="inline-flex rounded-full bg-primary-container px-2.5 py-1 text-[11px] font-black uppercase tracking-wide text-primary">Admin</div><h2 className="mt-2 text-lg font-black text-text-main tracking-[-0.01em]">{title}</h2></div>{right}</div>{children}</section>;}
+function Input({value,onChange,placeholder,className='',type='text',...props}){return type==='date'?<CustomDatePicker value={value} onChange={onChange} placeholder={placeholder} className={`input w-full ${className}`} {...props}/>:type==='time'?<CustomTimePicker value={value} onChange={onChange} placeholder={placeholder} className={`input w-full ${className}`} {...props}/>:<input type={type} value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder} className={`input w-full ${className}`} {...props}/>;}
 function Textarea({label,value,onChange,placeholder}){return <div><div className="label">{label}</div><textarea value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder} rows={3} className="input w-full min-h-20 resize-none"/></div>;}
-function Table({headers,children}){return <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr>{headers.map((h,i)=><th key={`${i}-${h||'empty'}`} className="text-left py-2 px-3 bg-slate-50 text-slate-500 font-black">{h}</th>)}</tr></thead><tbody className="divide-y divide-slate-100">{children}</tbody></table></div>;}
+function Table({headers,children}){return <div className="overflow-x-auto custom-scrollbar rounded-xl border border-slate-100"><table className="w-full text-sm"><thead><tr>{headers.map((h,i)=><th key={`${i}-${h||'empty'}`} className="text-left py-2 px-3 bg-slate-50 text-slate-500 font-black">{h}</th>)}</tr></thead><tbody className="divide-y divide-slate-100">{children}</tbody></table></div>;}
 function Td({children,className='',...props}){return <td className={`py-2 px-3 text-slate-700 whitespace-nowrap ${className}`} {...props}>{children}</td>;}
 function Toggle({label,checked,onChange}){return <label className="flex items-center gap-3 cursor-pointer select-none"><button type="button" role="switch" aria-checked={checked} onClick={()=>onChange(!checked)} className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary/30 focus:ring-offset-2 ${checked?'bg-emerald-500':'bg-slate-300'}`}><span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${checked?'translate-x-6':'translate-x-1'}`}/></button><span className="text-sm font-medium text-slate-700">{label}</span></label>;}
 async function downloadQrCard({siswa,pickup}){

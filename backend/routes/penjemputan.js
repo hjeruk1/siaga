@@ -2,6 +2,7 @@ const router = require('express').Router();
 const db = require('../db');
 const auth = require('../middleware/auth');
 const { nowUtc, todayWIB, nowTimeWIB, activeEnrollment, canAccessSiswa, requireActiveCabang, audit, notify, isDayClosed } = require('../utils/workflow');
+const { broadcastAbsensi } = require('./absensi');
 
 function cfg(e) {
   return db.prepare('SELECT * FROM operasional_config WHERE cabang_id=? AND jenjang_id=? AND paket=?').get(e.cabang_id, e.jenjang_id, e.paket) || {};
@@ -15,11 +16,7 @@ function minutesBetween(start, end) {
 }
 function pickupActorId(actorId) {
   if (!actorId) return null;
-  try {
-    return db.prepare('SELECT 1 FROM guru WHERE id=?').get(actorId) ? actorId : null;
-  } catch {
-    return actorId;
-  }
+  return db.prepare("SELECT 1 FROM pengguna WHERE id=? AND role IN ('guru','admin','admin_cabang','gerbang')").get(actorId) ? actorId : null;
 }
 function insertPickupLog(absen, actorId, cabangId, jamPulang, sumber) {
   db.prepare(`INSERT INTO penjemputan_log(absensi_id,siswa_id,penjemput_id,guru_id,cabang_id,tanggal,jam_scan,jam_pulang,durasi_menit,sumber,created_at)
@@ -54,6 +51,7 @@ router.post('/scan', auth(['gerbang','guru','admin','admin_cabang']), (req, res)
   const gurus = db.prepare('SELECT pengguna_id FROM guru_rombel WHERE rombel_id=?').all(e.rombel_id);
   for (const g of gurus) notify(g.pengguna_id, 'pickup_waiting', 'Penjemput tiba', `${p.siswa_nama} dijemput oleh ${p.nama}`, 'absensi', absen.id, e.cabang_id);
   audit(req.user, 'pickup_scan', 'absensi', absen.id, { cabang_id: e.cabang_id, before: beforeScan, after: { status: 'Menunggu', penjemput_id: p.id, penjemput_nama: p.nama, jam_tunggu: jam } });
+  broadcastAbsensi(e.cabang_id);
   res.json({ success: true, siswa: { id: p.siswa_id, nama: p.siswa_nama, rombel: e.rombel_nama }, penjemput: { nama: p.nama, relasi: p.relasi }, jam_tunggu: jam });
 });
 
@@ -62,6 +60,7 @@ router.post('/pulang', auth(['gerbang','guru','admin','admin_cabang']), (req, re
   if (!ids.length) return res.status(400).json({ error: 'Pilih siswa' });
   const tanggal = req.body?.tanggal || todayWIB(), jam = nowTimeWIB();
   let count = 0;
+  const cabangIds = new Set();
   const tx = db.transaction(() => {
     for (const id of ids) {
       const access = canAccessSiswa(req.user, id, { tanggal });
@@ -75,10 +74,17 @@ router.post('/pulang', auth(['gerbang','guru','admin','admin_cabang']), (req, re
       db.prepare("UPDATE absensi SET status='Pulang',jam_pulang=?,updated_at=? WHERE id=?").run(jam, nowUtc(), absen.id);
       insertPickupLog(absen, req.user.id, access.enrollment.cabang_id, jam, 'manual');
       audit(req.user, 'handoff', 'absensi', absen.id, { cabang_id: access.enrollment.cabang_id, before: { status: 'Menunggu', penjemput_id: absen.penjemput_id }, after: { status: 'Pulang', jam_pulang: jam } });
+      cabangIds.add(access.enrollment.cabang_id);
       count++;
     }
   });
-  try { tx(); res.json({ success: true, count, jam_pulang: jam }); }
+  try {
+    tx();
+    for (const cId of cabangIds) {
+      broadcastAbsensi(cId);
+    }
+    res.json({ success: true, count, jam_pulang: jam });
+  }
   catch (e) { res.status(e.status || 500).json({ error: e.message }); }
 });
 

@@ -4,6 +4,7 @@ const fs = require('fs');
 const db = require('../db');
 const auth = require('../middleware/auth');
 const { uploadImage, saveSquareJpeg, ensureDir } = require('../utils/image-upload');
+const asyncRoute = require('../utils/async-route');
 const { nowUtc, todayWIB, nowTimeWIB, activeEnrollment, canAccessSiswa, canWaliAccessSiswa, siswaScopeSql, requireCabang, requireActiveCabang, audit, notify, isSchoolDay } = require('../utils/workflow');
 
 const UPLOAD_DIR = path.join(__dirname, '../uploads/laporan');
@@ -278,7 +279,7 @@ router.post('/:id/comment', auth(['wali', 'guru']), (req, res) => {
   res.json({ id: r.lastInsertRowid });
 });
 
-router.post('/:id/attachments', auth(['guru', 'admin', 'admin_cabang']), uploadImage.single('foto'), async (req, res) => {
+router.post('/:id/attachments', auth(['guru', 'admin', 'admin_cabang']), uploadImage.single('foto'), asyncRoute(async (req, res) => {
   const l = db.prepare('SELECT * FROM laporan_harian WHERE id=?').get(req.params.id);
   if (!l) return res.status(404).json({ error: 'Daily record tidak ditemukan' });
   const access = canAccessSiswa(req.user, l.siswa_id, { tanggal: l.tanggal });
@@ -298,7 +299,7 @@ router.post('/:id/attachments', auth(['guru', 'admin', 'admin_cabang']), uploadI
   if (l.status === 'published') db.prepare('UPDATE laporan_harian SET last_published_change_at=?,updated_at=? WHERE id=?').run(nowUtc(), nowUtc(), l.id);
   audit(req.user, 'add_attachment', 'laporan_attachment', r.lastInsertRowid, { cabang_id: l.cabang_id });
   res.json({ id: r.lastInsertRowid, url });
-});
+}));
 
 router.delete('/:id/attachments/:attachmentId', auth(['guru', 'admin', 'admin_cabang']), (req, res) => {
   const l = db.prepare('SELECT * FROM laporan_harian WHERE id=?').get(req.params.id);

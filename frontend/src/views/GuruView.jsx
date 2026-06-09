@@ -1,7 +1,9 @@
 import{useEffect,useMemo,useState}from'react';
 import{api}from'../api';
 import{ConfirmActionModal,Modal,CustomSelect}from'../components/Shared';
+import{todayWIB}from'../utils/date';
 import{ArrowLeft,BookOpen,Camera,CheckCircle2,ChevronDown,ClipboardCheck,Eye,MessageCircle,Send,Sparkles,X}from'lucide-react';
+import KegiatanMingguanTab from './KegiatanMingguanTab';
 
 function generatePedagogicalNote(nama, activities, mood) {
   const sentences = [];
@@ -43,6 +45,20 @@ function activityLinesFromText(v){
 function domainOptions(detail){
   return Array.from(new Set([...(detail?.focus_theme_domains||[]),...OBSERVATION_DOMAINS].filter(Boolean)));
 }
+function matchesClassModule(module, rombelId, sampleStudent){
+  if(!module||!sampleStudent)return false;
+  const paketOk=!module.paket||!sampleStudent.paket||String(module.paket)===String(sampleStudent.paket);
+  const scopeOk=
+    (!module.rombel_id&&!module.jenjang_id)||
+    (module.rombel_id&&String(module.rombel_id)===String(rombelId))||
+    (!module.rombel_id&&module.jenjang_id&&String(module.jenjang_id)===String(sampleStudent.jenjang_id));
+  return paketOk&&scopeOk;
+}
+function moduleScopeLabel(module){
+  if(module?.rombel_nama)return module.rombel_nama;
+  if(module?.jenjang_nama)return `Jenjang ${module.jenjang_nama}`;
+  return 'Semua kelas';
+}
 
 function formalText(l,nama){
   if(!l||(!l.mood&&!l.makan&&(l.tidur===null||l.tidur===undefined)&&!(l.aktivitas?.length)&&!l.catatan&&!l.observation_note))return null;
@@ -68,9 +84,9 @@ function CompleteBadge({pct}){
 }
 
 export default function GuruView({user,toast,tab}){
-  const tabs = ['daily', 'absensi'];
+  const tabs = ['daily', 'absensi', 'modulAjar'];
   const activeTab = tabs.includes(tab) ? tab : 'daily';
-  const[tanggal,setTanggal]=useState(new Date().toISOString().slice(0,10));
+  const[tanggal,setTanggal]=useState(()=>todayWIB());
   const[list,setList]=useState([]);const[isSchoolDay,setIsSchoolDay]=useState(null);
   const[absensi,setAbsensi]=useState([]);
   const[absenMode,setAbsenMode]=useState('masuk');const[absenView,setAbsenView]=useState('card');
@@ -97,38 +113,36 @@ export default function GuruView({user,toast,tab}){
     menu_makanan: ''
   });
   const [classModules, setClassModules] = useState([]);
+  const [masterRombels, setMasterRombels] = useState([]);
 
   const [exportScope, setExportScope] = useState('class');
   const [exportSiswaId, setExportSiswaId] = useState('');
   const [exportPeriod, setExportPeriod] = useState('current_month');
-  const [exportStartDate, setExportStartDate] = useState(() => {
-    const d = new Date();
-    return new Date(d.getFullYear(), d.getMonth(), 2).toISOString().slice(0, 10);
-  });
-  const [exportEndDate, setExportEndDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [exportStartDate, setExportStartDate] = useState(() => `${todayWIB().slice(0, 7)}-01`);
+  const [exportEndDate, setExportEndDate] = useState(() => todayWIB());
   const [exportBusy, setExportBusy] = useState(false);
 
   const getDatesForPeriod = (period) => {
-    const now = new Date();
+    const today = todayWIB();
+    const [year, month] = today.split('-').map(Number);
     let start = '', end = '';
     if (period === 'current_month') {
-      start = new Date(now.getFullYear(), now.getMonth(), 1);
-      end = now;
+      start = `${today.slice(0, 7)}-01`;
+      end = today;
     } else if (period === 'prev_month') {
-      start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      end = new Date(now.getFullYear(), now.getMonth(), 0);
+      const previousMonth = new Date(Date.UTC(year, month - 2, 15, 12));
+      const previousPrefix = todayWIB(previousMonth).slice(0, 7);
+      const previousLastDay = new Date(Date.UTC(year, month - 1, 0, 12));
+      start = `${previousPrefix}-01`;
+      end = todayWIB(previousLastDay);
     } else if (period === 'current_year') {
-      const year = now.getFullYear();
-      const startYear = now.getMonth() >= 6 ? year : year - 1;
-      start = new Date(startYear, 6, 1); // July 1st
-      end = now;
+      const startYear = month >= 7 ? year : year - 1;
+      start = `${startYear}-07-01`;
+      end = today;
     } else {
       return { start: exportStartDate, end: exportEndDate };
     }
-    return {
-      start: new Intl.DateTimeFormat('sv-SE').format(start),
-      end: new Intl.DateTimeFormat('sv-SE').format(end)
-    };
+    return { start, end };
   };
 
   async function handleExport(format) {
@@ -181,6 +195,13 @@ export default function GuruView({user,toast,tab}){
   async function loadTutupHari(){try{const s=await api.tutupHariStatus({cabang_id:user.cabang_id,tanggal});setDayClosed(s.closed);}catch{}}
   useEffect(()=>{load().catch(e=>toast('err',e.message));loadReminder();},[tanggal]);
   useEffect(()=>{if(activeTab==='absensi'){loadAbsensi().catch(e=>toast('err',e.message));loadTutupHari();}},[tanggal,activeTab]);
+  useEffect(() => {
+    let alive = true;
+    api.rombel().then(res => {
+      if (alive) setMasterRombels(res || []);
+    }).catch(() => {});
+    return () => { alive = false; };
+  }, [user?.cabang_id]);
   async function open(row){
     setSelected(row);
     const seed={siswa_id:row.siswa_id,tanggal,mood:null,makan:null,tidur:null,aktivitas:[],catatan:'',observation_domain:row.observation_domain||'',observation_note:row.observation_note||'',parent_note:row.parent_note||'',focus_theme_id:row.focus_theme_id||null,focus_theme_title:row.focus_theme_title||'',focus_theme_activity_summary:row.focus_theme_activity_summary||'',focus_theme_domains:row.focus_theme_domains||[],attachments:[],comments:[],id:null};
@@ -279,14 +300,37 @@ export default function GuruView({user,toast,tab}){
     return matchText&&matchStatus;
   }),[list,dailySearch,dailyFilter]);
   const rombels = useMemo(() => {
-    const map = {};
-    list.forEach(r => {
-      if (r.rombel_id) {
-        map[r.rombel_id] = r.rombel_name;
+    const sorted = [...masterRombels].sort((a, b) => String(a.nama).localeCompare(String(b.nama), 'id'));
+    const mapped = sorted.map(r => ({ id: r.id, name: r.nama, jenjang_id: r.jenjang_id, gurus: r.gurus }));
+
+    if (user.role === 'admin' || user.role === 'admin_cabang' || user.role === 'kepsek') {
+      return mapped;
+    }
+
+    // Find rombels where current user is assigned
+    const assignedRombels = mapped.filter(r =>
+      r.gurus?.some(g => String(g.id) === String(user.id))
+    );
+
+    // Find jenjangs where current user is 'utama'
+    const leadJenjangIds = mapped
+      .filter(r => r.gurus?.some(g => String(g.id) === String(user.id) && g.role === 'utama'))
+      .map(r => String(r.jenjang_id));
+
+    // Filter masterRombels: must be assigned OR be lead in the same jenjang
+    return mapped.filter(r =>
+      assignedRombels.some(ar => String(ar.id) === String(r.id)) ||
+      leadJenjangIds.includes(String(r.jenjang_id))
+    );
+  }, [user?.id, user?.role, masterRombels]);
+
+  useEffect(() => {
+    if (classThemeOpen && rombels.length > 0) {
+      if (!classThemeRombelId || !rombels.some(r => String(r.id) === String(classThemeRombelId))) {
+        setClassThemeRombelId(String(rombels[0].id));
       }
-    });
-    return Object.entries(map).map(([id, name]) => ({ id, name }));
-  }, [list]);
+    }
+  }, [classThemeOpen, rombels, classThemeRombelId]);
 
   useEffect(() => {
     if (classThemeOpen) {
@@ -294,9 +338,19 @@ export default function GuruView({user,toast,tab}){
     }
   }, [classThemeOpen, tanggal, user.cabang_id]);
 
+  const selectedClassStudent = useMemo(() => {
+    if(!classThemeRombelId)return null;
+    return list.find(s => String(s.rombel_id) === String(classThemeRombelId)) || null;
+  }, [list, classThemeRombelId]);
+
+  const scopedClassModules = useMemo(() => {
+    if(!classThemeRombelId||!selectedClassStudent)return [];
+    return classModules.filter(m => matchesClassModule(m, classThemeRombelId, selectedClassStudent));
+  }, [classModules, classThemeRombelId, selectedClassStudent]);
+
   const selectedClassModule = useMemo(() => {
-    return classModules.find(x => String(x.id) === String(classThemeForm.modul_ajar_id));
-  }, [classModules, classThemeForm.modul_ajar_id]);
+    return scopedClassModules.find(x => String(x.id) === String(classThemeForm.modul_ajar_id));
+  }, [scopedClassModules, classThemeForm.modul_ajar_id]);
 
   const classTodayDayName = useMemo(() => getIndonesianDayName(tanggal), [tanggal]);
 
@@ -344,14 +398,7 @@ export default function GuruView({user,toast,tab}){
         if (!defaultModulAjarId && Array.isArray(mods)) {
           const sampleStudent = list.find(s => String(s.rombel_id) === String(classThemeRombelId));
           if (sampleStudent) {
-            const matched = mods.find(m => {
-              const paketOk = !m.paket || !sampleStudent.paket || String(m.paket) === String(sampleStudent.paket);
-              const scopeOk =
-                (!m.rombel_id && !m.jenjang_id) ||
-                (m.rombel_id && String(m.rombel_id) === String(classThemeRombelId)) ||
-                (!m.rombel_id && m.jenjang_id && String(m.jenjang_id) === String(sampleStudent.jenjang_id));
-              return paketOk && scopeOk;
-            });
+            const matched = mods.find(m => matchesClassModule(m, classThemeRombelId, sampleStudent));
             if (matched) {
               defaultModulAjarId = matched.id;
               if (!defaultTitle) defaultTitle = matched.title;
@@ -403,7 +450,7 @@ export default function GuruView({user,toast,tab}){
     }
   }
 
-  const showReminder=reminder?.aktif&&isSchoolDay!==false&&tanggal===new Date().toISOString().slice(0,10)&&(()=>{const now=new Date();const[h,m]=reminder.jam.split(':').map(Number);const t=new Date();t.setHours(h,m,0,0);return now>=t&&done<list.length;})();
+  const showReminder=reminder?.aktif&&isSchoolDay!==false&&tanggal===todayWIB()&&(()=>{const now=new Date();const[h,m]=reminder.jam.split(':').map(Number);const t=new Date();t.setHours(h,m,0,0);return now>=t&&done<list.length;})();
   return <div className="w-full p-3 sm:p-4 lg:p-6 2xl:p-8 space-y-4">
     {activeTab==='daily'&&<div className="w-full space-y-4 lg:h-[calc(100vh-132px)] lg:min-h-0 lg:flex lg:flex-col">
       {showReminder&&<div className="bg-primary-container border-2 border-primary rounded-2xl px-4 py-3 flex items-center gap-3"><span className="text-2xl">⏰</span><div className="flex-1"><p className="font-black text-primary-active text-sm">Pengingat Laporan Harian</p><p className="text-primary-active opacity-90 text-xs">{list.length-done} siswa belum dilaporkan — selesaikan sebelum akhir hari.</p></div></div>}
@@ -676,6 +723,7 @@ export default function GuruView({user,toast,tab}){
         </div>
       </div>
     </section>}
+    {activeTab==='modulAjar'&&<KegiatanMingguanTab user={user} toast={toast}/>}
     {historyFor&&<HistoryModal siswa={historyFor} onClose={()=>setHistoryFor(null)}/>}
     {showTutupHariConfirm && (
       <ConfirmActionModal
@@ -728,7 +776,7 @@ export default function GuruView({user,toast,tab}){
                   value={classThemeForm.modul_ajar_id || ''}
                   onChange={e => {
                     const id = e.target.value;
-                    const m = classModules.find(x => String(x.id) === String(id));
+                    const m = scopedClassModules.find(x => String(x.id) === String(id));
                     const domains = themeDomains(m?.suggested_domains).join(', ');
                     
                     // Auto-fill all activities of the selected week day by default
@@ -748,8 +796,15 @@ export default function GuruView({user,toast,tab}){
                   className="input w-full"
                 >
                   <option value="">Tanpa modul</option>
-                  {classModules.map(m => <option key={m.id} value={m.id}>{m.title}</option>)}
+                  {scopedClassModules.map(m => (
+                    <option key={m.id} value={m.id}>{m.title} - {moduleScopeLabel(m)}</option>
+                  ))}
                 </CustomSelect>
+                {scopedClassModules.length === 0 && (
+                  <div className="mt-1 text-[11px] font-bold text-slate-400">
+                    Belum ada Focus Theme mingguan yang cocok untuk rombel, jenjang, dan paket kelas ini.
+                  </div>
+                )}
               </div>
 
               <div>

@@ -6,6 +6,7 @@ const fs = require('fs');
 const db = require('../db');
 const auth = require('../middleware/auth');
 const { uploadImage, saveSquareJpeg, ensureDir } = require('../utils/image-upload');
+const asyncRoute = require('../utils/async-route');
 const { nowUtc, audit, requireCabang, requireActiveCabang } = require('../utils/workflow');
 
 const FOTO_DIR = path.join(__dirname, '../uploads/foto');
@@ -176,7 +177,7 @@ router.post('/:id/reset-password', auth(['admin', 'admin_cabang']), (req, res) =
   if (user.tipe === 'staff' && !canManageRole(req.user, user.role, user.cabang_id)) return res.status(403).json({ error: 'Akses ditolak' });
   if (user.tipe === 'wali' && !canAccessWali(req.user, user.id)) return res.status(403).json({ error: 'Akses wali ditolak' });
   const pass = tempPassword();
-  db.prepare("UPDATE pengguna SET password_hash=?,must_change_password=1,status='undangan',updated_at=? WHERE id=?")
+  db.prepare("UPDATE pengguna SET password_hash=?,must_change_password=1,status='undangan',auth_version=auth_version+1,updated_at=? WHERE id=?")
     .run(bcrypt.hashSync(pass, 10), nowUtc(), user.id);
   audit(req.user, 'password_reset', 'pengguna', user.id, { cabang_id: user.cabang_id || null });
   res.json({ success: true, temporary_password: pass });
@@ -310,7 +311,7 @@ router.put('/wali/:id', auth(['admin', 'admin_cabang']), (req, res) => {
   }
 });
 
-router.post('/staff/:id/foto', auth(['admin', 'admin_cabang']), uploadImage.single('foto'), async (req, res) => {
+router.post('/staff/:id/foto', auth(['admin', 'admin_cabang']), uploadImage.single('foto'), asyncRoute(async (req, res) => {
   const user = db.prepare("SELECT p.*,sp.cabang_id,sp.foto FROM pengguna p JOIN staff_profile sp ON sp.pengguna_id=p.id WHERE p.id=? AND p.tipe='staff'").get(req.params.id);
   if (!user) return res.status(404).json({ error: 'Staff tidak ditemukan' });
   if (!canManageRole(req.user, user.role, user.cabang_id)) return res.status(403).json({ error: 'Akses ditolak' });
@@ -325,7 +326,7 @@ router.post('/staff/:id/foto', auth(['admin', 'admin_cabang']), uploadImage.sing
   db.prepare('UPDATE staff_profile SET foto=? WHERE pengguna_id=?').run(url, user.id);
   audit(req.user, 'upload_foto', 'pengguna', user.id, { cabang_id: user.cabang_id });
   res.json({ url });
-});
+}));
 
 router.delete('/staff/:id/foto', auth(['admin', 'admin_cabang']), (req, res) => {
   const user = db.prepare("SELECT p.*,sp.cabang_id,sp.foto FROM pengguna p JOIN staff_profile sp ON sp.pengguna_id=p.id WHERE p.id=? AND p.tipe='staff'").get(req.params.id);

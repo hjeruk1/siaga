@@ -5,6 +5,8 @@ const path = require('path');
 const db = new Database(process.env.DB_PATH || path.join(__dirname, 'siaga.db'));
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
+db.pragma('busy_timeout = 5000');
+db.pragma('synchronous = NORMAL');
 
 db.exec(`
 CREATE TABLE IF NOT EXISTS organisasi (
@@ -60,6 +62,7 @@ CREATE TABLE IF NOT EXISTS pengguna (
   password_hash TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'undangan' CHECK(status IN ('undangan','aktif','nonaktif')),
   must_change_password INTEGER NOT NULL DEFAULT 1,
+  auth_version INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
@@ -504,6 +507,7 @@ CREATE TABLE IF NOT EXISTS sequence_counter (
 `);
 
 try { db.prepare('ALTER TABLE siswa ADD COLUMN catatan_sekolah_luar TEXT').run(); } catch {}
+try { db.prepare('ALTER TABLE pengguna ADD COLUMN auth_version INTEGER NOT NULL DEFAULT 0').run(); } catch {}
 try { db.prepare('ALTER TABLE penjemputan_log ADD COLUMN absensi_id INTEGER REFERENCES absensi(id) ON DELETE CASCADE').run(); } catch {}
 try { db.prepare('ALTER TABLE penjemputan_log ADD COLUMN siswa_id INTEGER REFERENCES siswa(id)').run(); } catch {}
 try { db.prepare('ALTER TABLE penjemputan_log ADD COLUMN penjemput_id INTEGER REFERENCES penjemput(id)').run(); } catch {}

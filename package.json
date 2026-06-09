@@ -8,8 +8,9 @@
     "start": "node backend/server.js",
     "init": "node backend/init.js",
     "smoke": "node scripts/smoke.js",
-    "test": "node --test scripts/test.js scripts/daily-record-v2.test.js scripts/adminview-stabilization.test.js scripts/export-absensi.test.js",
-    "test:workflow": "node --test scripts/workflow-regression.test.js"
+    "test": "node scripts/run-tests.js main",
+    "test:workflow": "node scripts/run-tests.js workflow",
+    "db:backup": "node scripts/backup.js"
   },
   "dependencies": {
     "concurrently": "^8.2.0"

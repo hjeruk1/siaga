@@ -10,8 +10,12 @@ frontend/dist/
 *.log
 frontend/tailwind.theme.json
 backend/uploads/
+backups/
 .agents/
+.superpowers/
 .interface-design/
 scratch/
 modul-ajar/
-
+backend/gcs-key.json
+backend/*-key.json
+*.key.json

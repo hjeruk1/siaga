@@ -1,7 +1,6 @@
-const router=require('express').Router(),db=require('../db'),auth=require('../middleware/auth'),path=require('path'),fs=require('fs'),multer=require('multer'),Database=require('better-sqlite3');
+const router=require('express').Router(),db=require('../db'),auth=require('../middleware/auth'),path=require('path'),fs=require('fs');
 const {todayWIB,holidayDatesInMonth,siswaScopeSql,isSchoolDay,canAccessSiswa}=require('../utils/workflow');
 const PDFDocument = require('pdfkit');
-const restoreUpload=multer({storage:multer.memoryStorage(),limits:{fileSize:50*1024*1024}});
 router.get('/dashboard',auth(),(req,res)=>{
   const tgl=todayWIB();
   const cabangId=req.query.cabang_id || (req.user.role!=='admin'?req.user.cabang_id:null);
@@ -120,68 +119,111 @@ router.get('/backup',auth(['admin']),async(req,res)=>{
     res.status(500).json({error:'Gagal membuat backup'});
   }
 });
-router.post('/restore',auth(['admin']),restoreUpload.single('backup'),(req,res)=>{
-  if(!req.file)return res.status(400).json({error:'File backup wajib'});
-  const dbPath=process.env.DB_PATH||path.join(__dirname,'../siaga.db');
-  const tmp=path.join(__dirname,'../restore-upload-'+Date.now()+'.db');
-  fs.writeFileSync(tmp,req.file.buffer);
-  try{
-    const check=new Database(tmp,{readonly:true});
-    const integrity=check.pragma('integrity_check',{simple:true});
-    const tables=check.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name IN ('guru','kelas','siswa','penjemput','absensi')").all();
-    check.close();
-    if(integrity!=='ok'||tables.length<5){fs.unlinkSync(tmp);return res.status(400).json({error:'File backup tidak valid'});}
-    const counts={};
-    const countDb=new Database(tmp,{readonly:true});
-    for(const t of ['guru','kelas','siswa','penjemput','absensi'])counts[t]=countDb.prepare(`SELECT COUNT(*) c FROM ${t}`).get().c;
-    countDb.close();
-    const currentBackup=dbPath+'.before-restore-'+Date.now();
-    res.json({success:true,restart_required:true,counts,message:'Restore diterima. Jika server tidak restart otomatis, jalankan ulang npm run dev.'});
-    setTimeout(()=>{
-      try{
-        db.close();
-        if(fs.existsSync(dbPath))fs.copyFileSync(dbPath,currentBackup);
-        fs.copyFileSync(tmp,dbPath);
-        try{fs.unlinkSync(dbPath+'-wal');}catch(_){}
-        try{fs.unlinkSync(dbPath+'-shm');}catch(_){}
-        fs.unlinkSync(tmp);
-      }catch(e){console.error('Restore failed:',e);}
-      if(process.env.SIAGA_RESTORE_NO_EXIT!=='1')process.exit(0);
-    },300);
-  }catch(e){
-    try{fs.unlinkSync(tmp);}catch(_){}
-    res.status(400).json({error:'File backup tidak bisa dibaca'});
-  }
-});
 router.get('/completeness',auth(['admin','kepsek']),(req,res)=>{
+  const cabangId=req.user.role==='admin'?req.query.cabang_id:req.user.cabang_id;
+  const cabangWhere=cabangId?' AND se.cabang_id=?':'';
+  const cabangParams=cabangId?[cabangId]:[];
+  const today=todayWIB();
   res.json({
-    siswaTanpaFoto:db.prepare("SELECT s.id,s.nama,k.nama kelas_nama FROM siswa s LEFT JOIN kelas k ON k.id=s.kelas_id WHERE COALESCE(s.aktif,1)=1 AND (s.foto IS NULL OR s.foto='') ORDER BY k.nama,s.nama LIMIT 50").all(),
-    siswaTanpaPenjemput:db.prepare('SELECT s.id,s.nama,k.nama kelas_nama FROM siswa s LEFT JOIN kelas k ON k.id=s.kelas_id WHERE COALESCE(s.aktif,1)=1 AND NOT EXISTS(SELECT 1 FROM penjemput p WHERE p.siswa_id=s.id AND COALESCE(p.aktif,1)=1) ORDER BY k.nama,s.nama LIMIT 50').all(),
-    guruTanpaKelas:db.prepare("SELECT g.id,g.nama,g.role FROM guru g WHERE COALESCE(g.aktif,1)=1 AND g.role='guru' AND NOT EXISTS(SELECT 1 FROM guru_kelas gk WHERE gk.guru_id=g.id) ORDER BY g.nama LIMIT 50").all(),
-    qrBelumDicetak:db.prepare("SELECT s.id,s.nama,k.nama kelas_nama,s.status_kartu FROM siswa s LEFT JOIN kelas k ON k.id=s.kelas_id WHERE COALESCE(s.aktif,1)=1 AND s.status_kartu='cetak' ORDER BY k.nama,s.nama LIMIT 50").all(),
+    siswaTanpaFoto:db.prepare(`
+      SELECT DISTINCT s.id,s.nama,r.nama kelas_nama,c.nama cabang_nama
+      FROM siswa s
+      JOIN siswa_enrollment se ON se.siswa_id=s.id AND se.status='aktif'
+      JOIN rombel r ON r.id=se.rombel_id
+      JOIN cabang c ON c.id=se.cabang_id
+      WHERE s.status='aktif'${cabangWhere} AND (s.foto IS NULL OR s.foto='')
+      ORDER BY c.nama,r.nama,s.nama LIMIT 50
+    `).all(...cabangParams),
+    siswaTanpaPenjemput:db.prepare(`
+      SELECT DISTINCT s.id,s.nama,r.nama kelas_nama,c.nama cabang_nama
+      FROM siswa s
+      JOIN siswa_enrollment se ON se.siswa_id=s.id AND se.status='aktif'
+      JOIN rombel r ON r.id=se.rombel_id
+      JOIN cabang c ON c.id=se.cabang_id
+      WHERE s.status='aktif'${cabangWhere}
+        AND NOT EXISTS(SELECT 1 FROM penjemput p WHERE p.siswa_id=s.id AND p.aktif=1)
+      ORDER BY c.nama,r.nama,s.nama LIMIT 50
+    `).all(...cabangParams),
+    guruTanpaKelas:db.prepare(`
+      SELECT p.id,p.display_name nama,p.role,c.nama cabang_nama
+      FROM pengguna p
+      LEFT JOIN staff_profile sp ON sp.pengguna_id=p.id
+      LEFT JOIN cabang c ON c.id=sp.cabang_id
+      WHERE p.status='aktif' AND p.role='guru'${cabangId?' AND sp.cabang_id=?':''}
+        AND NOT EXISTS(SELECT 1 FROM guru_rombel gr WHERE gr.pengguna_id=p.id)
+      ORDER BY c.nama,p.display_name LIMIT 50
+    `).all(...cabangParams),
+    qrBelumDicetak:db.prepare(`
+      SELECT DISTINCT s.id,s.nama,r.nama kelas_nama,c.nama cabang_nama,s.status_kartu
+      FROM siswa s
+      JOIN siswa_enrollment se ON se.siswa_id=s.id AND se.status='aktif'
+      JOIN rombel r ON r.id=se.rombel_id
+      JOIN cabang c ON c.id=se.cabang_id
+      WHERE s.status='aktif'${cabangWhere} AND s.status_kartu='cetak'
+      ORDER BY c.nama,r.nama,s.nama LIMIT 50
+    `).all(...cabangParams),
     duplicateNis:db.prepare("SELECT nis,COUNT(*) count,GROUP_CONCAT(nama, ', ') nama FROM siswa WHERE nis IS NOT NULL AND nis!='' GROUP BY nis HAVING COUNT(*)>1 ORDER BY nis LIMIT 50").all(),
-    importHistory:db.prepare("SELECT ih.*,g.nama user_nama FROM import_history ih LEFT JOIN guru g ON g.id=ih.user_id ORDER BY ih.id DESC LIMIT 10").all(),
+    importHistory:[],
     openDayStatus:{
-      tanggal:todayWIB(),
-      closed:!!db.prepare('SELECT 1 FROM day_closure WHERE tanggal=?').get(todayWIB()),
-      unresolvedBelum:db.prepare("SELECT COUNT(*) c FROM siswa s LEFT JOIN absensi a ON a.siswa_id=s.id AND a.tanggal=? WHERE COALESCE(s.aktif,1)=1 AND COALESCE(a.status,'Belum')='Belum'").get(todayWIB()).c,
-      unresolvedMenunggu:db.prepare("SELECT COUNT(*) c FROM siswa s JOIN absensi a ON a.siswa_id=s.id AND a.tanggal=? WHERE COALESCE(s.aktif,1)=1 AND a.status='Menunggu'").get(todayWIB()).c,
-      missingLaporan:db.prepare("SELECT COUNT(*) c FROM siswa s LEFT JOIN laporan_harian l ON l.siswa_id=s.id AND l.tanggal=? WHERE COALESCE(s.aktif,1)=1 AND (l.id IS NULL OR (l.mood IS NULL AND l.makan IS NULL AND l.tidur IS NULL AND (l.aktivitas IS NULL OR l.aktivitas='[]') AND (l.catatan IS NULL OR l.catatan='')))").get(todayWIB()).c,
-      rejectedQr:db.prepare("SELECT COUNT(*) c FROM notif_log WHERE tipe='alert_gerbang' AND created_at LIKE ?").get(todayWIB()+'%').c
+      tanggal:today,
+      closed:cabangId?!!db.prepare('SELECT 1 FROM tutup_hari WHERE cabang_id=? AND tanggal=?').get(cabangId,today):false,
+      unresolvedBelum:db.prepare(`
+        SELECT COUNT(DISTINCT s.id) c
+        FROM siswa s
+        JOIN siswa_enrollment se ON se.siswa_id=s.id AND se.status='aktif'
+        LEFT JOIN absensi a ON a.siswa_id=s.id AND a.tanggal=?
+        WHERE s.status='aktif'${cabangWhere} AND COALESCE(a.status,'Belum')='Belum'
+      `).get(today,...cabangParams).c,
+      unresolvedMenunggu:db.prepare(`
+        SELECT COUNT(DISTINCT s.id) c
+        FROM siswa s
+        JOIN siswa_enrollment se ON se.siswa_id=s.id AND se.status='aktif'
+        JOIN absensi a ON a.siswa_id=s.id AND a.tanggal=?
+        WHERE s.status='aktif'${cabangWhere} AND a.status='Menunggu'
+      `).get(today,...cabangParams).c,
+      missingLaporan:db.prepare(`
+        SELECT COUNT(DISTINCT s.id) c
+        FROM siswa s
+        JOIN siswa_enrollment se ON se.siswa_id=s.id AND se.status='aktif'
+        LEFT JOIN laporan_harian l ON l.siswa_id=s.id AND l.tanggal=?
+        WHERE s.status='aktif'${cabangWhere}
+          AND (l.id IS NULL OR l.focus_theme_id IS NULL OR l.mood IS NULL OR l.makan IS NULL OR l.tidur IS NULL OR l.observation_domain IS NULL OR TRIM(COALESCE(l.observation_note,''))='')
+      `).get(today,...cabangParams).c,
+      rejectedQr:db.prepare(`
+        SELECT COUNT(*) c FROM nfc_scan_log
+        WHERE status='failed' AND action='qr' AND created_at LIKE ?${cabangId?' AND cabang_id=?':''}
+      `).get(today+'%',...cabangParams).c
     }
   });
 });
 router.get('/activity',auth(['admin','kepsek']),(req,res)=>{
   const limit=Math.min(parseInt(req.query.limit,10)||80,200);
+  const cabangId=req.user.role==='admin'?req.query.cabang_id:req.user.cabang_id;
   const rows=db.prepare(`
     SELECT tipe,waktu,siswa,kelas,penjemput,pelaku,detail FROM (
-      SELECT 'serah_terima' tipe,pl.created_at waktu,s.nama siswa,k.nama kelas,p.nama penjemput,g.nama pelaku,('Scan '||COALESCE(pl.jam_scan,'-')||' lalu pulang '||COALESCE(pl.jam_pulang,'-')) detail FROM penjemputan_log pl LEFT JOIN siswa s ON s.id=pl.siswa_id LEFT JOIN kelas k ON k.id=s.kelas_id LEFT JOIN penjemput p ON p.id=pl.penjemput_id LEFT JOIN guru g ON g.id=pl.guru_id
+      SELECT 'serah_terima' tipe,pl.created_at waktu,s.nama siswa,r.nama kelas,p.nama penjemput,u.display_name pelaku,('Scan '||COALESCE(pl.jam_scan,'-')||' lalu pulang '||COALESCE(pl.jam_pulang,'-')) detail
+      FROM penjemputan_log pl
+      LEFT JOIN siswa s ON s.id=pl.siswa_id
+      LEFT JOIN siswa_enrollment se ON se.siswa_id=s.id AND se.status='aktif'
+      LEFT JOIN rombel r ON r.id=se.rombel_id
+      LEFT JOIN penjemput p ON p.id=pl.penjemput_id
+      LEFT JOIN pengguna u ON u.id=pl.guru_id
+      WHERE (? IS NULL OR pl.cabang_id=?)
       UNION ALL
-      SELECT 'qr_reissue' tipe,q.created_at waktu,s.nama siswa,k.nama kelas,p.nama penjemput,g.nama pelaku,('QR diganti: '||COALESCE(q.reason,'tanpa alasan')) detail FROM qr_reissue_log q LEFT JOIN siswa s ON s.id=q.siswa_id LEFT JOIN kelas k ON k.id=s.kelas_id LEFT JOIN penjemput p ON p.id=q.penjemput_id LEFT JOIN guru g ON g.id=q.admin_id
+      SELECT 'qr_reissue' tipe,q.created_at waktu,s.nama siswa,r.nama kelas,p.nama penjemput,u.display_name pelaku,('QR diganti: '||COALESCE(q.reason,'tanpa alasan')) detail
+      FROM qr_reissue_log q
+      LEFT JOIN siswa s ON s.id=q.siswa_id
+      LEFT JOIN siswa_enrollment se ON se.siswa_id=s.id AND se.status='aktif'
+      LEFT JOIN rombel r ON r.id=se.rombel_id
+      LEFT JOIN penjemput p ON p.id=q.penjemput_id
+      LEFT JOIN pengguna u ON u.id=q.admin_id
+      WHERE (? IS NULL OR q.cabang_id=?)
       UNION ALL
-      SELECT n.tipe,n.created_at waktu,s.nama siswa,k.nama kelas,NULL penjemput,g.nama pelaku,n.pesan detail FROM notif_log n LEFT JOIN siswa s ON s.id=n.siswa_id LEFT JOIN kelas k ON k.id=s.kelas_id LEFT JOIN guru g ON g.id=n.guru_id
+      SELECT n.tipe,n.created_at waktu,NULL siswa,NULL kelas,NULL penjemput,NULL pelaku,COALESCE(n.body,n.title) detail
+      FROM notifikasi n
+      WHERE (? IS NULL OR n.cabang_id=?)
     ) ORDER BY waktu DESC LIMIT ?
-  `).all(limit);
+  `).all(cabangId||null,cabangId||null,cabangId||null,cabangId||null,cabangId||null,cabangId||null,limit);
   res.json(rows);
 });
 router.get('/',auth(),(req,res)=>{
@@ -213,9 +255,17 @@ router.get('/export', auth(), (req, res) => {
   const siswa_id = req.query.siswa_id ? Number(req.query.siswa_id) : null;
   const start_date = req.query.start_date || todayWIB().slice(0, 8) + '01';
   const end_date = req.query.end_date || todayWIB();
+  const start = parseDateOnly(start_date);
+  const end = parseDateOnly(end_date);
 
   if (!rombel_id && !siswa_id) {
     return res.status(400).json({ error: 'Rombel atau Siswa wajib ditentukan' });
+  }
+  if (!start || !end || start > end) {
+    return res.status(400).json({ error: 'Rentang tanggal tidak valid' });
+  }
+  if ((end - start) / (24 * 60 * 60 * 1000) > 370) {
+    return res.status(400).json({ error: 'Rentang export maksimal 370 hari' });
   }
 
   // 1. Authorization checks
@@ -233,7 +283,9 @@ router.get('/export', auth(), (req, res) => {
     if (!rombel) return res.status(404).json({ error: 'Rombel tidak ditemukan' });
     targetCabangId = rombel.cabang_id;
 
-    if (req.user.role === 'guru') {
+    if (req.user.role === 'wali') {
+      return res.status(403).json({ error: 'Wali hanya dapat export per siswa' });
+    } else if (req.user.role === 'guru') {
       const assigned = db.prepare('SELECT 1 FROM guru_rombel WHERE pengguna_id=? AND rombel_id=?').get(req.user.id, rombel_id);
       if (!assigned) return res.status(403).json({ error: 'Akses rombel ditolak' });
     } else if (['admin_cabang', 'kepsek'].includes(req.user.role)) {
@@ -245,10 +297,10 @@ router.get('/export', auth(), (req, res) => {
 
   // 2. Fetch data
   const schoolDays = [];
-  let curr = new Date(start_date + 'T00:00:00');
-  const limit = new Date(end_date + 'T00:00:00');
+  let curr = new Date(start);
+  const limit = new Date(end);
   while (curr <= limit) {
-    const yyyymmdd = curr.toISOString().slice(0, 10);
+      const yyyymmdd = formatDateOnly(curr);
     if (isSchoolDay(yyyymmdd, targetCabangId)) {
       schoolDays.push(yyyymmdd);
     }
@@ -563,6 +615,18 @@ function formatDate(isoStr) {
   } catch {
     return isoStr.slice(0, 10);
   }
+}
+
+function parseDateOnly(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value || ''))) return null;
+  const [year, month, day] = value.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return null;
+  return date;
+}
+
+function formatDateOnly(date) {
+  return date.toISOString().slice(0, 10);
 }
 
 module.exports=router;

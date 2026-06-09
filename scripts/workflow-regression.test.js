@@ -283,6 +283,63 @@ describe('workflow regressions', () => {
     assert.equal(editRejected.status, 400, JSON.stringify(editRejected.body));
   });
 
+  it('blocks same-branch allocations to another student and non-positive amounts', async () => {
+    const master = await pickMaster(adminToken, 1);
+    const siswaA = await createSiswa(adminToken, 'alloc-owner', { master });
+    const siswaB = await createSiswa(adminToken, 'alloc-other', { master });
+    const billA = createTagihanFor(siswaA, 'ALLOC-A');
+    const billB = createTagihanFor(siswaB, 'ALLOC-B');
+
+    const crossStudent = await req('POST', '/api/billing/pembayaran', {
+      siswa_id: siswaA.id,
+      cabang_id: master.cabang.id,
+      nominal: 50000,
+      metode: 'tunai',
+      alokasi: [{ tagihan_id: billB, nominal: 50000 }]
+    }, adminToken);
+    assert.equal(crossStudent.status, 400, JSON.stringify(crossStudent.body));
+
+    const negative = await req('POST', '/api/billing/pembayaran', {
+      siswa_id: siswaA.id,
+      cabang_id: master.cabang.id,
+      nominal: -50000,
+      metode: 'tunai',
+      alokasi: [{ tagihan_id: billA, nominal: -50000 }]
+    }, adminToken);
+    assert.equal(negative.status, 400, JSON.stringify(negative.body));
+  });
+
+  it('blocks a guru from reading sensitive details outside assigned rombel', async () => {
+    const master = await pickMaster(adminToken, 1);
+    const rombels = await req('GET', `/api/master/rombel?cabang_id=${master.cabang.id}`, undefined, adminToken);
+    const otherRombel = rombels.body.find(r => Number(r.id) !== Number(master.rombel.id));
+    assert.ok(otherRombel, 'second rombel is required');
+
+    const guruSuffix = unique('detail-scope');
+    const guru = await req('POST', '/api/pengguna/staff', {
+      display_name: `Guru ${guruSuffix}`,
+      username: `guru.${guruSuffix}`,
+      role: 'guru',
+      cabang_id: master.cabang.id
+    }, adminToken);
+    assert.equal(guru.status, 200, JSON.stringify(guru.body));
+    const assigned = await req('POST', `/api/master/rombel/${master.rombel.id}/guru`, {
+      pengguna_id: guru.body.id,
+      role: 'utama'
+    }, adminToken);
+    assert.equal(assigned.status, 200, JSON.stringify(assigned.body));
+
+    const otherMaster = { ...master, jenjang: { id: otherRombel.jenjang_id }, rombel: otherRombel };
+    const otherStudent = await createSiswa(adminToken, 'detail-other', { master: otherMaster });
+    const temporaryToken = await loginStaff(`guru.${guruSuffix}`, guru.body.temporary_password);
+    const newPassword = `Guru${guruSuffix.replace(/[^a-zA-Z0-9]/g, '')}123`;
+    const changed = await req('POST', '/api/auth/change-password', { new_password: newPassword }, temporaryToken);
+    assert.equal(changed.status, 200, JSON.stringify(changed.body));
+    const guruToken = await loginStaff(`guru.${guruSuffix}`, newPassword);
+    const response = await req('GET', `/api/siswa/${otherStudent.id}`, undefined, guruToken);
+    assert.equal(response.status, 403, JSON.stringify(response.body));
+  });
+
   it('lets wali read published history after the student is no longer active', async () => {
     const siswa = await createSiswa(adminToken, 'wali-history');
     const noWa = `08${Date.now()}${Math.floor(Math.random() * 1000)}`;

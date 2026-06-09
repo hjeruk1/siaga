@@ -8,12 +8,26 @@ const PDFDocument = require('pdfkit');
 const crypto = require('crypto');
 const SECRET = process.env.JWT_SECRET || 'siaga-dev';
 
+function publicKey(type, id) {
+  const expires = Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60;
+  const signature = crypto.createHmac('sha256', SECRET).update(`${type}:${id}:${expires}`).digest('hex');
+  return `${expires}.${signature}`;
+}
+
+function validPublicKey(type, id, key) {
+  const [expiresRaw, signature] = String(key || '').split('.');
+  const expires = Number(expiresRaw);
+  if (!Number.isInteger(expires) || expires < Math.floor(Date.now() / 1000) || !/^[a-f0-9]{64}$/.test(signature || '')) return false;
+  const expected = crypto.createHmac('sha256', SECRET).update(`${type}:${id}:${expires}`).digest('hex');
+  return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
+}
+
 function getInvoiceKey(invoiceId) {
-  return crypto.createHmac('sha256', SECRET).update(String(invoiceId)).digest('hex').slice(0, 16);
+  return publicKey('invoice', invoiceId);
 }
 
 function getPaymentKey(paymentId) {
-  return crypto.createHmac('sha256', SECRET).update(String(paymentId)).digest('hex').slice(0, 16);
+  return publicKey('payment', paymentId);
 }
 
 function monthStart(period) {
@@ -151,9 +165,12 @@ router.post('/diskon', auth(['admin', 'admin_cabang']), (req, res) => {
   const cabangId = req.user.role === 'admin' ? d.cabang_id : req.user.cabang_id;
   if (!requireActiveCabang(req, res, cabangId)) return;
   if (!d.siswa_id || !d.tahun_ajaran || !d.jenis || !d.tipe || d.nilai === undefined) return res.status(400).json({ error: 'Data diskon belum lengkap' });
+  if (!studentBelongsToCabang(d.siswa_id, cabangId)) return res.status(403).json({ error: 'Siswa tidak terdaftar aktif di cabang diskon' });
+  const nilai = Number(d.nilai);
+  if (!Number.isFinite(nilai) || nilai < 0 || (d.tipe === 'persen' && nilai > 100)) return res.status(400).json({ error: 'Nilai diskon tidak valid' });
   const r = db.prepare(`INSERT INTO diskon_siswa(siswa_id,cabang_id,tahun_ajaran,jenis,tipe,nilai,catatan,created_by,created_at)
     VALUES(?,?,?,?,?,?,?,?,?)`)
-    .run(d.siswa_id, cabangId, d.tahun_ajaran, d.jenis, d.tipe, d.nilai, d.catatan || null, req.user.id, nowUtc());
+    .run(d.siswa_id, cabangId, d.tahun_ajaran, d.jenis, d.tipe, nilai, d.catatan || null, req.user.id, nowUtc());
   audit(req.user, 'create', 'diskon_siswa', r.lastInsertRowid, { cabang_id: cabangId, after: d });
   res.json({ id: r.lastInsertRowid });
 });
@@ -409,24 +426,32 @@ router.post('/pembayaran', auth(['admin', 'admin_cabang']), (req, res) => {
   const d = req.body || {};
   const cabangId = req.user.role === 'admin' ? d.cabang_id : req.user.cabang_id;
   if (!requireActiveCabang(req, res, cabangId)) return;
-  if (!d.siswa_id || !d.nominal || !d.metode) return res.status(400).json({ error: 'Data pembayaran belum lengkap' });
+  const paymentAmount = Number(d.nominal);
+  if (!d.siswa_id || !Number.isFinite(paymentAmount) || paymentAmount <= 0 || !d.metode) return res.status(400).json({ error: 'Data pembayaran belum lengkap atau nominal tidak valid' });
   if (!studentBelongsToCabang(d.siswa_id, cabangId)) return res.status(403).json({ error: 'Siswa tidak terdaftar aktif di cabang pembayaran' });
   const status = req.user.role === 'admin' || d.metode === 'tunai' ? 'confirmed' : 'pending_verification';
   const receiptNo = status === 'confirmed' ? `TP-${db.prepare('SELECT kode FROM cabang WHERE id=?').get(cabangId).kode}-${schoolYearForDate(d.tanggal_bayar || todayWIB()).slice(0,4)}-${String(nextSequence(`receipt:${cabangId}:${schoolYearForDate(d.tanggal_bayar || todayWIB())}`)).padStart(6, '0')}` : null;
   const tx = db.transaction(() => {
     const r = db.prepare(`INSERT INTO pembayaran(cabang_id,siswa_id,receipt_no,tanggal_bayar,nominal,metode,status,reference,catatan,created_by,created_at,updated_at)
       VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`)
-      .run(cabangId, d.siswa_id, receiptNo, d.tanggal_bayar || todayWIB(), d.nominal, d.metode, status, d.reference || null, d.catatan || null, req.user.id, nowUtc(), nowUtc());
-    let remaining = Number(d.nominal);
+      .run(cabangId, d.siswa_id, receiptNo, d.tanggal_bayar || todayWIB(), paymentAmount, d.metode, status, d.reference || null, d.catatan || null, req.user.id, nowUtc(), nowUtc());
+    let remaining = paymentAmount;
     const bills = Array.isArray(d.alokasi) && d.alokasi.length
       ? d.alokasi.map(a => ({ id: a.tagihan_id, amount: a.nominal }))
       : db.prepare("SELECT id,nominal_final FROM tagihan WHERE siswa_id=? AND cabang_id=? AND status IN ('open','sebagian') ORDER BY periode,created_at").all(d.siswa_id, cabangId);
     for (const b of bills) {
       if (remaining <= 0) break;
-      const bill = db.prepare('SELECT * FROM tagihan WHERE id=? AND cabang_id=?').get(b.id, cabangId);
-      if (!bill) continue;
+      const requestedAmount = b.amount === undefined ? null : Number(b.amount);
+      if (requestedAmount !== null && (!Number.isFinite(requestedAmount) || requestedAmount <= 0)) {
+        throw new Error(`Nominal alokasi tagihan #${b.id} tidak valid`);
+      }
+      const bill = db.prepare('SELECT * FROM tagihan WHERE id=? AND cabang_id=? AND siswa_id=?').get(b.id, cabangId, d.siswa_id);
+      if (!bill) {
+        if (Array.isArray(d.alokasi) && d.alokasi.length) throw new Error(`Tagihan #${b.id} bukan milik siswa pembayaran`);
+        continue;
+      }
       const unpaid = bill.nominal_final - paidAmount(bill.id);
-      const nominal = Math.min(remaining, b.amount || unpaid, unpaid);
+      const nominal = Math.min(remaining, requestedAmount || unpaid, unpaid);
       if (nominal > 0) {
         db.prepare('INSERT INTO pembayaran_alokasi(pembayaran_id,tagihan_id,nominal,created_at) VALUES(?,?,?,?)').run(r.lastInsertRowid, bill.id, nominal, nowUtc());
         remaining -= nominal;
@@ -436,7 +461,11 @@ router.post('/pembayaran', auth(['admin', 'admin_cabang']), (req, res) => {
     audit(req.user, 'create', 'pembayaran', r.lastInsertRowid, { cabang_id: cabangId, after: { ...d, status } });
     return { id: r.lastInsertRowid, receipt_no: receiptNo, status };
   });
-  res.json(tx());
+  try {
+    res.json(tx());
+  } catch (error) {
+    res.status(400).json({ error: error.message || 'Alokasi pembayaran tidak valid' });
+  }
 });
 
 router.post('/pembayaran/:id/verify', auth(['admin']), (req, res) => {
@@ -529,16 +558,21 @@ router.put('/pembayaran/:id/alokasi', auth(['admin', 'admin_cabang']), (req, res
   if (!requireCabang(req, res, p.cabang_id)) return;
   if (!['confirmed','pending_verification'].includes(p.status)) return res.status(400).json({ error: 'Alokasi hanya bisa diubah untuk pembayaran confirmed atau pending' });
   const alokasi = Array.isArray(req.body?.alokasi) ? req.body.alokasi : [];
-  const total = alokasi.reduce((s, a) => s + Number(a.nominal || 0), 0);
+  if (alokasi.some(a => !Number.isFinite(Number(a.nominal)) || Number(a.nominal) <= 0)) {
+    return res.status(400).json({ error: 'Semua nominal alokasi harus lebih dari nol' });
+  }
+  const total = alokasi.reduce((s, a) => s + Number(a.nominal), 0);
   if (total > p.nominal) return res.status(400).json({ error: `Total alokasi (${total}) melebihi nominal pembayaran (${p.nominal})` });
   const tx = db.transaction(() => {
     const oldAllocs = db.prepare('SELECT * FROM pembayaran_alokasi WHERE pembayaran_id=?').all(p.id);
     db.prepare('DELETE FROM pembayaran_alokasi WHERE pembayaran_id=?').run(p.id);
     for (const a of alokasi) {
-      const bill = db.prepare('SELECT * FROM tagihan WHERE id=? AND cabang_id=?').get(a.tagihan_id, p.cabang_id);
+      const bill = db.prepare('SELECT * FROM tagihan WHERE id=? AND cabang_id=? AND siswa_id=?').get(a.tagihan_id, p.cabang_id, p.siswa_id);
       if (!bill) throw new Error(`Tagihan #${a.tagihan_id} tidak ditemukan`);
+      const otherPaid = paidAmount(bill.id);
+      if (Number(a.nominal) > bill.nominal_final - otherPaid) throw new Error(`Alokasi tagihan #${a.tagihan_id} melebihi sisa tagihan`);
       db.prepare('INSERT INTO pembayaran_alokasi(pembayaran_id,tagihan_id,nominal,created_at) VALUES(?,?,?,?)')
-        .run(p.id, a.tagihan_id, a.nominal, nowUtc());
+        .run(p.id, a.tagihan_id, Number(a.nominal), nowUtc());
     }
     for (const old of oldAllocs) refreshBillStatus(old.tagihan_id);
     for (const a of alokasi) refreshBillStatus(a.tagihan_id);
@@ -549,9 +583,12 @@ router.put('/pembayaran/:id/alokasi', auth(['admin', 'admin_cabang']), (req, res
 
 router.get('/laporan', auth(['admin', 'admin_cabang', 'kepsek']), (req, res) => {
   const cabangId = cabangParam(req);
-  if (!cabangId) return res.status(400).json({ error: 'Cabang wajib' });
-  if (!requireCabang(req, res, cabangId)) return;
-  const summary = db.prepare(`
+  if (req.user.role !== 'admin' && !cabangId) {
+    return res.status(400).json({ error: 'Cabang wajib' });
+  }
+  if (cabangId && !requireCabang(req, res, cabangId)) return;
+
+  let summaryQuery = `
     SELECT
       COUNT(*) AS total_tagihan,
       COALESCE(SUM(CASE WHEN status!='void' THEN nominal_final ELSE 0 END),0) AS total_nominal,
@@ -560,32 +597,55 @@ router.get('/laporan', auth(['admin', 'admin_cabang', 'kepsek']), (req, res) => 
       COUNT(CASE WHEN status='lunas' THEN 1 END) AS count_lunas,
       COUNT(CASE WHEN status IN ('open','sebagian') THEN 1 END) AS count_outstanding,
       COUNT(CASE WHEN status='void' THEN 1 END) AS count_void
-    FROM tagihan WHERE cabang_id=?
-  `).get(cabangId);
-  const paid = db.prepare(`
+    FROM tagihan
+  `;
+  let paidQuery = `
     SELECT COALESCE(SUM(pa.nominal),0) AS total_paid
     FROM pembayaran_alokasi pa
     JOIN pembayaran p ON p.id=pa.pembayaran_id
     JOIN tagihan t ON t.id=pa.tagihan_id
-    WHERE t.cabang_id=? AND p.status='confirmed'
-  `).get(cabangId);
-  const byJenis = db.prepare(`
+    WHERE p.status='confirmed'
+  `;
+  let byJenisQuery = `
     SELECT jenis,
       COUNT(*) AS count,
       COALESCE(SUM(CASE WHEN status!='void' THEN nominal_final ELSE 0 END),0) AS total,
       COALESCE(SUM(CASE WHEN status='lunas' THEN nominal_final ELSE 0 END),0) AS lunas,
       COALESCE(SUM(CASE WHEN status IN ('open','sebagian') THEN nominal_final ELSE 0 END),0) AS outstanding
-    FROM tagihan WHERE cabang_id=? GROUP BY jenis ORDER BY jenis
-  `).all(cabangId);
-  const byPeriode = db.prepare(`
+    FROM tagihan
+  `;
+  let byPeriodeQuery = `
     SELECT periode,
       COUNT(*) AS count,
       COALESCE(SUM(CASE WHEN status!='void' THEN nominal_final ELSE 0 END),0) AS total,
       COALESCE(SUM(CASE WHEN status='lunas' THEN nominal_final ELSE 0 END),0) AS lunas,
       COALESCE(SUM(CASE WHEN status IN ('open','sebagian') THEN nominal_final ELSE 0 END),0) AS outstanding
-    FROM tagihan WHERE cabang_id=? AND periode IS NOT NULL GROUP BY periode ORDER BY periode DESC LIMIT 12
-  `).all(cabangId);
-  res.json({ summary: { ...summary, total_paid: paid.total_paid }, by_jenis: byJenis, by_periode: byPeriode, cabang_id: cabangId });
+    FROM tagihan WHERE periode IS NOT NULL
+  `;
+
+  const params = [];
+  if (cabangId) {
+    summaryQuery += ' WHERE cabang_id=?';
+    paidQuery += ' AND t.cabang_id=?';
+    byJenisQuery += ' WHERE cabang_id=?';
+    byPeriodeQuery += ' AND cabang_id=?';
+    params.push(cabangId);
+  }
+
+  byJenisQuery += ' GROUP BY jenis ORDER BY jenis';
+  byPeriodeQuery += ' GROUP BY periode ORDER BY periode DESC LIMIT 12';
+
+  const summary = db.prepare(summaryQuery).get(...params);
+  const paid = db.prepare(paidQuery).get(...params);
+  const byJenis = db.prepare(byJenisQuery).all(...params);
+  const byPeriode = db.prepare(byPeriodeQuery).all(...params);
+
+  res.json({
+    summary: { ...summary, total_paid: paid.total_paid },
+    by_jenis: byJenis,
+    by_periode: byPeriode,
+    cabang_id: cabangId || null
+  });
 });
 
 router.post('/invoice', auth(['admin', 'admin_cabang']), (req, res) => {
@@ -1056,7 +1116,7 @@ router.get('/pembayaran/:id/pdf', auth(['admin', 'admin_cabang', 'kepsek']), (re
 router.get('/public/invoice/:id/pdf', (req, res) => {
   const id = Number(req.params.id);
   const key = req.query.key;
-  if (!key || key !== getInvoiceKey(id)) {
+  if (!validPublicKey('invoice', id, key)) {
     return res.status(403).json({ error: 'Akses ditolak' });
   }
   const inv = db.prepare(`
@@ -1075,7 +1135,7 @@ router.get('/public/invoice/:id/pdf', (req, res) => {
 router.get('/public/pembayaran/:id/pdf', (req, res) => {
   const id = Number(req.params.id);
   const key = req.query.key;
-  if (!key || key !== getPaymentKey(id)) {
+  if (!validPublicKey('payment', id, key)) {
     return res.status(403).json({ error: 'Akses ditolak' });
   }
   const pay = db.prepare(`
