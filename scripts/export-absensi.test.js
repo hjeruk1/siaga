@@ -1,7 +1,6 @@
 const { describe, it, before } = require('node:test');
 const assert = require('node:assert');
 const http = require('node:http');
-const db = require('../backend/db');
 
 const BASE = process.env.TEST_URL || 'http://localhost:3001';
 let token = '';
@@ -41,15 +40,34 @@ describe('Absensi Export Tests', () => {
     assert.equal(loginRes.status, 200);
     token = loginRes.body.token;
 
-    // 2. Find a student
-    student = db.prepare(`
-      SELECT s.id as siswa_id, s.nama, se.rombel_id, se.cabang_id
-      FROM siswa s
-      JOIN siswa_enrollment se ON se.siswa_id = s.id
-      WHERE s.status = 'aktif' AND se.status = 'aktif'
-      LIMIT 1
-    `).get();
-    assert.ok(student, 'active student must exist for tests');
+    // 2. Create an isolated student through the public API.
+    const cabangRes = await req('GET', '/api/master/cabang', null, token);
+    const jenjangRes = await req('GET', '/api/master/jenjang', null, token);
+    assert.equal(cabangRes.status, 200);
+    assert.equal(jenjangRes.status, 200);
+    const cabang = cabangRes.body.find(item => item.aktif) || cabangRes.body[0];
+    const jenjang = jenjangRes.body[0];
+    const rombelRes = await req('GET', `/api/master/rombel?cabang_id=${cabang.id}`, null, token);
+    assert.equal(rombelRes.status, 200);
+    const rombel = rombelRes.body.find(item => Number(item.jenjang_id) === Number(jenjang.id)) || rombelRes.body[0];
+    const suffix = `${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+    const nama = `Siswa Export ${suffix}`;
+    const createRes = await req('POST', '/api/siswa', {
+      nama,
+      nis: `EXP-${suffix}`,
+      cabang_id: cabang.id,
+      jenjang_id: rombel.jenjang_id,
+      rombel_id: rombel.id,
+      paket: 'reguler',
+      tanggal_mulai: '2026-05-01'
+    }, token);
+    assert.equal(createRes.status, 200, JSON.stringify(createRes.body));
+    student = {
+      siswa_id: createRes.body.id,
+      nama,
+      rombel_id: rombel.id,
+      cabang_id: cabang.id
+    };
   });
 
   it('rejects unauthenticated requests', async () => {

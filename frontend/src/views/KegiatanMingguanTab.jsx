@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { api } from '../api';
-import { ActionButton, IconButton, CustomSelect, Modal } from '../components/Shared';
+import { ActionButton, IconButton, CustomSelect, CustomDatePicker, Modal } from '../components/Shared';
 import { todayWIB } from '../utils/date';
 import { RefreshCw, Upload, FilePlus, Pencil, X, Save } from 'lucide-react';
 
@@ -40,9 +40,12 @@ function CabangFilter({ user, cabang, cabangId, setCabangId, className = '', pla
 
 function Panel({ title, right, children, className = '' }) {
   return (
-    <section className={`bg-white border border-slate-200 rounded-2xl p-3 sm:p-4 max-w-full overflow-hidden ${className}`}>
+    <section className={`bg-white border border-slate-200 rounded-2xl p-3 sm:p-4 max-w-full overflow-hidden shadow-[0_18px_60px_rgba(15,23,42,.05)] ${className}`}>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-        <h2 className="text-lg font-black text-text-main">{title}</h2>
+        <div>
+          <div className="inline-flex rounded-full bg-primary-container px-2.5 py-1 text-[11px] font-black uppercase tracking-wide text-primary">Rencana kelas</div>
+          <h2 className="mt-2 text-lg font-black text-text-main tracking-[-0.01em]">{title}</h2>
+        </div>
         {right}
       </div>
       {children}
@@ -51,6 +54,9 @@ function Panel({ title, right, children, className = '' }) {
 }
 
 function Input({ value, onChange, placeholder, className = '', ...props }) {
+  if (props.type === 'date') {
+    return <CustomDatePicker value={value} onChange={onChange} placeholder={placeholder} className={`input w-full ${className}`} disabled={props.disabled} />;
+  }
   return (
     <input
       value={value}
@@ -105,6 +111,33 @@ const normalizeActivities = (v) => {
 
 export default function KegiatanMingguanTab({ user, toast }) {
   const m = useMaster(user, { autoDefaultCabang: false });
+
+  const leadRombels = useMemo(() => {
+    if (user.role !== 'guru') return [];
+    return m.rombel.filter(r => r.gurus?.some(g => String(g.id) === String(user.id) && g.role === 'utama'));
+  }, [user?.id, user?.role, m.rombel]);
+
+  const allowedJenjangIds = useMemo(() => {
+    return Array.from(new Set(leadRombels.map(r => String(r.jenjang_id))));
+  }, [leadRombels]);
+
+  const isLeadTeacher = useMemo(() => {
+    if (user.role === 'admin' || user.role === 'admin_cabang' || user.role === 'kepsek') return true;
+    return leadRombels.length > 0;
+  }, [user?.role, leadRombels]);
+
+  const canEditRow = (row) => {
+    if (user.role === 'admin' || user.role === 'admin_cabang' || user.role === 'kepsek') return true;
+    if (user.role === 'guru') {
+      if (row.rombel_id) {
+        return leadRombels.some(r => String(r.id) === String(row.rombel_id));
+      }
+      if (row.jenjang_id) {
+        return allowedJenjangIds.includes(String(row.jenjang_id));
+      }
+    }
+    return false;
+  };
   const today = todayWIB();
   const empty = {
     id: null,
@@ -196,15 +229,15 @@ export default function KegiatanMingguanTab({ user, toast }) {
               <button
                 type="button"
                 onClick={() => removeItem(idx)}
-                className="w-8 h-8 rounded-lg border border-slate-200 hover:border-red-200 hover:bg-red-50 text-slate-400 hover:text-red-600 transition-all flex items-center justify-center shrink-0 text-[10px]"
-                title="Hapus"
-              >
-                ✕
-              </button>
+        className="w-8 h-8 rounded-lg border border-slate-200 hover:border-red-200 hover:bg-red-50 text-slate-400 hover:text-red-600 transition-all flex items-center justify-center shrink-0"
+        title="Hapus"
+      >
+                <X className="w-3.5 h-3.5" strokeWidth={2.4}/>
+      </button>
             </div>
           ))}
           {currentActs.length === 0 && (
-            <p className="text-[11px] text-slate-400 italic">Belum ada kegiatan di bagian ini.</p>
+            <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-center text-[11px] font-bold text-slate-400">Belum ada kegiatan di bagian ini.</p>
           )}
         </div>
 
@@ -213,7 +246,7 @@ export default function KegiatanMingguanTab({ user, toast }) {
           onClick={addItem}
           className="w-full h-8 border border-dashed border-slate-300 hover:border-primary/50 text-[11px] font-bold text-slate-600 hover:text-primary rounded-lg transition-all"
         >
-          + Tambah Kegiatan
+          Tambah Kegiatan
         </button>
       </div>
     );
@@ -243,6 +276,7 @@ export default function KegiatanMingguanTab({ user, toast }) {
         
         const matched = m.rombel.find(r => {
           if (m.cabangId && String(r.cabang_id) !== String(m.cabangId)) return false;
+          if (user.role === 'guru' && !leadRombels.some(lr => String(lr.id) === String(r.id))) return false;
           const cleanName = r.nama.toLowerCase()
             .replace(/kelompok/g, '')
             .replace(/usia/g, '')
@@ -290,7 +324,8 @@ export default function KegiatanMingguanTab({ user, toast }) {
     if (!cid) return [];
     return m.rombel.filter(r => 
       String(r.cabang_id) === String(cid) &&
-      (!draft.jenjang_id || String(r.jenjang_id) === String(draft.jenjang_id))
+      (!draft.jenjang_id || String(r.jenjang_id) === String(draft.jenjang_id)) &&
+      (user.role !== 'guru' || leadRombels.some(lr => String(lr.id) === String(r.id)))
     );
   };
 
@@ -339,7 +374,7 @@ export default function KegiatanMingguanTab({ user, toast }) {
 
   async function save(draft = form) {
     if (!draft.title.trim()) {
-      toast('err', 'Judul kegiatan mingguan wajib diisi');
+      toast('err', 'Judul Focus Theme wajib diisi');
       return;
     }
     if (!draft.week_start || !draft.week_end) {
@@ -351,10 +386,25 @@ export default function KegiatanMingguanTab({ user, toast }) {
       toast('err', 'Pilih cabang terlebih dahulu');
       return;
     }
+    if (user.role === 'guru') {
+      if (!draft.jenjang_id && !draft.rombel_id) {
+        toast('err', 'Anda harus memilih jenjang atau rombel');
+        return;
+      }
+      const hasPerm = canEditRow(draft);
+      if (!hasPerm) {
+        toast('err', 'Anda tidak memiliki hak akses untuk jenjang atau rombel yang dipilih');
+        return;
+      }
+    }
     if (draft.rombel_id) {
       const rombel = m.rombel.find(r => String(r.id) === String(draft.rombel_id));
       if (rombel && String(rombel.cabang_id) !== String(finalCabangId)) {
         toast('err', 'Rombel tidak sesuai cabang');
+        return;
+      }
+      if (rombel && draft.jenjang_id && String(rombel.jenjang_id) !== String(draft.jenjang_id)) {
+        toast('err', 'Jenjang tidak sesuai rombel');
         return;
       }
     }
@@ -375,7 +425,7 @@ export default function KegiatanMingguanTab({ user, toast }) {
     try {
       if (draft.id) await api.updateModulAjar(draft.id, payload);
       else await api.createModulAjar(payload);
-      toast('ok', draft.id ? 'Kegiatan mingguan diperbarui' : 'Kegiatan mingguan dibuat');
+      toast('ok', draft.id ? 'Focus Theme diperbarui' : 'Focus Theme dibuat');
       if (draft.id) setEditForm(null);
       else {
         reset();
@@ -389,7 +439,7 @@ export default function KegiatanMingguanTab({ user, toast }) {
     }
   }
 
-  const right = (
+  const right = isLeadTeacher ? (
     <div className="grid grid-cols-2 sm:flex sm:flex-row gap-2 w-full sm:w-auto">
       <input
         ref={fileInputRef}
@@ -409,27 +459,31 @@ export default function KegiatanMingguanTab({ user, toast }) {
         disabled={parseBusy}
         className={parseBusy ? 'animate-pulse' : ''}
       >
-        {parseBusy ? 'Mengekstrak…' : 'Upload & Parse'}
+        {parseBusy ? 'Mengekstrak...' : 'Upload & Parse'}
       </ActionButton>
       <ActionButton
         icon={FilePlus}
         onClick={() => {
-          setForm(empty);
+          const defaultJenjangId = user.role === 'guru' && allowedJenjangIds.length > 0 ? allowedJenjangIds[0] : '';
+          setForm({
+            ...empty,
+            jenjang_id: defaultJenjangId
+          });
           setParsedFrom(null);
           setOpenForm(true);
         }}
       >
-        Tambah Manual
+        Tambah Focus Theme
       </ActionButton>
     </div>
-  );
+  ) : null;
 
   return (
-    <Panel title="Kegiatan Mingguan" right={right}>
+    <Panel title="Focus Theme Mingguan" right={right}>
       <div className="space-y-4 min-w-0">
         <div className={`grid grid-cols-2 ${user.role === 'admin' ? 'sm:grid-cols-5' : 'sm:grid-cols-4'} gap-2`}>
           <CabangFilter user={user} {...m} plain className="input w-full" />
-          <input type="date" value={tanggal} onChange={e => setTanggal(e.target.value)} className="input w-full" />
+          <CustomDatePicker value={tanggal} onChange={setTanggal} className="input w-full" />
           <CustomSelect value={filterJenjang} onChange={e => { setFilterJenjang(e.target.value); setFilterRombel(''); }} className="input">
             <option value="">Semua jenjang</option>
             {m.jenjang.map(j => <option key={j.id} value={j.id}>{j.nama}</option>)}
@@ -442,7 +496,7 @@ export default function KegiatanMingguanTab({ user, toast }) {
           </CustomSelect>
           <ActionButton icon={RefreshCw} onClick={load} variant="secondary" className="w-full col-span-2 sm:col-span-1">Refresh</ActionButton>
         </div>
-        <div className="overflow-x-auto max-w-full rounded-xl border border-slate-100">
+        <div className="overflow-x-auto max-w-full rounded-xl border border-slate-100 custom-scrollbar">
           <table className="w-full min-w-[960px] text-sm">
             <thead>
               <tr>
@@ -476,13 +530,19 @@ export default function KegiatanMingguanTab({ user, toast }) {
                   <td className="py-2 px-3 text-slate-600 max-w-64">{(r.suggested_domains || []).join(', ') || '-'}</td>
                   <td className="py-2 px-3 text-slate-600">{r.created_by_name || '-'}</td>
                   <td className="py-2 px-3 sticky right-0 z-10 bg-white border-l border-slate-200/80">
-                    <IconButton icon={Pencil} label={`Edit kegiatan ${r.title}`} onClick={() => edit(r)} size="sm" />
+                    {canEditRow(r) ? (
+                      <IconButton icon={Pencil} label={`Edit Focus Theme ${r.title}`} onClick={() => edit(r)} size="sm" />
+                    ) : (
+                      <span className="text-slate-400 text-xs italic font-bold">View-only</span>
+                    )}
                   </td>
                 </tr>
               ))}
               {filteredRows.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="py-8 text-center text-slate-400">Belum ada kegiatan mingguan untuk filter ini.</td>
+                  <td colSpan={9} className="py-8">
+                    <div className="mx-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center text-sm font-bold text-slate-400">Belum ada Focus Theme mingguan untuk filter ini.</div>
+                  </td>
                 </tr>
               )}
             </tbody>
@@ -491,22 +551,21 @@ export default function KegiatanMingguanTab({ user, toast }) {
       </div>
       
       {openForm && (
-        <Modal title={parsedFrom ? 'Tambah Kegiatan Mingguan (dari file)' : 'Tambah Kegiatan Mingguan'} onClose={() => { setOpenForm(false); setParsedFrom(null); }}>
+        <Modal title={parsedFrom ? 'Tambah Focus Theme (dari file)' : 'Tambah Focus Theme'} onClose={() => { setOpenForm(false); setParsedFrom(null); }}>
           <div className="space-y-3">
             {parsedFrom && (
               <div className="flex flex-col gap-1.5 bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2">
                 <div className="flex items-center gap-2">
-                  <span className="text-emerald-600 text-lg">✨</span>
                   <div>
                     <div className="text-xs font-black text-emerald-700">Data diekstrak otomatis dari file</div>
                     <div className="text-[11px] text-emerald-600 truncate max-w-xs">{parsedFrom}</div>
                   </div>
-                  <button onClick={() => { setParsedFrom(null); setForm(f => ({ ...f, parsed_metadata: null })); }} className="ml-auto text-emerald-400 hover:text-emerald-700 text-xs">✕</button>
+                  <button onClick={() => { setParsedFrom(null); setForm(f => ({ ...f, parsed_metadata: null })); }} className="ml-auto text-emerald-500 hover:text-emerald-700 rounded-lg p-1 hover:bg-emerald-100" aria-label="Hapus data ekstraksi"><X className="w-4 h-4"/></button>
                 </div>
                 {form.parsed_metadata && (
                   <div className="text-[10px] bg-white/60 border border-emerald-100/50 rounded-lg px-2.5 py-1 text-emerald-800 flex flex-wrap gap-x-3 gap-y-1 mt-0.5">
-                    {form.parsed_metadata.kelompok && <span>👥 Kelompok: <strong>{form.parsed_metadata.kelompok}</strong></span>}
-                    {form.parsed_metadata.semester && <span>🗓️ Semester: <strong>{form.parsed_metadata.semester}</strong></span>}
+                    {form.parsed_metadata.kelompok && <span>Kelompok: <strong>{form.parsed_metadata.kelompok}</strong></span>}
+                    {form.parsed_metadata.semester && <span>Semester: <strong>{form.parsed_metadata.semester}</strong></span>}
                     {form.parsed_metadata.minggu && <span>Weeks: <strong>Minggu {form.parsed_metadata.minggu}</strong></span>}
                   </div>
                 )}
@@ -533,18 +592,20 @@ export default function KegiatanMingguanTab({ user, toast }) {
 
               <div>
                 <label className="label text-[11px] font-bold text-slate-500 mb-1 block">Mulai Minggu</label>
-                <input type="date" value={form.week_start} onChange={e => setForm(f => ({ ...f, week_start: e.target.value }))} className="input w-full" />
+                <CustomDatePicker value={form.week_start} onChange={v => setForm(f => ({ ...f, week_start: v }))} className="input w-full" />
               </div>
               <div>
                 <label className="label text-[11px] font-bold text-slate-500 mb-1 block">Sampai Minggu</label>
-                <input type="date" value={form.week_end} onChange={e => setForm(f => ({ ...f, week_end: e.target.value }))} className="input w-full" />
+                <CustomDatePicker value={form.week_end} onChange={v => setForm(f => ({ ...f, week_end: v }))} className="input w-full" />
               </div>
 
               <div>
                 <label className="label text-[11px] font-bold text-slate-500 mb-1 block">Jenjang</label>
                 <CustomSelect value={form.jenjang_id} onChange={e => setForm(f => ({ ...f, jenjang_id: e.target.value, rombel_id: '' }))} className="input w-full">
-                  <option value="">Semua jenjang</option>
-                  {m.jenjang.map(j => <option key={j.id} value={j.id}>{j.nama}</option>)}
+                  {user.role !== 'guru' && <option value="">Semua jenjang</option>}
+                  {m.jenjang
+                    .filter(j => user.role !== 'guru' || allowedJenjangIds.includes(String(j.id)))
+                    .map(j => <option key={j.id} value={j.id}>{j.nama}</option>)}
                 </CustomSelect>
               </div>
               <div>
@@ -594,10 +655,10 @@ export default function KegiatanMingguanTab({ user, toast }) {
               </div>
 
               <div className="space-y-3">
-                {renderSectionBuilder(form, setForm, 'opening', '🌅 Pembuka (Opening)')}
-                {renderSectionBuilder(form, setForm, 'focus_theme', '🎯 Inti (Focus Theme)')}
-                {renderSectionBuilder(form, setForm, 'break', '🥪 Istirahat (Take a Break)')}
-                {renderSectionBuilder(form, setForm, 'closing', '🚪 Penutup (Recalling & Closing)')}
+                {renderSectionBuilder(form, setForm, 'opening', 'Pembuka (Opening)')}
+                {renderSectionBuilder(form, setForm, 'focus_theme', 'Inti (Focus Theme)')}
+                {renderSectionBuilder(form, setForm, 'break', 'Istirahat (Take a Break)')}
+                {renderSectionBuilder(form, setForm, 'closing', 'Penutup (Recalling & Closing)')}
               </div>
             </div>
 
@@ -606,7 +667,7 @@ export default function KegiatanMingguanTab({ user, toast }) {
               <Textarea label="Domain observasi" value={form.suggested_domains} onChange={v => setForm(f => ({ ...f, suggested_domains: v }))} placeholder="Literasi, Numerasi, Sosial Emosional" />
             </div>
             <div className="flex gap-2">
-              <ActionButton icon={FilePlus} onClick={() => save(form)} disabled={busy}>{busy ? 'Menyimpan…' : 'Tambah Rencana'}</ActionButton>
+              <ActionButton icon={FilePlus} onClick={() => save(form)} disabled={busy}>{busy ? 'Menyimpan...' : 'Tambah Rencana'}</ActionButton>
               <ActionButton icon={X} onClick={() => { setOpenForm(false); setParsedFrom(null); }} variant="secondary">Batal</ActionButton>
             </div>
           </div>
@@ -614,7 +675,7 @@ export default function KegiatanMingguanTab({ user, toast }) {
       )}
 
       {editForm && (
-        <Modal title="Edit Rencana Kegiatan Mingguan" onClose={() => setEditForm(null)}>
+        <Modal title="Edit Focus Theme" onClose={() => setEditForm(null)}>
           <div className="space-y-3">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-white p-3 rounded-2xl border border-slate-200/80">
               {user.role === 'admin' && (
@@ -634,18 +695,21 @@ export default function KegiatanMingguanTab({ user, toast }) {
 
               <div>
                 <label className="label text-[11px] font-bold text-slate-500 mb-1 block">Mulai Minggu</label>
-                <input type="date" value={editForm.week_start} onChange={e => setEditForm(f => ({ ...f, week_start: e.target.value }))} className="input w-full" />
+                <CustomDatePicker value={editForm.week_start} onChange={v => setEditForm(f => ({ ...f, week_start: v }))} className="input w-full" />
               </div>
               <div>
                 <label className="label text-[11px] font-bold text-slate-500 mb-1 block">Sampai Minggu</label>
-                <input type="date" value={editForm.week_end} onChange={e => setEditForm(f => ({ ...f, week_end: e.target.value }))} className="input w-full" />
+                <CustomDatePicker value={editForm.week_end} onChange={v => setEditForm(f => ({ ...f, week_end: v }))} className="input w-full" />
               </div>
 
               <div>
                 <label className="label text-[11px] font-bold text-slate-500 mb-1 block">Jenjang</label>
                 <CustomSelect value={editForm.jenjang_id} onChange={e => setEditForm(f => ({ ...f, jenjang_id: e.target.value, rombel_id: '' }))} className="input w-full">
-                  <option value="">Semua jenjang</option>
-                  {m.jenjang.map(j => <option key={j.id} value={j.id}>{j.nama}</option>)}
+                  {user.role !== 'guru' && <option value="">Semua jenjang</option>}
+                  {user.role === 'guru' && editForm.rombel_id && <option value="">Ikuti jenjang rombel</option>}
+                  {m.jenjang
+                    .filter(j => user.role !== 'guru' || allowedJenjangIds.includes(String(j.id)))
+                    .map(j => <option key={j.id} value={j.id}>{j.nama}</option>)}
                 </CustomSelect>
               </div>
               <div>
@@ -689,16 +753,16 @@ export default function KegiatanMingguanTab({ user, toast }) {
               </div>
 
               <div className="space-y-3">
-                {renderSectionBuilder(editForm, setEditForm, 'opening', '🌅 Pembuka (Opening)')}
-                {renderSectionBuilder(editForm, setEditForm, 'focus_theme', '🎯 Inti (Focus Theme)')}
-                {renderSectionBuilder(editForm, setEditForm, 'break', '🥪 Istirahat (Take a Break)')}
-                {renderSectionBuilder(editForm, setEditForm, 'closing', '🚪 Penutup (Recalling & Closing)')}
+                {renderSectionBuilder(editForm, setEditForm, 'opening', 'Pembuka (Opening)')}
+                {renderSectionBuilder(editForm, setEditForm, 'focus_theme', 'Inti (Focus Theme)')}
+                {renderSectionBuilder(editForm, setEditForm, 'break', 'Istirahat (Take a Break)')}
+                {renderSectionBuilder(editForm, setEditForm, 'closing', 'Penutup (Recalling & Closing)')}
               </div>
             </div>
 
             <Textarea label="Domain observasi" value={editForm.suggested_domains} onChange={v => setEditForm(f => ({ ...f, suggested_domains: v }))} placeholder="Literasi, Numerasi, Sosial Emosional" />
             <div className="flex gap-2">
-              <ActionButton icon={Save} onClick={() => save(editForm)} disabled={busy}>{busy ? 'Menyimpan…' : 'Simpan Perubahan'}</ActionButton>
+              <ActionButton icon={Save} onClick={() => save(editForm)} disabled={busy}>{busy ? 'Menyimpan...' : 'Simpan Perubahan'}</ActionButton>
               <ActionButton icon={X} onClick={() => setEditForm(null)} variant="secondary">Batal</ActionButton>
             </div>
           </div>

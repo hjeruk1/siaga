@@ -1,14 +1,11 @@
 import{useEffect,useMemo,useState}from'react';
 import{api}from'../api';
-import{ActionButton,Chip,CustomSelect,LiveClock,Modal,Spinner,meniTunggu}from'../components/Shared';
+import{ActionButton,Chip,CustomSelect,CustomDatePicker,LiveClock,Modal,Spinner,meniTunggu}from'../components/Shared';
 import{todayWIB}from'../utils/date';
 import{DoorClosed,Plus,Save,X}from'lucide-react';
-import KegiatanMingguanTab from './KegiatanMingguanTab';
-
 const TABS=[
   {id:'monitoring',label:'Monitoring'},
   {id:'laporan',label:'Laporan'},
-  {id:'modulAjar',label:'Kegiatan Mingguan'},
   {id:'keuangan',label:'Keuangan'},
   {id:'notifikasi',label:'Notifikasi'}
 ];
@@ -85,8 +82,16 @@ export default function KepsekView({user,toast,tab}){
   useEffect(()=>{
     if(activeTab!=='monitoring')return;
     loadMonitoring().catch(e=>toast('err',e.message));
-    const timer=setInterval(()=>loadMonitoring().catch(()=>{}),30000);
-    return()=>clearInterval(timer);
+    const eventSource = new EventSource('/api/absensi/stream');
+    eventSource.onmessage = (event) => {
+      try {
+        const payload = JSON.parse(event.data);
+        if (payload.type === 'absensi_changed') {
+          loadMonitoring().catch(()=>{});
+        }
+      } catch {}
+    };
+    return ()=>eventSource.close();
   },[activeTab,cabangId]);
 
   const stat=useMemo(()=>({
@@ -98,18 +103,17 @@ export default function KepsekView({user,toast,tab}){
   const showTopControls=activeTab!=='monitoring'&&(user.role==='admin'||activeTab==='laporan');
 
   return <div className="w-full p-3 sm:p-4 lg:p-6 2xl:p-8 space-y-4">
-    {showTopControls&&<div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-      <div className="flex flex-col sm:flex-row gap-2 ml-auto">
-        {user.role==='admin'&&<CustomSelect value={cabangId} onChange={e=>setCabangId(e.target.value)} className="input">
+    {showTopControls&&<div className="flex justify-end">
+      <div className="grid w-full grid-cols-2 gap-2 sm:w-auto">
+        {user.role==='admin'&&<CustomSelect value={cabangId} onChange={e=>setCabangId(e.target.value)} className="input h-10 min-w-0">
           <option value="">Semua cabang</option>{cabang.map(c=><option key={c.id} value={c.id}>{c.nama}</option>)}
         </CustomSelect>}
-        {activeTab==='laporan'&&<input type="date" value={tanggal} onChange={e=>setTanggal(e.target.value)} className="input"/>}
+        {activeTab==='laporan'&&<CustomDatePicker value={tanggal} onChange={setTanggal} className="input h-10 min-w-0"/>}
       </div>
     </div>}
 
     {activeTab==='monitoring'&&<MonitoringPanel data={monitoring} loading={loadingMonitoring} earlyReleases={earlyReleases} dayClose={dayClose} canCloseDay={user.role!=='admin'||!!cabangId} cabang={cabang} cabangId={cabangId} isAdmin={user.role==='admin'} onCabangChange={setCabangId} onOpenEarly={()=>setEarlyOpen(true)} onOpenClose={()=>setCloseOpen(true)} onDeleteER={async(id)=>{try{await api.deleteEarlyRelease(id);toast('ok','Izin pulang dini dihapus');loadMonitoring();}catch(e){toast('err',e.message);}}} toast={toast}/>}
     {activeTab==='laporan'&&<LaporanPanel rows={rows} stat={stat}/>}
-    {activeTab==='modulAjar'&&<KegiatanMingguanTab user={user} toast={toast}/>}
     {activeTab==='keuangan'&&<KeuanganPanel laporan={laporan} cabangId={cabangId}/>}
     {activeTab==='notifikasi'&&<NotifikasiPanel notif={notif}/>}
     {earlyOpen&&<Modal title="Buat Izin Pulang Dini" onClose={()=>setEarlyOpen(false)} maxWidth="max-w-lg">
@@ -182,7 +186,7 @@ function MonitoringPanel({data,loading,earlyReleases=[],dayClose,cabang=[],caban
 
   return <div className="space-y-4">
     <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 items-start">
-      <section className="bg-slate-950 text-white border border-slate-800 rounded-2xl p-3 sm:p-4">
+      <section className="bg-slate-950 text-white border border-slate-800 rounded-2xl p-3 sm:p-4 shadow-2xl shadow-slate-950/10">
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 mb-3">
           <div>
             <h2 className="text-lg sm:text-xl font-black">Monitoring Hari Ini</h2>
@@ -203,7 +207,7 @@ function MonitoringPanel({data,loading,earlyReleases=[],dayClose,cabang=[],caban
         </div>
       </section>
 
-      <section className="bg-white border border-slate-200 rounded-2xl p-3 sm:p-4">
+      <section className="bg-white border border-slate-200 rounded-2xl p-3 sm:p-4 shadow-[0_18px_60px_rgba(15,23,42,.05)]">
         <div className="grid grid-cols-1 md:grid-cols-[minmax(0,0.9fr)_minmax(250px,1.1fr)] gap-3 items-start">
           <div className="min-w-0">
             <div className="text-[10px] sm:text-xs font-black text-slate-400 uppercase tracking-wider">Operasional Hari Ini</div>
@@ -232,8 +236,11 @@ function MonitoringPanel({data,loading,earlyReleases=[],dayClose,cabang=[],caban
       </section>
     </div>
 
-    {(redFlags.length>0||waiting.length>0)&&<section className="bg-white border border-slate-200 rounded-2xl p-3 sm:p-4 space-y-3">
-      <div className="text-[10px] sm:text-xs font-black text-slate-400 uppercase tracking-wider">Perlu Perhatian</div>
+    {(redFlags.length>0||waiting.length>0)&&<section className="bg-white border border-slate-200 rounded-2xl p-3 sm:p-4 space-y-3 shadow-[0_18px_60px_rgba(15,23,42,.05)]">
+      <div>
+        <div className="text-[10px] sm:text-xs font-black text-slate-400 uppercase tracking-wider">Perlu Perhatian</div>
+        <div className="text-sm font-bold text-text-main mt-0.5">Siswa yang menunggu penjemput atau melewati batas waktu.</div>
+      </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {redFlags.length>0&&<div className="space-y-2">
           <div className="flex items-center gap-2">
@@ -274,7 +281,7 @@ function MonitoringPanel({data,loading,earlyReleases=[],dayClose,cabang=[],caban
 
     <StatusBoard rows={statusRows}/>
 
-    {earlyReleases.length>0&&<section className="bg-white border border-slate-200 rounded-2xl p-3 sm:p-4">
+    {earlyReleases.length>0&&<section className="bg-white border border-slate-200 rounded-2xl p-3 sm:p-4 shadow-[0_18px_60px_rgba(15,23,42,.05)]">
       <div className="flex items-center justify-between gap-2 mb-3">
         <div className="text-[10px] sm:text-xs font-black text-slate-400 uppercase tracking-wider">Pulang Dini ({earlyReleases.length})</div>
       </div>
@@ -293,7 +300,7 @@ function MonitoringPanel({data,loading,earlyReleases=[],dayClose,cabang=[],caban
 
     <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
       {byKelas.map(k=><RombelCard key={k.id} item={k} siswa={siswaAktif.filter(s=>Number(s.rombel_id)===Number(k.id))}/>)}
-      {byKelas.length===0&&<div className="bg-white border border-slate-200 rounded-2xl p-10 text-center text-slate-400 sm:col-span-2 lg:col-span-3 xl:col-span-5">Belum ada rombel aktif untuk ditampilkan.</div>}
+      {byKelas.length===0&&<div className="bg-white border border-dashed border-slate-200 rounded-2xl p-10 text-center text-sm font-bold text-slate-400 sm:col-span-2 lg:col-span-3 xl:col-span-5">Belum ada rombel aktif untuk ditampilkan.</div>}
     </section>
   </div>;
 }
@@ -316,7 +323,7 @@ function RombelCard({item,siswa}){
   const total=Number(item.total||0);
   const hadir=Number(item.hadir||0),menunggu=Number(item.menunggu||0),pulang=Number(item.pulang||0);
   const isEmpty=siswa.length===0;
-  return <div className={`bg-white border border-slate-200 rounded-2xl overflow-hidden flex flex-col ${isEmpty?'':'min-h-[360px]'}`}>
+  return <div className={`bg-white border border-slate-200 rounded-2xl overflow-hidden flex flex-col shadow-[0_18px_60px_rgba(15,23,42,.05)] ${isEmpty?'':'min-h-[360px]'}`}>
     <div className="px-4 py-3 border-b border-slate-100 flex items-start justify-between gap-3">
       <div className="min-w-0">
         <div className="font-black text-text-main truncate">{item.kelas}</div>
@@ -331,7 +338,7 @@ function RombelCard({item,siswa}){
     </div>
     {isEmpty
       ? <div className="px-4 py-2.5 text-xs text-slate-400 text-center">Tidak ada siswa aktif</div>
-      : <div className="flex-1 overflow-y-auto px-3 py-3 space-y-2 max-h-72">
+      : <div className="flex-1 overflow-y-auto px-3 py-3 space-y-2 max-h-72 custom-scrollbar">
           {siswa.map(s=>{
             const menit=meniTunggu(s.jam_tunggu);
             const red=s.status==='Menunggu'&&menit>15;
@@ -366,12 +373,12 @@ function StatusBoard({rows=[],compact=false}){
     {title:'Sudah Pulang',tone:'border-slate-200 bg-white',statuses:['Pulang']}
   ].map(g=>({...g,items:rows.filter(r=>g.statuses.includes(r.status))}));
   const groupGridClass=compact
-    ? 'grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-1 gap-2 xl:max-h-[300px] xl:overflow-y-auto xl:overscroll-contain xl:pr-1'
+    ? 'grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-1 gap-2 xl:max-h-[300px] xl:overflow-y-auto xl:overscroll-contain xl:pr-1 custom-scrollbar'
     : 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-2';
   const itemListClass=compact
-    ? 'space-y-1.5 max-h-40 overflow-y-auto overscroll-contain pr-1'
-    : 'space-y-1.5 max-h-72 overflow-y-auto overscroll-contain pr-1';
-  return <section className={`bg-white border border-slate-200 rounded-2xl p-3 sm:p-4 ${compact?'h-full':''}`}>
+    ? 'space-y-1.5 max-h-40 overflow-y-auto overscroll-contain pr-1 custom-scrollbar'
+    : 'space-y-1.5 max-h-72 overflow-y-auto overscroll-contain pr-1 custom-scrollbar';
+  return <section className={`bg-white border border-slate-200 rounded-2xl p-3 sm:p-4 shadow-[0_18px_60px_rgba(15,23,42,.05)] ${compact?'h-full':''}`}>
     <div className="flex items-center justify-between gap-2 mb-3">
       <div>
         <div className="text-[10px] sm:text-xs font-black text-slate-400 uppercase tracking-wider">Status Board</div>
@@ -386,7 +393,7 @@ function StatusBoard({rows=[],compact=false}){
         </div>
         <div className={itemListClass}>
           {g.items.map(s=><StudentStatusRow key={`${g.title}-${s.id}`} item={s}/>)}
-          {g.items.length===0&&<div className="text-[11px] text-slate-400 px-1 py-2">Kosong</div>}
+          {g.items.length===0&&<div className="rounded-lg border border-dashed border-white/70 bg-white/50 px-2 py-3 text-center text-[11px] font-bold text-slate-400">Kosong</div>}
         </div>
       </div>)}
     </div>
@@ -414,15 +421,15 @@ function LaporanPanel({rows,stat}){
     return 'bg-slate-100 text-slate-400 border-slate-200';
   };
 
-  return <section className="bg-white border border-slate-200 rounded-2xl p-4">
+  return <section className="bg-white border border-slate-200 rounded-2xl p-4 shadow-[0_18px_60px_rgba(15,23,42,.05)]">
     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
       <div><h2 className="font-black text-text-main text-lg">Laporan Daily Record</h2><p className="text-sm text-slate-500">Progress publish laporan harian per siswa.</p></div>
       <div className="text-sm font-black text-slate-500 bg-slate-50 px-3 py-1 border border-slate-200 rounded-full w-fit">{stat.published}/{stat.total} published</div>
     </div>
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
-      <Card label="Siswa" value={stat.total}/>
-      <Card label="Published" value={stat.published}/>
-      <Card label="Draft/Belum" value={stat.total-stat.published}/>
+    <div className="grid grid-cols-3 gap-2 mb-4">
+      <CompactStat label="Siswa" value={stat.total}/>
+      <CompactStat label="Published" value={stat.published}/>
+      <CompactStat label="Draft/Belum" value={stat.total-stat.published}/>
     </div>
     
     {/* Desktop view table */}
@@ -469,15 +476,18 @@ function LaporanPanel({rows,stat}){
           </div>
         </div>
       ))}
-      {rows.length===0&&<div className="text-center py-8 text-sm text-slate-400">Belum ada data laporan.</div>}
+      {rows.length===0&&<div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center text-sm font-bold text-slate-400">Belum ada data laporan.</div>}
     </div>
   </section>;
 }
 
 function KeuanganPanel({laporan,cabangId}){
-  if(!laporan)return <section className="bg-white border border-slate-200 rounded-2xl p-4"><Spinner/></section>;
-  return <section className="bg-white border border-slate-200 rounded-2xl p-4">
-    <h2 className="font-black text-text-main mb-3">Laporan Keuangan {!cabangId && '(Semua Cabang)'}</h2>
+  if(!laporan)return <section className="bg-white border border-slate-200 rounded-2xl p-4 shadow-[0_18px_60px_rgba(15,23,42,.05)]"><Spinner/></section>;
+  return <section className="bg-white border border-slate-200 rounded-2xl p-4 shadow-[0_18px_60px_rgba(15,23,42,.05)]">
+    <div className="mb-3">
+      <div className="inline-flex rounded-full bg-primary-container px-2.5 py-1 text-[11px] font-black uppercase tracking-wide text-primary">Keuangan</div>
+      <h2 className="mt-2 font-black text-text-main text-lg">Laporan Keuangan {!cabangId && '(Semua Cabang)'}</h2>
+    </div>
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
       <Card label="Total Tagihan" value={money(laporan.summary.total_nominal)}/>
       <Card label="Sudah Dibayar" value={money(laporan.summary.total_paid)}/>
@@ -523,9 +533,12 @@ function FinanceTable({title,rows,first}){
 
 function NotifikasiPanel({notif}){
   const [limit, setLimit] = useState(12);
-  return <section className="bg-white border border-slate-200 rounded-2xl p-4">
-    <h2 className="font-black text-text-main mb-3">Notifikasi Saya</h2>
-    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">{notif.slice(0,limit).map(n=><div key={n.id} className="bg-slate-50 border border-slate-200 rounded-xl p-3"><div className="font-bold text-text-main">{n.title}</div><div className="text-sm text-slate-500 mt-1">{n.body||n.tipe}</div></div>)}{notif.length===0&&<div className="text-sm text-slate-400">Belum ada notifikasi.</div>}</div>
+  return <section className="bg-white border border-slate-200 rounded-2xl p-4 shadow-[0_18px_60px_rgba(15,23,42,.05)]">
+    <div className="mb-3">
+      <div className="inline-flex rounded-full bg-primary-container px-2.5 py-1 text-[11px] font-black uppercase tracking-wide text-primary">Inbox</div>
+      <h2 className="mt-2 font-black text-text-main text-lg">Notifikasi Saya</h2>
+    </div>
+    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">{notif.slice(0,limit).map(n=><div key={n.id} className="bg-slate-50 border border-slate-200 rounded-xl p-3"><div className="font-bold text-text-main">{n.title}</div><div className="text-sm text-slate-500 mt-1 leading-relaxed">{n.body||n.tipe}</div></div>)}{notif.length===0&&<div className="md:col-span-2 xl:col-span-3 rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center text-sm font-bold text-slate-400">Belum ada notifikasi.</div>}</div>
     {notif.length > limit && (
       <div className="mt-4 text-center">
         <button
@@ -540,4 +553,5 @@ function NotifikasiPanel({notif}){
 }
 
 function Card({label,value}){return <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 sm:p-4"><div className="text-[10px] sm:text-xs font-black text-slate-500 uppercase tracking-wider">{label}</div><div className="text-2xl sm:text-3xl font-black text-text-main mt-0.5 tabular-nums">{value}</div></div>;}
+function CompactStat({label,value}){return <div className="min-w-0 rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-2 sm:px-3"><div className="truncate text-[9px] font-black uppercase tracking-wider text-slate-500 sm:text-[10px]">{label}</div><div className="mt-0.5 truncate text-xl font-black tabular-nums text-text-main sm:text-2xl">{value}</div></div>;}
 function money(v){return 'Rp '+Number(v||0).toLocaleString('id-ID');}

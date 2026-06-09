@@ -7,6 +7,7 @@ const http = require('node:http');
 const BASE = process.env.TEST_URL || 'http://localhost:3001';
 let token = '';
 let adminToken = '';
+let mediaCookie = '';
 
 function req(method, path, body) {
   return new Promise((resolve, reject) => {
@@ -19,8 +20,8 @@ function req(method, path, body) {
       let d = '';
       res.on('data', c => d += c);
       res.on('end', () => {
-        try { resolve({ status: res.statusCode, body: JSON.parse(d) }); }
-        catch { resolve({ status: res.statusCode, body: d }); }
+        try { resolve({ status: res.statusCode, headers: res.headers, body: JSON.parse(d) }); }
+        catch { resolve({ status: res.statusCode, headers: res.headers, body: d }); }
       });
     });
     r.on('error', reject);
@@ -73,6 +74,8 @@ describe('SIAGA API Tests', () => {
     assert.equal(r.status, 200, 'Login should succeed');
     token = r.body.token;
     adminToken = token;
+    mediaCookie = String((r.headers['set-cookie'] || [])[0] || '').split(';')[0];
+    assert.match(mediaCookie, /^siaga_media=/);
   });
 
   describe('Auth', () => {
@@ -243,6 +246,42 @@ describe('SIAGA API Tests', () => {
       assert.equal(r.status, 200);
       assert.ok(Array.isArray(r.body));
     });
+
+    it('GET /api/absensi/stream connects using the HttpOnly media cookie', () => {
+      return new Promise((resolve, reject) => {
+        const url = new URL('/api/absensi/stream', BASE);
+        const reqStream = http.request(url, { method: 'GET', headers: { Cookie: mediaCookie } }, res => {
+          assert.equal(res.statusCode, 200);
+          assert.equal(res.headers['content-type'], 'text/event-stream');
+          assert.equal(res.headers['connection'], 'keep-alive');
+
+          res.on('data', chunk => {
+            const dataStr = chunk.toString();
+            if (dataStr.includes('connected')) {
+              reqStream.destroy();
+              resolve();
+            }
+          });
+        });
+        reqStream.on('error', reject);
+        reqStream.end();
+      });
+    });
+
+    it('GET /api/absensi/stream rejects query-string tokens', async () => {
+      return new Promise((resolve, reject) => {
+        const url = new URL('/api/absensi/stream?token=' + token, BASE);
+        const reqStream = http.request(url, { method: 'GET' }, res => {
+          assert.equal(res.statusCode, 401);
+          res.on('data', () => {});
+          res.on('end', () => {
+            resolve();
+          });
+        });
+        reqStream.on('error', reject);
+        reqStream.end();
+      });
+    });
   });
 
   describe('Rekap', () => {
@@ -313,6 +352,13 @@ describe('SIAGA API Tests', () => {
       const r = await req('GET', '/api/billing/laporan?cabang_id=1');
       assert.equal(r.status, 200);
       assert.ok(r.body.summary);
+    });
+
+    it('GET /api/billing/laporan returns summary for all branches combined (empty query param)', async () => {
+      const r = await req('GET', '/api/billing/laporan');
+      assert.equal(r.status, 200);
+      assert.ok(r.body.summary);
+      assert.equal(r.body.cabang_id, null);
     });
 
     it('POST /api/billing/generate-bulanan/preview returns preview', async () => {

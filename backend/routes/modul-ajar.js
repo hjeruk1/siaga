@@ -79,7 +79,7 @@ function parseSuggestedActivities(v) {
 }
 
 function jsonArray(v) {
-  return JSON.stringify(v && typeof v === 'object' ? v : {});
+  return JSON.stringify(Array.isArray(v) ? v : []);
 }
 
 function moduleRow(row) {
@@ -101,6 +101,42 @@ function scopeCabang(req, explicitCabangId) {
   return req.user.role === 'admin' ? explicitCabangId : req.user.cabang_id;
 }
 
+function checkGuruModulAjarPermission(req, res, jenjangId, rombelId) {
+  if (req.user.role !== 'guru') return true;
+
+  const leadRombels = db.prepare(`
+    SELECT r.id, r.jenjang_id
+    FROM guru_rombel gr
+    JOIN rombel r ON r.id = gr.rombel_id
+    WHERE gr.pengguna_id = ? AND gr.role = 'utama' AND r.cabang_id = ?
+  `).all(req.user.id, req.user.cabang_id);
+
+  if (leadRombels.length === 0) {
+    res.status(403).json({ error: 'Akses ditolak: Anda bukan guru utama' });
+    return false;
+  }
+
+  let targetJenjangId = jenjangId;
+  if (rombelId) {
+    const r = db.prepare('SELECT jenjang_id FROM rombel WHERE id=?').get(rombelId);
+    if (r) {
+      targetJenjangId = r.jenjang_id;
+    }
+  }
+
+  if (targetJenjangId) {
+    const isLeadForJenjang = leadRombels.some(r => Number(r.jenjang_id) === Number(targetJenjangId));
+    if (!isLeadForJenjang) {
+      res.status(403).json({ error: 'Akses ditolak: Anda bukan guru utama untuk jenjang ini' });
+      return false;
+    }
+    return true;
+  }
+
+  res.status(403).json({ error: 'Akses ditolak: Guru tidak dapat mengelola rencana global (tanpa rombel & jenjang)' });
+  return false;
+}
+
 function canUseRombel(req, res, rombelId, cabangId = null) {
   const rombel = db.prepare('SELECT * FROM rombel WHERE id=?').get(rombelId);
   if (!rombel) {
@@ -113,14 +149,45 @@ function canUseRombel(req, res, rombelId, cabangId = null) {
   }
   if (!requireCabang(req, res, rombel.cabang_id)) return null;
   if (req.user.role === 'guru') {
+    // Check direct assignment
     const assigned = db.prepare('SELECT 1 FROM guru_rombel WHERE pengguna_id=? AND rombel_id=?')
       .get(req.user.id, rombel.id);
     if (!assigned) {
-      res.status(403).json({ error: 'Guru tidak ditugaskan di rombel ini' });
-      return null;
+      // Check if they are a guru utama in the same jenjang (in the same cabang)
+      const leadInSameJenjang = db.prepare(`
+        SELECT 1
+        FROM guru_rombel gr
+        JOIN rombel r ON r.id = gr.rombel_id
+        WHERE gr.pengguna_id = ? AND gr.role = 'utama' AND r.jenjang_id = ? AND r.cabang_id = ?
+      `).get(req.user.id, rombel.jenjang_id, rombel.cabang_id);
+      
+      if (!leadInSameJenjang) {
+        res.status(403).json({ error: 'Guru tidak ditugaskan di rombel ini dan bukan guru utama di jenjang ini' });
+        return null;
+      }
     }
   }
   return rombel;
+}
+
+function validateModulAjarScope(req, res, cabangId, jenjangId, rombelId) {
+  let rombel = null;
+  if (rombelId) {
+    rombel = canUseRombel(req, res, rombelId, cabangId);
+    if (!rombel) return false;
+  }
+  if (jenjangId) {
+    const jenjang = db.prepare('SELECT 1 FROM jenjang WHERE id=?').get(jenjangId);
+    if (!jenjang) {
+      res.status(400).json({ error: 'Jenjang tidak ditemukan' });
+      return false;
+    }
+    if (rombel && Number(rombel.jenjang_id) !== Number(jenjangId)) {
+      res.status(400).json({ error: 'Jenjang tidak sesuai rombel' });
+      return false;
+    }
+  }
+  return true;
 }
 
 function validateModulAjarLink(res, modulAjarId, cabangId, rombelId) {
@@ -173,17 +240,20 @@ router.get('/', auth(['admin', 'admin_cabang', 'kepsek', 'guru']), (req, res) =>
   res.json(rows.map(moduleRow));
 });
 
-router.post('/', auth(['admin', 'admin_cabang', 'kepsek']), (req, res) => {
+router.post('/', auth(['admin', 'admin_cabang', 'kepsek', 'guru']), (req, res) => {
   const d = req.body || {};
   const cabangId = scopeCabang(req, d.cabang_id);
   if (!d.title || !d.week_start || !d.week_end) return res.status(400).json({ error: 'Judul, minggu mulai, dan minggu selesai wajib' });
+  
+  const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+  if (!dateRegex.test(d.week_start) || !dateRegex.test(d.week_end)) {
+    return res.status(400).json({ error: 'Format tanggal minggu mulai atau selesai tidak valid (wajib YYYY-MM-DD)' });
+  }
+
   if (!cabangId) return res.status(400).json({ error: 'Cabang wajib' });
   if (!requireCabang(req, res, cabangId)) return;
-  if (d.rombel_id && !canUseRombel(req, res, d.rombel_id, cabangId)) return;
-  if (d.jenjang_id) {
-    const jenjang = db.prepare('SELECT 1 FROM jenjang WHERE id=?').get(d.jenjang_id);
-    if (!jenjang) return res.status(400).json({ error: 'Jenjang tidak ditemukan' });
-  }
+  if (!checkGuruModulAjarPermission(req, res, d.jenjang_id, d.rombel_id)) return;
+  if (!validateModulAjarScope(req, res, cabangId, d.jenjang_id, d.rombel_id)) return;
 
   const now = nowUtc();
   const r = db.prepare(`
@@ -210,21 +280,28 @@ router.post('/', auth(['admin', 'admin_cabang', 'kepsek']), (req, res) => {
   res.json({ id: r.lastInsertRowid });
 });
 
-router.put('/:id', auth(['admin', 'admin_cabang', 'kepsek']), (req, res) => {
+router.put('/:id', auth(['admin', 'admin_cabang', 'kepsek', 'guru']), (req, res) => {
   const before = db.prepare('SELECT * FROM modul_ajar WHERE id=?').get(req.params.id);
   if (!before) return res.status(404).json({ error: 'Modul ajar tidak ditemukan' });
   if (!requireCabang(req, res, before.cabang_id)) return;
+  if (!checkGuruModulAjarPermission(req, res, before.jenjang_id, before.rombel_id)) return;
 
   const d = req.body || {};
+  const targetJenjangId = d.hasOwnProperty('jenjang_id') ? d.jenjang_id : before.jenjang_id;
+  const targetRombelId = d.hasOwnProperty('rombel_id') ? d.rombel_id : before.rombel_id;
+
   const cabangId = scopeCabang(req, d.cabang_id || before.cabang_id);
   if (!d.title || !d.week_start || !d.week_end) return res.status(400).json({ error: 'Judul, minggu mulai, dan minggu selesai wajib' });
+  
+  const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+  if (!dateRegex.test(d.week_start) || !dateRegex.test(d.week_end)) {
+    return res.status(400).json({ error: 'Format tanggal minggu mulai atau selesai tidak valid (wajib YYYY-MM-DD)' });
+  }
+
   if (!cabangId) return res.status(400).json({ error: 'Cabang wajib' });
   if (!requireCabang(req, res, cabangId)) return;
-  if (d.rombel_id && !canUseRombel(req, res, d.rombel_id, cabangId)) return;
-  if (d.jenjang_id) {
-    const jenjang = db.prepare('SELECT 1 FROM jenjang WHERE id=?').get(d.jenjang_id);
-    if (!jenjang) return res.status(400).json({ error: 'Jenjang tidak ditemukan' });
-  }
+  if (!checkGuruModulAjarPermission(req, res, targetJenjangId, targetRombelId)) return;
+  if (!validateModulAjarScope(req, res, cabangId, targetJenjangId, targetRombelId)) return;
 
   db.prepare(`
     UPDATE modul_ajar
@@ -233,8 +310,8 @@ router.put('/:id', auth(['admin', 'admin_cabang', 'kepsek']), (req, res) => {
     WHERE id=?
   `).run(
     cabangId,
-    d.jenjang_id || null,
-    d.rombel_id || null,
+    targetJenjangId || null,
+    targetRombelId || null,
     d.paket || null,
     d.title,
     d.week_start,
@@ -271,13 +348,49 @@ router.post('/focus-theme', auth(['guru', 'admin', 'admin_cabang', 'kepsek']), (
   const d = req.body || {};
   const cabangId = scopeCabang(req, d.cabang_id);
   if (!cabangId || !d.rombel_id || !d.tanggal || !d.title) return res.status(400).json({ error: 'Cabang, rombel, tanggal, dan judul wajib' });
+  
+  const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+  if (!dateRegex.test(d.tanggal)) {
+    return res.status(400).json({ error: 'Format tanggal tidak valid (wajib YYYY-MM-DD)' });
+  }
+
+  if (!checkGuruModulAjarPermission(req, res, null, d.rombel_id)) return;
+
   const rombel = canUseRombel(req, res, d.rombel_id, cabangId);
   if (!rombel) return;
   if (!validateModulAjarLink(res, d.modul_ajar_id, cabangId, d.rombel_id)) return;
 
   const before = db.prepare('SELECT * FROM focus_theme WHERE rombel_id=? AND tanggal=?').get(d.rombel_id, d.tanggal);
   const now = nowUtc();
-  const values = [
+
+  if (before) {
+    db.prepare(`
+      UPDATE focus_theme
+      SET modul_ajar_id=?,cabang_id=?,rombel_id=?,tanggal=?,title=?,activity_summary=?,
+          suggested_domains=?,teacher_prompt=?,updated_at=?,menu_makanan=?
+      WHERE id=?
+    `).run(
+      d.modul_ajar_id || null,
+      cabangId,
+      d.rombel_id,
+      d.tanggal,
+      d.title,
+      d.activity_summary || null,
+      jsonArray(d.suggested_domains),
+      d.teacher_prompt || null,
+      now,
+      d.menu_makanan || null,
+      before.id
+    );
+    audit(req.user, 'update', 'focus_theme', before.id, { cabang_id: cabangId, before, after: d });
+    return res.json({ id: before.id, action: 'updated' });
+  }
+
+  const r = db.prepare(`
+    INSERT INTO focus_theme
+      (modul_ajar_id,cabang_id,rombel_id,tanggal,title,activity_summary,suggested_domains,teacher_prompt,created_by,created_at,updated_at,menu_makanan)
+    VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
+  `).run(
     d.modul_ajar_id || null,
     cabangId,
     d.rombel_id,
@@ -287,25 +400,10 @@ router.post('/focus-theme', auth(['guru', 'admin', 'admin_cabang', 'kepsek']), (
     jsonArray(d.suggested_domains),
     d.teacher_prompt || null,
     req.user.id,
-    now
-  ];
-
-  if (before) {
-    db.prepare(`
-      UPDATE focus_theme
-      SET modul_ajar_id=?,cabang_id=?,rombel_id=?,tanggal=?,title=?,activity_summary=?,
-          suggested_domains=?,teacher_prompt=?,created_by=?,updated_at=?,menu_makanan=?
-      WHERE id=?
-    `).run(...values, d.menu_makanan || null, before.id);
-    audit(req.user, 'update', 'focus_theme', before.id, { cabang_id: cabangId, before, after: d });
-    return res.json({ id: before.id, action: 'updated' });
-  }
-
-  const r = db.prepare(`
-    INSERT INTO focus_theme
-      (modul_ajar_id,cabang_id,rombel_id,tanggal,title,activity_summary,suggested_domains,teacher_prompt,created_by,created_at,updated_at,menu_makanan)
-    VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
-  `).run(...values, now, d.menu_makanan || null);
+    now,
+    now,
+    d.menu_makanan || null
+  );
   audit(req.user, 'create', 'focus_theme', r.lastInsertRowid, { cabang_id: cabangId, after: d });
   res.json({ id: r.lastInsertRowid, action: 'created' });
 });
@@ -314,7 +412,7 @@ router.post('/focus-theme', auth(['guru', 'admin', 'admin_cabang', 'kepsek']), (
 // Upload .doc/.docx/.pdf modul ajar -> extract text -> Gemini AI -> return pre-filled JSON
 router.post(
   '/parse-file',
-  auth(['admin', 'admin_cabang', 'kepsek']),
+  auth(['admin', 'admin_cabang', 'kepsek', 'guru']),
   (req, res, next) => {
     upload.single('file')(req, res, (err) => {
       if (err) return res.status(400).json({ error: err.message });
@@ -322,6 +420,16 @@ router.post(
     });
   },
   async (req, res) => {
+    if (req.user.role === 'guru') {
+      const leadCount = db.prepare(`
+        SELECT COUNT(*) as count FROM guru_rombel gr
+        JOIN rombel r ON r.id = gr.rombel_id
+        WHERE gr.pengguna_id = ? AND gr.role = 'utama' AND r.cabang_id = ?
+      `).get(req.user.id, req.user.cabang_id);
+      if (!leadCount || leadCount.count === 0) {
+        return res.status(403).json({ error: 'Akses ditolak: Anda bukan guru utama' });
+      }
+    }
     if (!req.file) return res.status(400).json({ error: 'File tidak ditemukan dalam request' });
     try {
       // 1. Extract raw text from the uploaded file

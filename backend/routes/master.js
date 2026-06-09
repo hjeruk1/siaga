@@ -262,7 +262,7 @@ router.get('/audit-log', auth(['admin', 'admin_cabang', 'kepsek']), (req, res) =
   const params = [];
   let where = 'WHERE 1=1';
   if (req.user.role !== 'admin') {
-    where += ' AND (a.cabang_id=? OR a.cabang_id IS NULL)';
+    where += ' AND a.cabang_id=?';
     params.push(req.user.cabang_id);
   } else if (req.query.cabang_id) {
     where += ' AND a.cabang_id=?';

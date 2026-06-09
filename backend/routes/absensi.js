@@ -59,17 +59,45 @@ function minutesBetween(start, end) {
 }
 function pickupActorId(actorId) {
   if (!actorId) return null;
-  try {
-    return db.prepare('SELECT 1 FROM guru WHERE id=?').get(actorId) ? actorId : null;
-  } catch {
-    return actorId;
-  }
+  return db.prepare("SELECT 1 FROM pengguna WHERE id=? AND role IN ('guru','admin','admin_cabang','gerbang')").get(actorId) ? actorId : null;
 }
 function insertPickupLog(absen, actorId, cabangId, jamPulang, sumber) {
   db.prepare(`INSERT INTO penjemputan_log(absensi_id,siswa_id,penjemput_id,guru_id,cabang_id,tanggal,jam_scan,jam_pulang,durasi_menit,sumber,created_at)
     VALUES(?,?,?,?,?,?,?,?,?,?,?)`)
     .run(absen.id, absen.siswa_id, absen.penjemput_id || null, pickupActorId(actorId), cabangId, absen.tanggal, absen.jam_tunggu || null, jamPulang, minutesBetween(absen.jam_tunggu, jamPulang), sumber, nowUtc());
 }
+
+const sseClients = new Set();
+
+function broadcastAbsensi(cabangId) {
+  const payload = JSON.stringify({ type: 'absensi_changed' });
+  for (const client of sseClients) {
+    if (Number(client.cabangId) === Number(cabangId)) {
+      try {
+        client.res.write(`data: ${payload}\n\n`);
+      } catch (e) {
+        sseClients.delete(client);
+      }
+    }
+  }
+}
+
+router.get('/stream', auth.media(['admin', 'admin_cabang', 'kepsek', 'guru', 'gerbang']), (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+
+  res.write(`data: ${JSON.stringify({ type: 'connected' })}\n\n`);
+
+  const cabangId = req.user.role === 'admin' ? Number(req.query.cabang_id) || null : req.user.cabang_id;
+  const client = { res, cabangId };
+  sseClients.add(client);
+
+  req.on('close', () => {
+    sseClients.delete(client);
+  });
+});
 
 router.get('/today', auth(), (req, res) => {
   const tanggal = req.query.tanggal || todayWIB();
@@ -111,6 +139,7 @@ router.post('/checkin', auth(['guru','admin','admin_cabang']), (req, res) => {
   db.prepare('UPDATE absensi SET status=?,jam_masuk=?,manual=?,updated_at=? WHERE id=?')
     .run(status, jam, req.body?.manual ? 1 : 0, nowUtc(), item.row.id);
   audit(req.user, 'checkin', 'absensi', item.row.id, { cabang_id: item.enrollment.cabang_id, before: { status: beforeStatus }, after: { status, jam_masuk: jam } });
+  broadcastAbsensi(item.enrollment.cabang_id);
   res.json({ success: true, status, jam_masuk: jam });
 });
 
@@ -129,6 +158,7 @@ router.post('/keterangan', auth(['guru','admin','admin_cabang']), (req, res) => 
   db.prepare('UPDATE absensi SET status=?,catatan=?,manual=1,updated_at=? WHERE id=?').run(status, catatan || null, nowUtc(), item.row.id);
   audit(req.user, 'set_keterangan', 'absensi', item.row.id, { cabang_id: item.enrollment.cabang_id, after: { status, catatan } });
   notifyKepsek(item.enrollment.cabang_id, 'absensi_keterangan', `${access.siswa.nama} ${status}`, catatan || `Status absensi diubah menjadi ${status}.`, 'absensi', item.row.id, req.user.id);
+  broadcastAbsensi(item.enrollment.cabang_id);
   res.json({ success: true });
 });
 
@@ -163,6 +193,7 @@ router.post('/nfc-scan', auth(['guru','admin','admin_cabang']), (req, res) => {
         .run(status, jam, nowUtc(), item.row.id);
       logNfc({ siswaId: siswa.id, penggunaId: req.user.id, cabangId: item.enrollment.cabang_id, action, status: 'success', token, tab, tanggal, jam });
       audit(req.user, 'nfc_checkin', 'absensi', item.row.id, { cabang_id: item.enrollment.cabang_id, before: { status: beforeStatusNfc }, after: { status, jam_masuk: jam } });
+      broadcastAbsensi(item.enrollment.cabang_id);
       return res.json({ success: true, action, siswa: { id: siswa.id, nama: siswa.nama }, status, jam_masuk: jam });
     }
 
@@ -172,6 +203,7 @@ router.post('/nfc-scan', auth(['guru','admin','admin_cabang']), (req, res) => {
     insertPickupLog(absen, req.user.id, access.enrollment.cabang_id, jam, 'nfc');
     logNfc({ siswaId: siswa.id, penggunaId: req.user.id, cabangId: access.enrollment.cabang_id, action, status: 'success', token, tab, tanggal, jam });
     audit(req.user, 'nfc_handoff', 'absensi', absen.id, { cabang_id: access.enrollment.cabang_id, before: { status: 'Menunggu', penjemput_id: absen.penjemput_id }, after: { status: 'Pulang', jam_pulang: jam } });
+    broadcastAbsensi(access.enrollment.cabang_id);
     res.json({ success: true, action, siswa: { id: siswa.id, nama: siswa.nama }, status: 'Pulang', jam_pulang: jam });
   } catch (e) {
     return fail(500, e.message || 'Gagal memproses NFC', { siswa_id: siswa.id, cabangId: access.enrollment.cabang_id });
@@ -190,6 +222,7 @@ router.post('/early-release', auth(['admin', 'admin_cabang', 'kepsek']), (req, r
       .run(d.siswa_id, access.enrollment.cabang_id, d.tanggal, d.alasan, req.user.id, nowUtc());
     audit(req.user, 'create_early_release', 'early_release', r.lastInsertRowid, { cabang_id: access.enrollment.cabang_id, after: d });
     notifyKepsek(access.enrollment.cabang_id, 'early_release', `Pulang dini: ${access.siswa.nama}`, d.alasan, 'early_release', r.lastInsertRowid, req.user.id);
+    broadcastAbsensi(access.enrollment.cabang_id);
     res.json({ id: r.lastInsertRowid });
   } catch {
     res.status(400).json({ error: 'Izin pulang dini sudah ada untuk siswa ini di tanggal tersebut' });
@@ -214,6 +247,7 @@ router.delete('/early-release/:id', auth(['admin', 'admin_cabang', 'kepsek']), (
   if (!requireCabang(req, res, er.cabang_id)) return;
   db.prepare('DELETE FROM early_release WHERE id=?').run(req.params.id);
   audit(req.user, 'delete_early_release', 'early_release', req.params.id, { cabang_id: er.cabang_id, before: er });
+  broadcastAbsensi(er.cabang_id);
   res.json({ success: true });
 });
 
@@ -261,6 +295,7 @@ router.post('/tutup-hari', auth(['admin', 'admin_cabang', 'kepsek', 'guru']), (r
   });
   try {
     const details = tx();
+    broadcastAbsensi(cabangId);
     res.json({ success: true, tanggal, cabang_id: cabangId, remaining_count: details.length, details });
   }
   catch (e) { res.status(400).json({ error: e.message }); }
@@ -275,3 +310,4 @@ router.get('/tutup-hari/status', auth(), (req, res) => {
 });
 
 module.exports = router;
+module.exports.broadcastAbsensi = broadcastAbsensi;

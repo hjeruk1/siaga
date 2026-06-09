@@ -8,6 +8,10 @@ if (process.env.NODE_ENV === 'production' && !process.env.ADMIN_PASSWORD) {
   console.error('ADMIN_PASSWORD wajib diset untuk init production.');
   process.exit(1);
 }
+if (process.env.NODE_ENV !== 'test' && process.env.RESET_DATABASE_CONFIRM !== 'HAPUS_DATABASE_SIAGA') {
+  console.error('Init dibatalkan. Set RESET_DATABASE_CONFIRM=HAPUS_DATABASE_SIAGA untuk menghapus dan membuat ulang database.');
+  process.exit(1);
+}
 
 const tables = [
   'invoice_item','invoice','pembayaran_alokasi','pembayaran','tagihan','diskon_siswa','biaya_tarif',
@@ -64,10 +68,17 @@ for (const cb of cabang) {
 }
 
 const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
+const testMode = process.env.NODE_ENV === 'test';
 const r = freshDb.prepare(`INSERT INTO pengguna
   (tipe,role,display_name,username,password_hash,status,must_change_password,created_at,updated_at)
-  VALUES('staff','admin','Admin Pusat','admin',?,'undangan',1,?,?)`)
-  .run(bcrypt.hashSync(adminPassword, 10), now(), now());
+  VALUES('staff','admin','Admin Pusat','admin',?,?,?,?,?)`)
+  .run(
+    bcrypt.hashSync(adminPassword, 10),
+    testMode ? 'aktif' : 'undangan',
+    testMode ? 0 : 1,
+    now(),
+    now(),
+  );
 freshDb.prepare('INSERT INTO staff_profile(pengguna_id,cabang_id,jabatan) VALUES(?,?,?)')
   .run(r.lastInsertRowid, null, 'Admin Pusat');
 

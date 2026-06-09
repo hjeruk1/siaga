@@ -94,21 +94,24 @@ export default function WaliView({toast}){
   }
 
   return <div className="w-full max-w-6xl mx-auto p-4 sm:p-6 lg:p-8 space-y-4">
-    <section className="bg-white border border-slate-200 rounded-2xl p-4">
+    <section className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-[0_18px_60px_rgba(15,23,42,.06)]">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
         <div>
-          <h1 className="text-xl font-black text-text-main">Portal Wali</h1>
-          <p className="text-sm text-slate-500">Daily record dan feedback.{unreadCount>0&&<span className="ml-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full font-bold">{unreadCount} baru</span>}</p>
+          <div className="inline-flex rounded-full bg-primary-container px-2.5 py-1 text-[11px] font-black uppercase tracking-wide text-primary">Portal keluarga</div>
+          <h1 className="mt-2 text-2xl font-black text-text-main tracking-[-0.02em]">Portal Wali</h1>
+          <p className="text-sm text-slate-500">Daily record, tagihan, dan feedback.{unreadCount>0&&<span className="ml-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full font-bold">{unreadCount} baru</span>}</p>
         </div>
         {siswa.length > 1 ? (
-          <div className="flex gap-1.5 p-1 bg-slate-100 rounded-lg">
+          <div className="flex gap-1.5 p-1 bg-slate-100 rounded-xl" role="tablist" aria-label="Pilih siswa">
             {siswa.map(s => (
               <button
                 key={s.id}
                 onClick={() => setSelected(s)}
-                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200 ${
+                role="tab"
+                aria-selected={selected?.id === s.id}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 ${
                   selected?.id === s.id
-                    ? 'bg-white text-text-main border border-slate-200/50'
+                    ? 'bg-white text-text-main border border-slate-200/70 shadow-sm'
                     : 'text-slate-500 hover:text-text-main'
                 }`}
               >
@@ -117,7 +120,7 @@ export default function WaliView({toast}){
             ))}
           </div>
         ) : siswa.length === 1 ? (
-          <span className="px-3 py-1.5 bg-slate-100 text-slate-700 text-xs font-medium rounded-lg border border-slate-200 bg-slate-50">
+          <span className="px-3 py-1.5 text-slate-700 text-xs font-bold rounded-xl border border-slate-200 bg-slate-50">
             {siswa[0].nama}
           </span>
         ) : null}
@@ -125,30 +128,30 @@ export default function WaliView({toast}){
 
       {/* Redesigned Student & Teacher Info Card */}
       {selected && (
-        <div className="bg-gradient-to-br from-slate-50 to-slate-100/50 border border-slate-200 rounded-2xl p-5 mb-6 relative overflow-hidden group">
+        <div className="bg-gradient-to-br from-slate-50 to-white border border-slate-200 rounded-2xl p-5 mb-6 relative overflow-hidden group">
           {/* Decorative accent gradient bar */}
-          <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-primary to-indigo-500" />
+          <div className="absolute top-0 inset-x-0 h-1 bg-primary" />
           
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
             {/* Student Info (Siswa) */}
             <div className="flex items-center gap-4">
               <StudentAvatar name={selected.nama} url={selected.foto} size="xl" />
               <div>
-                <span className="text-[10px] font-black text-primary uppercase tracking-wider bg-primary/10 px-2 py-0.5 rounded-full">Siswa Aktif</span>
+                <span className="text-[10px] font-black text-primary uppercase tracking-wider bg-primary-container px-2 py-0.5 rounded-full">Siswa Aktif</span>
                 <h2 className="text-xl font-black text-slate-800 mt-1 leading-tight">{selected.nama}</h2>
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-xs text-slate-500">
                   <div className="flex items-center gap-1">
                     <GraduationCap className="w-3.5 h-3.5 text-slate-400" />
                     Kelas: <span className="font-bold text-slate-700">{selected.rombel_nama || '-'}</span>
                   </div>
-                  <span className="text-slate-300">•</span>
+                  <span className="text-slate-300">/</span>
                   <div className="flex items-center gap-1">
                     <MapPin className="w-3.5 h-3.5 text-slate-400" />
                     {selected.cabang_nama || 'Pusat'}
                   </div>
                   {selected.paket && (
                     <>
-                      <span className="text-slate-300">•</span>
+                      <span className="text-slate-300">/</span>
                       <div className="flex items-center gap-1">
                         <Award className="w-3.5 h-3.5 text-slate-400" />
                         Paket: <span className="font-bold text-slate-700 uppercase">{selected.paket}</span>
@@ -175,7 +178,7 @@ export default function WaliView({toast}){
                           <div className="font-black text-slate-700 text-xs truncate max-w-[130px]" title={g.display_name}>{g.display_name}</div>
                           <span className={`inline-block text-[8px] px-1.5 py-0.5 rounded font-black tracking-wider uppercase mt-0.5 ${
                             g.role === 'utama' 
-                              ? 'bg-primary/10 text-primary' 
+                              ? 'bg-primary-container text-primary' 
                               : 'bg-slate-100 text-slate-500'
                           }`}>
                             {g.role === 'utama' ? 'Wali Kelas' : 'Bantu'}
@@ -208,8 +211,10 @@ export default function WaliView({toast}){
       )}
 
       {/* Tab Navigation */}
-      <div className="flex gap-1 p-1 bg-slate-100/80 rounded-xl mb-5 max-w-[200px]">
+      <div className="flex gap-1 p-1 bg-slate-100/80 rounded-xl mb-5 max-w-[220px]" role="tablist" aria-label="Konten wali">
         <button type="button" onClick={() => setActiveTab('daily')}
+          role="tab"
+          aria-selected={activeTab === 'daily'}
           className={`flex-1 py-1.5 rounded-lg text-xs font-black transition-all ${
             activeTab === 'daily'
               ? 'bg-white text-text-main shadow-sm'
@@ -218,6 +223,8 @@ export default function WaliView({toast}){
           Harian
         </button>
         <button type="button" onClick={() => setActiveTab('billing')}
+          role="tab"
+          aria-selected={activeTab === 'billing'}
           className={`flex-1 py-1.5 rounded-lg text-xs font-black transition-all ${
             activeTab === 'billing'
               ? 'bg-white text-text-main shadow-sm'

@@ -5,7 +5,8 @@ const fs = require('fs');
 const db = require('../db');
 const auth = require('../middleware/auth');
 const { uploadImage, saveSquareJpeg, ensureDir } = require('../utils/image-upload');
-const { nowUtc, todayWIB, schoolYearForDate, activeEnrollment, siswaScopeSql, requireCabang, requireActiveCabang, audit } = require('../utils/workflow');
+const asyncRoute = require('../utils/async-route');
+const { nowUtc, todayWIB, schoolYearForDate, activeEnrollment, siswaScopeSql, requireCabang, requireActiveCabang, canAccessSiswa, canWaliAccessSiswa, audit } = require('../utils/workflow');
 
 const FOTO_DIR = path.join(__dirname, '../uploads/foto');
 ensureDir(FOTO_DIR);
@@ -147,11 +148,9 @@ router.get('/:id', auth(), (req, res) => {
   if (!siswa) return res.status(404).json({ error: 'Siswa tidak ditemukan' });
   const e = managementEnrollment(siswa.id);
   if (!e) return res.status(404).json({ error: 'Enrollment siswa tidak ditemukan' });
-  if (!['admin', 'wali'].includes(req.user.role) && !requireCabang(req, res, e.cabang_id)) return;
-  if (req.user.role === 'wali') {
-    const ok = db.prepare('SELECT 1 FROM wali_siswa WHERE wali_pengguna_id=? AND siswa_id=? AND aktif=1').get(req.user.id, siswa.id);
-    if (!ok) return res.status(403).json({ error: 'Akses ditolak' });
-  }
+  const access = canAccessSiswa(req.user, siswa.id);
+  if (access === false) return res.status(403).json({ error: 'Akses ditolak' });
+  if (!access) return res.status(404).json({ error: 'Siswa tidak ditemukan' });
   const penjemput = db.prepare('SELECT * FROM penjemput WHERE siswa_id=? ORDER BY aktif DESC,nama').all(siswa.id);
   const wali = db.prepare(`
     SELECT p.id,p.display_name,p.no_wa,ws.relasi,p.status
@@ -241,6 +240,7 @@ router.post('/:id/nfc/reissue', auth(['admin', 'admin_cabang']), (req, res) => {
 router.get('/:id/penjemput', auth(), (req, res) => {
   const e = managementEnrollment(req.params.id);
   if (!e) return res.status(404).json({ error: 'Siswa tidak ditemukan' });
+  if (req.user.role === 'wali' && !canWaliAccessSiswa(req.user, req.params.id)) return res.status(403).json({ error: 'Akses ditolak' });
   if (req.user.role !== 'admin' && req.user.role !== 'wali' && !requireCabang(req, res, e.cabang_id)) return;
   res.json(db.prepare('SELECT * FROM penjemput WHERE siswa_id=? ORDER BY aktif DESC,nama').all(req.params.id));
 });
@@ -388,7 +388,7 @@ router.post('/kenaikan', auth(['admin', 'admin_cabang']), (req, res) => {
   }
 });
 
-router.post('/:id/foto', auth(['admin', 'admin_cabang']), uploadImage.single('foto'), async (req, res) => {
+router.post('/:id/foto', auth(['admin', 'admin_cabang']), uploadImage.single('foto'), asyncRoute(async (req, res) => {
   const siswa = db.prepare('SELECT * FROM siswa WHERE id=?').get(req.params.id);
   if (!siswa) return res.status(404).json({ error: 'Siswa tidak ditemukan' });
   const access = activeEnrollment(siswa.id) || db.prepare('SELECT cabang_id FROM siswa_enrollment WHERE siswa_id=? ORDER BY tanggal_mulai DESC LIMIT 1').get(siswa.id);
@@ -405,7 +405,7 @@ router.post('/:id/foto', auth(['admin', 'admin_cabang']), uploadImage.single('fo
   db.prepare('UPDATE siswa SET foto=?,updated_at=? WHERE id=?').run(url, nowUtc(), siswa.id);
   audit(req.user, 'upload_foto', 'siswa', siswa.id, { cabang_id: access.cabang_id });
   res.json({ url });
-});
+}));
 
 router.delete('/:id/foto', auth(['admin', 'admin_cabang']), (req, res) => {
   const siswa = db.prepare('SELECT * FROM siswa WHERE id=?').get(req.params.id);
