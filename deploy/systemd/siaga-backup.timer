@@ -1,0 +1,15 @@
+[Unit]
+Description=Jalankan backup database SIAGA setiap hari
+
+[Timer]
+# Dini hari, di luar jam operasional sekolah.
+OnCalendar=*-*-* 02:30:00
+# RandomizedDelaySec menghindari lonjakan I/O tepat pada detik yang sama
+# dengan tugas terjadwal lain di VPS.
+RandomizedDelaySec=10min
+# Bila VPS sempat mati saat jadwal terlewat, jalankan segera setelah hidup.
+Persistent=true
+Unit=siaga-backup.service
+
+[Install]
+WantedBy=timers.target

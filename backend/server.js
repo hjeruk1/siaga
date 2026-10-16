@@ -9,7 +9,8 @@ const path = require('path');
 const crypto = require('crypto');
 const pinoHttp = require('pino-http');
 const logger = require('./utils/logger');
-const { runMigrations } = require('./migrate');
+const { runMigrations, pendingMigrations } = require('./migrate');
+const db = require('./db');
 
 // Terapkan migrasi skema sebelum route dimuat. Bila migrasi gagal, proses
 // dihentikan: menjalankan server dengan skema setengah jadi lebih berbahaya
@@ -120,6 +121,40 @@ app.use('/uploads', require('./routes/media'));
 app.get('/api/health', (_req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   res.json({ status: 'ok', time: new Date().toISOString() });
+});
+
+// Liveness di atas hanya membuktikan prosesnya hidup. Endpoint ini memeriksa
+// dependensi nyata (database bisa dibaca, migrasi sudah diterapkan) sehingga
+// cocok dipakai sebagai health check deployment / load balancer.
+app.get('/api/health/ready', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  const checks = { database: 'ok', migrations: 'ok' };
+  let ready = true;
+
+  try {
+    db.prepare('SELECT 1').get();
+  } catch (error) {
+    checks.database = 'error';
+    ready = false;
+    logger.error({ err: error }, 'readiness: database tidak dapat dibaca');
+  }
+
+  try {
+    const pending = pendingMigrations();
+    if (pending.length) {
+      checks.migrations = 'pending';
+      checks.pending = pending;
+      ready = false;
+    }
+  } catch (error) {
+    checks.migrations = 'error';
+    ready = false;
+    logger.error({ err: error }, 'readiness: status migrasi tidak dapat dibaca');
+  }
+
+  res
+    .status(ready ? 200 : 503)
+    .json({ status: ready ? 'ready' : 'unavailable', checks, time: new Date().toISOString() });
 });
 
 app.use('/api/auth', require('./routes/auth'));

@@ -150,6 +150,21 @@ sudo systemctl restart siaga
 curl -I http://127.0.0.1:3999
 ```
 
+Migrasi skema berjalan otomatis saat service start, jadi tidak ada langkah
+tambahan di alur deploy di atas. Untuk menjalankannya manual (mis. sebelum
+mengganti service):
+
+```bash
+sudo -iu siaga
+cd /opt/siaga/app
+npm run db:migrate
+```
+
+Bila migrasi gagal, proses sengaja dihentikan agar server tidak berjalan dengan
+skema setengah jadi. Cek `journalctl -u siaga` untuk melihat migrasi mana yang
+gagal. Set `MIGRATE_ON_START=0` di `/etc/siaga/siaga.env` hanya bila Anda memang
+ingin melewatinya.
+
 Do not run `npm run init` during normal updates. It drops and reseeds production data.
 
 If the app does not recover after an update, inspect logs:
@@ -209,6 +224,57 @@ Restart:
 ```bash
 sudo systemctl restart siaga nginx
 ```
+
+## Backup Otomatis
+
+`scripts/backup.js` sudah lama ada dan menangani `integrity_check` serta retensi,
+tetapi belum ada yang memanggilnya otomatis. Unit systemd di `deploy/systemd/`
+menutup celah itu.
+
+Pasang sekali di server:
+
+```bash
+sudo cp /opt/siaga/app/deploy/systemd/siaga-backup.service /etc/systemd/system/
+sudo cp /opt/siaga/app/deploy/systemd/siaga-backup.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now siaga-backup.timer
+```
+
+Verifikasi:
+
+```bash
+systemctl list-timers siaga-backup.timer --no-pager
+sudo systemctl start siaga-backup.service
+sudo journalctl -u siaga-backup -n 50 --no-pager
+ls -la /var/backups/siaga
+```
+
+Konfigurasi terkait di `/etc/siaga/siaga.env`:
+
+```text
+BACKUP_DIR=/var/backups/siaga
+BACKUP_RETENTION_COUNT=30
+```
+
+Jadwal default: setiap hari 02:30 dengan `RandomizedDelaySec=10min`. Bila VPS
+mati saat jadwal terlewat, `Persistent=true` membuat backup dijalankan segera
+setelah VPS hidup.
+
+Uji pulih dari backup (lakukan di lingkungan uji, bukan produksi):
+
+```bash
+sudo systemctl stop siaga
+sudo cp /var/backups/siaga/siaga-backup-YYYY-MM-DD-HHMMSS.db /opt/siaga/app/backend/siaga.db
+sudo chown siaga:siaga /opt/siaga/app/backend/siaga.db
+sudo systemctl start siaga
+curl -s http://127.0.0.1:3999/api/health/ready
+```
+
+## Health Check
+
+- `GET /api/health` — liveness. Cepat, tanpa akses database.
+- `GET /api/health/ready` — readiness. Memeriksa database bisa dibaca dan semua
+  migrasi sudah diterapkan. Mengembalikan `503` bila belum siap.
 
 ## Safety Notes
 

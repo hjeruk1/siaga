@@ -65,6 +65,7 @@ function assert(label, cond) {
     await check('GET /', '/');
     await check('GET /some/spa/route', '/some/spa/route');
     await check('GET /api/health', '/api/health');
+    await check('GET /api/health/ready', '/api/health/ready');
     await check('GET /api/nonexistent', '/api/nonexistent');
     await check('POST /api/auth/login', '/api/auth/login', {
       method: 'POST',
@@ -77,6 +78,7 @@ function assert(label, cond) {
     ok = assert('SPA route harus HTML', by('GET /some/spa/route')?.ct === 'text/html') && ok;
     ok = assert('SPA route harus 200', by('GET /some/spa/route')?.status === 200) && ok;
     ok = assert('/api/health harus JSON 200', by('GET /api/health')?.ct === 'application/json') && ok;
+    ok = assert('readiness harus 200', by('GET /api/health/ready')?.status === 200) && ok;
     ok = assert('/api/nonexistent harus 404 (bukan HTML)', by('GET /api/nonexistent')?.status === 404) && ok;
     // Di production admin dibuat dengan status 'undangan' + must_change_password,
     // jadi 403 PASSWORD_CHANGE_REQUIRED juga sah untuk kredensial yang benar.

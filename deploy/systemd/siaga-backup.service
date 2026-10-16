@@ -1,0 +1,20 @@
+[Unit]
+Description=SIAGA database backup
+Documentation=file:/opt/siaga/app/docs/siaga-improvement-plan.md
+After=siaga.service
+
+[Service]
+Type=oneshot
+User=siaga
+Group=siaga
+WorkingDirectory=/opt/siaga/app
+EnvironmentFile=/etc/siaga/siaga.env
+ExecStart=/usr/bin/node scripts/backup.js
+
+# Backup online bisa memakan waktu bila database membesar; beri ruang lega
+# tetapi jangan biarkan menggantung tanpa batas.
+TimeoutStartSec=15min
+
+# Backup yang gagal harus terlihat di `systemctl status`, bukan hilang diam-diam.
+StandardOutput=journal
+StandardError=journal

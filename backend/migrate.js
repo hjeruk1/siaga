@@ -40,6 +40,16 @@ function appliedNames() {
   );
 }
 
+// Daftar migrasi yang belum diterapkan. Dipakai readiness check: server yang
+// masih tertinggal migrasi dianggap belum siap menerima trafik.
+function pendingMigrations() {
+  ensureTrackingTable();
+  const applied = appliedNames();
+  return loadMigrations()
+    .filter((migration) => !applied.has(migration.id))
+    .map((migration) => migration.id);
+}
+
 function runMigrations({ silent = false } = {}) {
   ensureTrackingTable();
   const applied = appliedNames();
@@ -68,7 +78,7 @@ function runMigrations({ silent = false } = {}) {
   return done;
 }
 
-module.exports = { runMigrations, MIGRATIONS_DIR };
+module.exports = { runMigrations, pendingMigrations, MIGRATIONS_DIR };
 
 if (require.main === module) {
   try {
