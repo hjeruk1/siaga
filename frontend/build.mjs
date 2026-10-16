@@ -1,11 +1,8 @@
 import { build } from 'vite';
-import react from '@vitejs/plugin-react';
-import tailwindcss from '@tailwindcss/vite';
 import { fileURLToPath } from 'node:url';
 
+// Konfigurasi (plugin, preview) ada di vite.config.js.
+// Vite memuatnya otomatis karena root diarahkan ke direktori ini.
 await build({
-  root: fileURLToPath(new URL('.', import.meta.url)),
-  configFile: false,
-  plugins: [react(), tailwindcss()],
-  preview: { port: 4173, host: '0.0.0.0' }
+  root: fileURLToPath(new URL('.', import.meta.url))
 });

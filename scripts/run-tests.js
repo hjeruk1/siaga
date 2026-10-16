@@ -49,15 +49,24 @@ function stopServer() {
 }
 
 async function waitForServer() {
-  for (let i = 0; i < 80; i++) {
+  // Cold start di Windows (better-sqlite3 + WAL + antivirus) bisa jauh lebih lama
+  // dari 8 detik, yang membuat suite flaky. Beri ruang lega, tetap bisa di-override.
+  const timeoutMs = Number(process.env.TEST_SERVER_TIMEOUT_MS) || 60_000;
+  const deadline = Date.now() + timeoutMs;
+  let lastError = null;
+  while (Date.now() < deadline) {
     if (server.exitCode !== null) throw new Error(`Server test berhenti dengan code ${server.exitCode}`);
     try {
       const response = await fetch(`${env.TEST_URL}/api/health`);
       if (response.ok) return;
-    } catch {}
+    } catch (error) {
+      lastError = error;
+    }
     await new Promise(resolve => setTimeout(resolve, 100));
   }
-  throw new Error('Server test tidak siap dalam 8 detik');
+  throw new Error(
+    `Server test tidak siap dalam ${Math.round(timeoutMs / 1000)} detik (${lastError?.message || 'tanpa respons'})`
+  );
 }
 
 (async () => {

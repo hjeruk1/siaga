@@ -287,8 +287,8 @@ router.put('/:id', auth(['admin', 'admin_cabang', 'kepsek', 'guru']), (req, res)
   if (!checkGuruModulAjarPermission(req, res, before.jenjang_id, before.rombel_id)) return;
 
   const d = req.body || {};
-  const targetJenjangId = d.hasOwnProperty('jenjang_id') ? d.jenjang_id : before.jenjang_id;
-  const targetRombelId = d.hasOwnProperty('rombel_id') ? d.rombel_id : before.rombel_id;
+  const targetJenjangId = Object.hasOwn(d, 'jenjang_id') ? d.jenjang_id : before.jenjang_id;
+  const targetRombelId = Object.hasOwn(d, 'rombel_id') ? d.rombel_id : before.rombel_id;
 
   const cabangId = scopeCabang(req, d.cabang_id || before.cabang_id);
   if (!d.title || !d.week_start || !d.week_end) return res.status(400).json({ error: 'Judul, minggu mulai, dan minggu selesai wajib' });

@@ -20,6 +20,8 @@ jobs:
         run: npm ci --prefix backend
       - name: Install frontend dependencies
         run: npm ci --prefix frontend
+      - name: Lint
+        run: npm run lint
       - name: Run test suite
         run: node scripts/run-tests.js main
       - name: Build frontend

@@ -1,0 +1,10 @@
+node_modules
+dist
+backend/uploads
+backups
+scratch
+docs
+.workbuddy-ai
+package-lock.json
+backend/package-lock.json
+frontend/package-lock.json
