@@ -128,6 +128,47 @@ sudo systemctl status siaga --no-pager
 sudo journalctl -u siaga -n 100 --no-pager
 ```
 
+### Berkas konfigurasi yang kini ada di repo
+
+Sebelum ini konfigurasi Nginx dan unit `siaga.service` hanya ada di server —
+tidak bisa ditinjau, tidak punya riwayat perubahan, dan tidak bisa
+direproduksi bila VPS dibangun ulang. Sekarang keduanya masuk repo:
+
+| Berkas di repo | Dipasang ke server |
+|---|---|
+| `deploy/systemd/siaga.service` | `/etc/systemd/system/siaga.service` |
+| `deploy/nginx/siaga.conf` | `/etc/nginx/sites-available/siaga.conf` |
+| `deploy/nginx/proxy_params.conf` | `/etc/nginx/siaga/proxy_params.conf` |
+| `deploy/systemd/siaga-backup.{service,timer}` | `/etc/systemd/system/` |
+| `deploy/systemd/siaga-maintenance.{service,timer}` | `/etc/systemd/system/` |
+
+Pemasangan Nginx (sesuaikan bila direktori distribusi Anda berbeda):
+
+```bash
+sudo mkdir -p /etc/nginx/siaga
+sudo cp /opt/siaga/app/deploy/nginx/proxy_params.conf /etc/nginx/siaga/
+sudo cp /opt/siaga/app/deploy/nginx/siaga.conf /etc/nginx/sites-available/siaga.conf
+sudo ln -sf /etc/nginx/sites-available/siaga.conf /etc/nginx/sites-enabled/siaga.conf
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+`siaga.conf` memuat tiga hal yang mudah terlewat dan berdampak nyata:
+
+- **Stream SSE tidak boleh di-buffer.** `/api/absensi/stream` dilayani dengan
+  `proxy_buffering off` dan `proxy_read_timeout 1h`. Tanpa itu, Nginx menahan
+  respons sampai buffer penuh dan aliran absensi real-time mati diam-diam.
+- **`index.html` tidak di-cache** (`no-cache`), sedangkan aset di `/assets/`
+  di-cache setahun karena namanya sudah ber-hash oleh Vite. Tanpa pemisahan ini,
+  hasil deploy bisa tidak terlihat.
+- **`client_max_body_size 10m`**, di atas batas unggahan multer (5 MB per foto).
+  Tanpa itu, unggahan foto ditolak Nginx sebelum sampai ke aplikasi dan pesan
+  errornya membingungkan.
+
+Pastikan `TRUST_PROXY=true` ada di `/etc/siaga/siaga.env`. Tanpa itu semua
+request tampak berasal dari `127.0.0.1`, sehingga pembatasan percobaan login
+kehilangan nilai — penyerang yang tersebar tetap terhitung satu IP.
+
 Deploy latest code safely:
 
 ```bash

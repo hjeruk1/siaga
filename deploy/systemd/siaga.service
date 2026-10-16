@@ -1,0 +1,33 @@
+[Unit]
+Description=SIAGA Backend
+Documentation=file:/opt/siaga/app/docs/siaga-improvement-plan.md
+After=network.target
+
+[Service]
+Type=simple
+User=siaga
+Group=siaga
+WorkingDirectory=/opt/siaga/app
+
+# Seluruh konfigurasi ada di satu berkas: JWT_SECRET, NODE_ENV, FRONTEND_URL,
+# TRUST_PROXY, batas retensi, dan kredensial GCS.
+EnvironmentFile=/etc/siaga/siaga.env
+
+# Migrasi skema berjalan saat proses ini start, SEBELUM route dimuat. Bila
+# migrasi gagal, proses keluar dengan kode 1 — server dengan skema setengah jadi
+# lebih berbahaya daripada tidak jalan sama sekali. Lihat backend/server.js.
+ExecStart=/usr/bin/node backend/server.js
+
+Restart=always
+# Jeda 5 detik. systemd akan berhenti mencoba setelah beberapa kegagalan
+# beruntun dan menandai unit gagal, supaya kegagalan berulang terlihat di
+# `systemctl status` alih-alih restart tanpa henti.
+RestartSec=5
+
+# pino menulis log terstruktur ke stdout/stderr; journald yang mengelolanya.
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=siaga
+
+[Install]
+WantedBy=multi-user.target
