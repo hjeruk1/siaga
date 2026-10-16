@@ -17,5 +17,20 @@ export default defineConfig({
   preview: {
     port: 4173,
     host: '0.0.0.0'
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        // Pisahkan React dari kode aplikasi. React berubah jarang, kode aplikasi
+        // sering — tanpa pemisahan ini setiap deploy memaksa pengguna mengunduh
+        // ulang React. Efeknya terasa setelah React 19 menambah ~79 kB pada
+        // bundle utama.
+        manualChunks(id) {
+          if (id.includes('node_modules/react') || id.includes('node_modules/scheduler')) {
+            return 'react-vendor';
+          }
+        }
+      }
+    }
   }
 });
