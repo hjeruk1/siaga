@@ -6,7 +6,6 @@ const fs = require('fs');
 const db = require('../db');
 const auth = require('../middleware/auth');
 const { uploadImage, saveSquareJpeg, ensureDir } = require('../utils/image-upload');
-const asyncRoute = require('../utils/async-route');
 const { nowUtc, audit, requireCabang, requireActiveCabang } = require('../utils/workflow');
 
 const FOTO_DIR = path.join(__dirname, '../uploads/foto');
@@ -414,33 +413,28 @@ router.put('/wali/:id', auth(['admin', 'admin_cabang']), (req, res) => {
   }
 });
 
-router.post(
-  '/staff/:id/foto',
-  auth(['admin', 'admin_cabang']),
-  uploadImage.single('foto'),
-  asyncRoute(async (req, res) => {
-    const user = db
-      .prepare(
-        "SELECT p.*,sp.cabang_id,sp.foto FROM pengguna p JOIN staff_profile sp ON sp.pengguna_id=p.id WHERE p.id=? AND p.tipe='staff'"
-      )
-      .get(req.params.id);
-    if (!user) return res.status(404).json({ error: 'Staff tidak ditemukan' });
-    if (!canManageRole(req.user, user.role, user.cabang_id)) return res.status(403).json({ error: 'Akses ditolak' });
-    if (!req.file) return res.status(400).json({ error: 'File foto wajib' });
-    if (user.foto) {
-      try {
-        fs.unlinkSync(path.join(FOTO_DIR, path.basename(user.foto)));
-      } catch {}
-    }
-    const filename = `staff-${user.id}-${Date.now()}.jpg`;
-    const outPath = path.join(FOTO_DIR, filename);
-    await saveSquareJpeg(req.file.buffer, outPath);
-    const url = `/uploads/foto/${filename}`;
-    db.prepare('UPDATE staff_profile SET foto=? WHERE pengguna_id=?').run(url, user.id);
-    audit(req.user, 'upload_foto', 'pengguna', user.id, { cabang_id: user.cabang_id });
-    res.json({ url });
-  })
-);
+router.post('/staff/:id/foto', auth(['admin', 'admin_cabang']), uploadImage.single('foto'), async (req, res) => {
+  const user = db
+    .prepare(
+      "SELECT p.*,sp.cabang_id,sp.foto FROM pengguna p JOIN staff_profile sp ON sp.pengguna_id=p.id WHERE p.id=? AND p.tipe='staff'"
+    )
+    .get(req.params.id);
+  if (!user) return res.status(404).json({ error: 'Staff tidak ditemukan' });
+  if (!canManageRole(req.user, user.role, user.cabang_id)) return res.status(403).json({ error: 'Akses ditolak' });
+  if (!req.file) return res.status(400).json({ error: 'File foto wajib' });
+  if (user.foto) {
+    try {
+      fs.unlinkSync(path.join(FOTO_DIR, path.basename(user.foto)));
+    } catch {}
+  }
+  const filename = `staff-${user.id}-${Date.now()}.jpg`;
+  const outPath = path.join(FOTO_DIR, filename);
+  await saveSquareJpeg(req.file.buffer, outPath);
+  const url = `/uploads/foto/${filename}`;
+  db.prepare('UPDATE staff_profile SET foto=? WHERE pengguna_id=?').run(url, user.id);
+  audit(req.user, 'upload_foto', 'pengguna', user.id, { cabang_id: user.cabang_id });
+  res.json({ url });
+});
 
 router.delete('/staff/:id/foto', auth(['admin', 'admin_cabang']), (req, res) => {
   const user = db

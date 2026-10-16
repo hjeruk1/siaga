@@ -86,10 +86,21 @@ app.use('/api/notifikasi', require('./routes/notifikasi'));
 app.use('/api/billing', require('./routes/billing'));
 app.use('/api/rekap', require('./routes/rekap'));
 
+// 404 JSON untuk endpoint API yang tidak dikenal. Tanpa ini Express mengirim
+// halaman HTML default, yang membingungkan klien API.
+app.use('/api', (_req, res) => res.status(404).json({ error: 'Endpoint tidak ditemukan' }));
+
 if (process.env.NODE_ENV === 'production') {
   const dist = path.join(__dirname, '../frontend/dist');
   app.use(express.static(dist));
-  app.get('*', (_req, res) => res.sendFile(path.join(dist, 'index.html')));
+  // SPA fallback. Express 5 (path-to-regexp v8) tidak lagi menerima '*' sebagai
+  // pola route, jadi dipakai middleware biasa. Hanya GET/HEAD non-API yang
+  // dilayani index.html; /api/* dan /uploads/* yang tidak dikenal tetap 404.
+  app.use((req, res, next) => {
+    if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+    if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) return next();
+    res.sendFile(path.join(dist, 'index.html'));
+  });
 }
 
 app.use((err, _req, res, _next) => {

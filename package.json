@@ -8,6 +8,7 @@
     "start": "node backend/server.js",
     "init": "node backend/init.js",
     "smoke": "node scripts/smoke.js",
+    "smoke:prod": "node scripts/prod-smoke.js",
     "test": "node scripts/run-tests.js main",
     "test:workflow": "node scripts/run-tests.js workflow",
     "db:backup": "node scripts/backup.js",

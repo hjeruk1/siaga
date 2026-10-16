@@ -5,7 +5,6 @@ const fs = require('fs');
 const db = require('../db');
 const auth = require('../middleware/auth');
 const { uploadImage, saveSquareJpeg, ensureDir } = require('../utils/image-upload');
-const asyncRoute = require('../utils/async-route');
 const {
   nowUtc,
   todayWIB,
@@ -595,35 +594,30 @@ router.post('/kenaikan', auth(['admin', 'admin_cabang']), (req, res) => {
   }
 });
 
-router.post(
-  '/:id/foto',
-  auth(['admin', 'admin_cabang']),
-  uploadImage.single('foto'),
-  asyncRoute(async (req, res) => {
-    const siswa = db.prepare('SELECT * FROM siswa WHERE id=?').get(req.params.id);
-    if (!siswa) return res.status(404).json({ error: 'Siswa tidak ditemukan' });
-    const access =
-      activeEnrollment(siswa.id) ||
-      db
-        .prepare('SELECT cabang_id FROM siswa_enrollment WHERE siswa_id=? ORDER BY tanggal_mulai DESC LIMIT 1')
-        .get(siswa.id);
-    if (!access) return res.status(404).json({ error: 'Enrollment tidak ditemukan' });
-    if (!requireCabang(req, res, access.cabang_id)) return;
-    if (!req.file) return res.status(400).json({ error: 'File foto wajib' });
-    if (siswa.foto) {
-      try {
-        fs.unlinkSync(path.join(FOTO_DIR, siswa.foto));
-      } catch {}
-    }
-    const filename = `siswa-${siswa.id}-${Date.now()}.jpg`;
-    const outPath = path.join(FOTO_DIR, filename);
-    await saveSquareJpeg(req.file.buffer, outPath);
-    const url = `/uploads/foto/${filename}`;
-    db.prepare('UPDATE siswa SET foto=?,updated_at=? WHERE id=?').run(url, nowUtc(), siswa.id);
-    audit(req.user, 'upload_foto', 'siswa', siswa.id, { cabang_id: access.cabang_id });
-    res.json({ url });
-  })
-);
+router.post('/:id/foto', auth(['admin', 'admin_cabang']), uploadImage.single('foto'), async (req, res) => {
+  const siswa = db.prepare('SELECT * FROM siswa WHERE id=?').get(req.params.id);
+  if (!siswa) return res.status(404).json({ error: 'Siswa tidak ditemukan' });
+  const access =
+    activeEnrollment(siswa.id) ||
+    db
+      .prepare('SELECT cabang_id FROM siswa_enrollment WHERE siswa_id=? ORDER BY tanggal_mulai DESC LIMIT 1')
+      .get(siswa.id);
+  if (!access) return res.status(404).json({ error: 'Enrollment tidak ditemukan' });
+  if (!requireCabang(req, res, access.cabang_id)) return;
+  if (!req.file) return res.status(400).json({ error: 'File foto wajib' });
+  if (siswa.foto) {
+    try {
+      fs.unlinkSync(path.join(FOTO_DIR, siswa.foto));
+    } catch {}
+  }
+  const filename = `siswa-${siswa.id}-${Date.now()}.jpg`;
+  const outPath = path.join(FOTO_DIR, filename);
+  await saveSquareJpeg(req.file.buffer, outPath);
+  const url = `/uploads/foto/${filename}`;
+  db.prepare('UPDATE siswa SET foto=?,updated_at=? WHERE id=?').run(url, nowUtc(), siswa.id);
+  audit(req.user, 'upload_foto', 'siswa', siswa.id, { cabang_id: access.cabang_id });
+  res.json({ url });
+});
 
 router.delete('/:id/foto', auth(['admin', 'admin_cabang']), (req, res) => {
   const siswa = db.prepare('SELECT * FROM siswa WHERE id=?').get(req.params.id);

@@ -4,7 +4,6 @@ const fs = require('fs');
 const db = require('../db');
 const auth = require('../middleware/auth');
 const { uploadImage, saveSquareJpeg, ensureDir } = require('../utils/image-upload');
-const asyncRoute = require('../utils/async-route');
 const {
   nowUtc,
   todayWIB,
@@ -419,7 +418,7 @@ router.post(
   '/:id/attachments',
   auth(['guru', 'admin', 'admin_cabang']),
   uploadImage.single('foto'),
-  asyncRoute(async (req, res) => {
+  async (req, res) => {
     const l = db.prepare('SELECT * FROM laporan_harian WHERE id=?').get(req.params.id);
     if (!l) return res.status(404).json({ error: 'Daily record tidak ditemukan' });
     const access = canAccessSiswa(req.user, l.siswa_id, { tanggal: l.tanggal });
@@ -448,7 +447,7 @@ router.post(
       );
     audit(req.user, 'add_attachment', 'laporan_attachment', r.lastInsertRowid, { cabang_id: l.cabang_id });
     res.json({ id: r.lastInsertRowid, url });
-  })
+  }
 );
 
 router.delete('/:id/attachments/:attachmentId', auth(['guru', 'admin', 'admin_cabang']), (req, res) => {
