@@ -9,7 +9,7 @@ app.disable('x-powered-by');
 if (process.env.TRUST_PROXY) app.set('trust proxy', process.env.TRUST_PROXY === 'true' ? 1 : process.env.TRUST_PROXY);
 const allowedOrigins = (process.env.FRONTEND_URL || '')
   .split(',')
-  .map(origin => origin.trim())
+  .map((origin) => origin.trim())
   .filter(Boolean);
 if (process.env.NODE_ENV === 'production' && allowedOrigins.length) {
   // CORS hanya untuk API. Aset statis tidak perlu CORS: browser mengirim Origin
@@ -33,7 +33,10 @@ app.use((_req, res, next) => {
   res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
   if (process.env.NODE_ENV === 'production') {
     res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
-    res.setHeader('Content-Security-Policy', "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
+    res.setHeader(
+      'Content-Security-Policy',
+      "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+    );
   }
   next();
 });

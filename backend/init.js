@@ -9,17 +9,52 @@ if (process.env.NODE_ENV === 'production' && !process.env.ADMIN_PASSWORD) {
   process.exit(1);
 }
 if (process.env.NODE_ENV !== 'test' && process.env.RESET_DATABASE_CONFIRM !== 'HAPUS_DATABASE_SIAGA') {
-  console.error('Init dibatalkan. Set RESET_DATABASE_CONFIRM=HAPUS_DATABASE_SIAGA untuk menghapus dan membuat ulang database.');
+  console.error(
+    'Init dibatalkan. Set RESET_DATABASE_CONFIRM=HAPUS_DATABASE_SIAGA untuk menghapus dan membuat ulang database.'
+  );
   process.exit(1);
 }
 
 const tables = [
-  'invoice_item','invoice','pembayaran_alokasi','pembayaran','tagihan','diskon_siswa','biaya_tarif',
-  'audit_log','notifikasi','laporan_comment','laporan_read','laporan_attachment','laporan_edit_log',
-  'laporan_harian','absensi','kalender_event','operasional_config','penjemput','guru_rombel',
-  'wali_siswa','siswa_enrollment','siswa','wali_profile','staff_profile','pengguna','rombel',
-  'jenjang','cabang','sequence_counter','organisasi','early_release','tutup_hari','penjemputan_log',
-  'qr_reissue_log','nfc_scan_log','modul_ajar','focus_theme','kenaikan_batch','saldo_kredit'
+  'invoice_item',
+  'invoice',
+  'pembayaran_alokasi',
+  'pembayaran',
+  'tagihan',
+  'diskon_siswa',
+  'biaya_tarif',
+  'audit_log',
+  'notifikasi',
+  'laporan_comment',
+  'laporan_read',
+  'laporan_attachment',
+  'laporan_edit_log',
+  'laporan_harian',
+  'absensi',
+  'kalender_event',
+  'operasional_config',
+  'penjemput',
+  'guru_rombel',
+  'wali_siswa',
+  'siswa_enrollment',
+  'siswa',
+  'wali_profile',
+  'staff_profile',
+  'pengguna',
+  'rombel',
+  'jenjang',
+  'cabang',
+  'sequence_counter',
+  'organisasi',
+  'early_release',
+  'tutup_hari',
+  'penjemputan_log',
+  'qr_reissue_log',
+  'nfc_scan_log',
+  'modul_ajar',
+  'focus_theme',
+  'kenaikan_batch',
+  'saldo_kredit'
 ];
 
 db.exec('PRAGMA foreign_keys = OFF');
@@ -51,7 +86,9 @@ for (const j of jenjangSeed) insertJenjang.run(j[0], j[1], j[2], j[3]);
 
 const cabang = freshDb.prepare('SELECT * FROM cabang').all();
 const jenjang = freshDb.prepare('SELECT * FROM jenjang ORDER BY urutan').all();
-const insertRombel = freshDb.prepare('INSERT INTO rombel(cabang_id,jenjang_id,nama,created_at,updated_at) VALUES(?,?,?,?,?)');
+const insertRombel = freshDb.prepare(
+  'INSERT INTO rombel(cabang_id,jenjang_id,nama,created_at,updated_at) VALUES(?,?,?,?,?)'
+);
 const insertCfg = freshDb.prepare(`INSERT INTO operasional_config
   (cabang_id,jenjang_id,paket,jam_masuk,jam_pulang,hitung_terlambat,pakai_kalender,daily_record_wajib,daily_record_due_time,pickup_fleksibel)
   VALUES(?,?,?,?,?,?,?,?,?,?)`);
@@ -69,20 +106,19 @@ for (const cb of cabang) {
 
 const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
 const testMode = process.env.NODE_ENV === 'test';
-const r = freshDb.prepare(`INSERT INTO pengguna
+const r = freshDb
+  .prepare(
+    `INSERT INTO pengguna
   (tipe,role,display_name,username,password_hash,status,must_change_password,created_at,updated_at)
-  VALUES('staff','admin','Admin Pusat','admin',?,?,?,?,?)`)
-  .run(
-    bcrypt.hashSync(adminPassword, 10),
-    testMode ? 'aktif' : 'undangan',
-    testMode ? 0 : 1,
-    now(),
-    now(),
-  );
-freshDb.prepare('INSERT INTO staff_profile(pengguna_id,cabang_id,jabatan) VALUES(?,?,?)')
+  VALUES('staff','admin','Admin Pusat','admin',?,?,?,?,?)`
+  )
+  .run(bcrypt.hashSync(adminPassword, 10), testMode ? 'aktif' : 'undangan', testMode ? 0 : 1, now(), now());
+freshDb
+  .prepare('INSERT INTO staff_profile(pengguna_id,cabang_id,jabatan) VALUES(?,?,?)')
   .run(r.lastInsertRowid, null, 'Admin Pusat');
 
 console.log('\nSIAGA database initialized.');
-console.log('Cabang: ' + cabangSeed.map(x => x[0]).join(', '));
+console.log('Cabang: ' + cabangSeed.map((x) => x[0]).join(', '));
 console.log('Admin pusat: admin / ' + adminPassword);
-if (!process.env.ADMIN_PASSWORD) console.log('DEV WARNING: using fallback admin password. Set ADMIN_PASSWORD for production.');
+if (!process.env.ADMIN_PASSWORD)
+  console.log('DEV WARNING: using fallback admin password. Set ADMIN_PASSWORD for production.');

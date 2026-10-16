@@ -16,12 +16,15 @@ function req(method, path, body) {
     if (token) headers['Authorization'] = 'Bearer ' + token;
     const data = body ? JSON.stringify(body) : undefined;
     if (data) headers['Content-Length'] = Buffer.byteLength(data);
-    const r = http.request(url, { method, headers }, res => {
+    const r = http.request(url, { method, headers }, (res) => {
       let d = '';
-      res.on('data', c => d += c);
+      res.on('data', (c) => (d += c));
       res.on('end', () => {
-        try { resolve({ status: res.statusCode, headers: res.headers, body: JSON.parse(d) }); }
-        catch { resolve({ status: res.statusCode, headers: res.headers, body: d }); }
+        try {
+          resolve({ status: res.statusCode, headers: res.headers, body: JSON.parse(d) });
+        } catch {
+          resolve({ status: res.statusCode, headers: res.headers, body: d });
+        }
       });
     });
     r.on('error', reject);
@@ -37,9 +40,9 @@ function reqBuffer(method, path, body) {
     if (token) headers['Authorization'] = 'Bearer ' + token;
     const data = body ? JSON.stringify(body) : undefined;
     if (data) headers['Content-Length'] = Buffer.byteLength(data);
-    const r = http.request(url, { method, headers }, res => {
+    const r = http.request(url, { method, headers }, (res) => {
       const chunks = [];
-      res.on('data', c => chunks.push(c));
+      res.on('data', (c) => chunks.push(c));
       res.on('end', () => {
         resolve({
           status: res.statusCode,
@@ -58,10 +61,7 @@ function assertBrandedPdf(pdf, label) {
   assert.equal(pdf.status, 200, `${label} PDF should be returned`);
   assert.match(pdf.headers['content-type'] || '', /application\/pdf/);
   assert.ok(pdf.body.length > 1000, `${label} PDF should not be empty`);
-  assert.ok(
-    pdf.body.includes(Buffer.from('/Subtype /Image')),
-    `${label} PDF should embed the Taruna Prima logo image`
-  );
+  assert.ok(pdf.body.includes(Buffer.from('/Subtype /Image')), `${label} PDF should embed the Taruna Prima logo image`);
   assert.ok(
     pdf.body.includes(Buffer.from(`SIAGA ${label}`)),
     `${label} PDF should include official SIAGA document metadata`
@@ -70,7 +70,10 @@ function assertBrandedPdf(pdf, label) {
 
 describe('SIAGA API Tests', () => {
   before(async () => {
-    const r = await req('POST', '/api/auth/login', { username: 'admin', password: process.env.TEST_ADMIN_PASSWORD || 'admin123' });
+    const r = await req('POST', '/api/auth/login', {
+      username: 'admin',
+      password: process.env.TEST_ADMIN_PASSWORD || 'admin123'
+    });
     assert.equal(r.status, 200, 'Login should succeed');
     token = r.body.token;
     adminToken = token;
@@ -182,7 +185,10 @@ describe('SIAGA API Tests', () => {
 
       const list = await req('GET', '/api/pengguna?cabang_id=1');
       assert.equal(list.status, 200);
-      assert.equal(list.body.some(s => s.username === username), false);
+      assert.equal(
+        list.body.some((s) => s.username === username),
+        false
+      );
     });
   });
 
@@ -250,12 +256,12 @@ describe('SIAGA API Tests', () => {
     it('GET /api/absensi/stream connects using the HttpOnly media cookie', () => {
       return new Promise((resolve, reject) => {
         const url = new URL('/api/absensi/stream', BASE);
-        const reqStream = http.request(url, { method: 'GET', headers: { Cookie: mediaCookie } }, res => {
+        const reqStream = http.request(url, { method: 'GET', headers: { Cookie: mediaCookie } }, (res) => {
           assert.equal(res.statusCode, 200);
           assert.equal(res.headers['content-type'], 'text/event-stream');
           assert.equal(res.headers['connection'], 'keep-alive');
 
-          res.on('data', chunk => {
+          res.on('data', (chunk) => {
             const dataStr = chunk.toString();
             if (dataStr.includes('connected')) {
               reqStream.destroy();
@@ -271,7 +277,7 @@ describe('SIAGA API Tests', () => {
     it('GET /api/absensi/stream rejects query-string tokens', async () => {
       return new Promise((resolve, reject) => {
         const url = new URL('/api/absensi/stream?token=' + token, BASE);
-        const reqStream = http.request(url, { method: 'GET' }, res => {
+        const reqStream = http.request(url, { method: 'GET' }, (res) => {
           assert.equal(res.statusCode, 401);
           res.on('data', () => {});
           res.on('end', () => {
@@ -299,8 +305,10 @@ describe('SIAGA API Tests', () => {
 
       if (!dashboard.body.libur && rows.length > 0) {
         const counts = dashboard.body.statusCounts;
-        const total = ['hadir', 'terlambat', 'menunggu', 'pulang', 'izin', 'sakit', 'absen', 'belum']
-          .reduce((sum, key) => sum + Number(counts[key] || 0), 0);
+        const total = ['hadir', 'terlambat', 'menunggu', 'pulang', 'izin', 'sakit', 'absen', 'belum'].reduce(
+          (sum, key) => sum + Number(counts[key] || 0),
+          0
+        );
         assert.equal(total, rows.length);
         assert.equal(dashboard.body.statusRows.length, rows.length);
       }
@@ -368,7 +376,10 @@ describe('SIAGA API Tests', () => {
     });
 
     it('POST /api/billing/generate-kegiatan/preview returns preview', async () => {
-      const r = await req('POST', '/api/billing/generate-kegiatan/preview', { cabang_id: 1, tahun_ajaran: '2026/2027' });
+      const r = await req('POST', '/api/billing/generate-kegiatan/preview', {
+        cabang_id: 1,
+        tahun_ajaran: '2026/2027'
+      });
       assert.equal(r.status, 200);
       assert.ok(r.body.preview);
     });
@@ -415,7 +426,7 @@ describe('SIAGA API Tests', () => {
 
       const list = await req('GET', '/api/billing/pembayaran?cabang_id=1');
       assert.equal(list.status, 200);
-      const row = list.body.find(p => p.id === created.body.id);
+      const row = list.body.find((p) => p.id === created.body.id);
       assert.ok(row);
       assert.ok('allocated_amount' in row);
       assert.ok('credit_amount' in row);
@@ -447,7 +458,7 @@ describe('SIAGA API Tests', () => {
 
       const list = await req('GET', '/api/billing/diskon?cabang_id=1&tahun_ajaran=2026%2F2027');
       assert.equal(list.status, 200);
-      const row = list.body.find(d => d.id === created.body.id);
+      const row = list.body.find((d) => d.id === created.body.id);
       assert.ok(row);
       assert.equal(row.tipe, 'persen');
       assert.equal(Number(row.nilai), 10);

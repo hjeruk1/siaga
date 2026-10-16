@@ -42,7 +42,6 @@ async function extractTextFromBuffer(buffer, originalname) {
   throw new Error('Format file tidak didukung untuk parsing');
 }
 
-
 function parseJson(v, fallback = []) {
   if (Array.isArray(v)) return v;
   try {
@@ -56,7 +55,7 @@ function parseJson(v, fallback = []) {
 function parseSuggestedActivities(v) {
   let parsed = {};
   try {
-    parsed = typeof v === 'string' ? JSON.parse(v || '{}') : (v || {});
+    parsed = typeof v === 'string' ? JSON.parse(v || '{}') : v || {};
   } catch {}
 
   if (Array.isArray(parsed)) {
@@ -65,7 +64,7 @@ function parseSuggestedActivities(v) {
 
   const result = {};
   const DAYS = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
-  DAYS.forEach(day => {
+  DAYS.forEach((day) => {
     const dayData = parsed[day] || {};
     result[day] = {
       opening: Array.isArray(dayData.opening) ? dayData.opening.filter(Boolean) : [],
@@ -104,12 +103,16 @@ function scopeCabang(req, explicitCabangId) {
 function checkGuruModulAjarPermission(req, res, jenjangId, rombelId) {
   if (req.user.role !== 'guru') return true;
 
-  const leadRombels = db.prepare(`
+  const leadRombels = db
+    .prepare(
+      `
     SELECT r.id, r.jenjang_id
     FROM guru_rombel gr
     JOIN rombel r ON r.id = gr.rombel_id
     WHERE gr.pengguna_id = ? AND gr.role = 'utama' AND r.cabang_id = ?
-  `).all(req.user.id, req.user.cabang_id);
+  `
+    )
+    .all(req.user.id, req.user.cabang_id);
 
   if (leadRombels.length === 0) {
     res.status(403).json({ error: 'Akses ditolak: Anda bukan guru utama' });
@@ -125,7 +128,7 @@ function checkGuruModulAjarPermission(req, res, jenjangId, rombelId) {
   }
 
   if (targetJenjangId) {
-    const isLeadForJenjang = leadRombels.some(r => Number(r.jenjang_id) === Number(targetJenjangId));
+    const isLeadForJenjang = leadRombels.some((r) => Number(r.jenjang_id) === Number(targetJenjangId));
     if (!isLeadForJenjang) {
       res.status(403).json({ error: 'Akses ditolak: Anda bukan guru utama untuk jenjang ini' });
       return false;
@@ -150,17 +153,22 @@ function canUseRombel(req, res, rombelId, cabangId = null) {
   if (!requireCabang(req, res, rombel.cabang_id)) return null;
   if (req.user.role === 'guru') {
     // Check direct assignment
-    const assigned = db.prepare('SELECT 1 FROM guru_rombel WHERE pengguna_id=? AND rombel_id=?')
+    const assigned = db
+      .prepare('SELECT 1 FROM guru_rombel WHERE pengguna_id=? AND rombel_id=?')
       .get(req.user.id, rombel.id);
     if (!assigned) {
       // Check if they are a guru utama in the same jenjang (in the same cabang)
-      const leadInSameJenjang = db.prepare(`
+      const leadInSameJenjang = db
+        .prepare(
+          `
         SELECT 1
         FROM guru_rombel gr
         JOIN rombel r ON r.id = gr.rombel_id
         WHERE gr.pengguna_id = ? AND gr.role = 'utama' AND r.jenjang_id = ? AND r.cabang_id = ?
-      `).get(req.user.id, rombel.jenjang_id, rombel.cabang_id);
-      
+      `
+        )
+        .get(req.user.id, rombel.jenjang_id, rombel.cabang_id);
+
       if (!leadInSameJenjang) {
         res.status(403).json({ error: 'Guru tidak ditugaskan di rombel ini dan bukan guru utama di jenjang ini' });
         return null;
@@ -226,7 +234,9 @@ router.get('/', auth(['admin', 'admin_cabang', 'kepsek', 'guru']), (req, res) =>
     params.push(req.query.tanggal, req.query.tanggal);
   }
 
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(
+      `
     SELECT m.*,c.nama AS cabang_nama,j.nama AS jenjang_nama,r.nama AS rombel_nama,
            p.display_name AS created_by_name
     FROM modul_ajar m
@@ -236,15 +246,18 @@ router.get('/', auth(['admin', 'admin_cabang', 'kepsek', 'guru']), (req, res) =>
     LEFT JOIN pengguna p ON p.id=m.created_by
     ${where}
     ORDER BY m.week_start DESC,m.id DESC
-  `).all(...params);
+  `
+    )
+    .all(...params);
   res.json(rows.map(moduleRow));
 });
 
 router.post('/', auth(['admin', 'admin_cabang', 'kepsek', 'guru']), (req, res) => {
   const d = req.body || {};
   const cabangId = scopeCabang(req, d.cabang_id);
-  if (!d.title || !d.week_start || !d.week_end) return res.status(400).json({ error: 'Judul, minggu mulai, dan minggu selesai wajib' });
-  
+  if (!d.title || !d.week_start || !d.week_end)
+    return res.status(400).json({ error: 'Judul, minggu mulai, dan minggu selesai wajib' });
+
   const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
   if (!dateRegex.test(d.week_start) || !dateRegex.test(d.week_end)) {
     return res.status(400).json({ error: 'Format tanggal minggu mulai atau selesai tidak valid (wajib YYYY-MM-DD)' });
@@ -256,26 +269,30 @@ router.post('/', auth(['admin', 'admin_cabang', 'kepsek', 'guru']), (req, res) =
   if (!validateModulAjarScope(req, res, cabangId, d.jenjang_id, d.rombel_id)) return;
 
   const now = nowUtc();
-  const r = db.prepare(`
+  const r = db
+    .prepare(
+      `
     INSERT INTO modul_ajar
       (cabang_id,jenjang_id,rombel_id,paket,title,week_start,week_end,goals,suggested_activities,suggested_domains,attachment_url,created_by,created_at,updated_at)
     VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-  `).run(
-    cabangId,
-    d.jenjang_id || null,
-    d.rombel_id || null,
-    d.paket || null,
-    d.title,
-    d.week_start,
-    d.week_end,
-    jsonArray(d.goals),
-    jsonArray(d.suggested_activities),
-    jsonArray(d.suggested_domains),
-    d.attachment_url || null,
-    req.user.id,
-    now,
-    now
-  );
+  `
+    )
+    .run(
+      cabangId,
+      d.jenjang_id || null,
+      d.rombel_id || null,
+      d.paket || null,
+      d.title,
+      d.week_start,
+      d.week_end,
+      jsonArray(d.goals),
+      jsonArray(d.suggested_activities),
+      jsonArray(d.suggested_domains),
+      d.attachment_url || null,
+      req.user.id,
+      now,
+      now
+    );
   audit(req.user, 'create', 'modul_ajar', r.lastInsertRowid, { cabang_id: cabangId, after: d });
   res.json({ id: r.lastInsertRowid });
 });
@@ -291,8 +308,9 @@ router.put('/:id', auth(['admin', 'admin_cabang', 'kepsek', 'guru']), (req, res)
   const targetRombelId = Object.hasOwn(d, 'rombel_id') ? d.rombel_id : before.rombel_id;
 
   const cabangId = scopeCabang(req, d.cabang_id || before.cabang_id);
-  if (!d.title || !d.week_start || !d.week_end) return res.status(400).json({ error: 'Judul, minggu mulai, dan minggu selesai wajib' });
-  
+  if (!d.title || !d.week_start || !d.week_end)
+    return res.status(400).json({ error: 'Judul, minggu mulai, dan minggu selesai wajib' });
+
   const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
   if (!dateRegex.test(d.week_start) || !dateRegex.test(d.week_end)) {
     return res.status(400).json({ error: 'Format tanggal minggu mulai atau selesai tidak valid (wajib YYYY-MM-DD)' });
@@ -303,12 +321,14 @@ router.put('/:id', auth(['admin', 'admin_cabang', 'kepsek', 'guru']), (req, res)
   if (!checkGuruModulAjarPermission(req, res, targetJenjangId, targetRombelId)) return;
   if (!validateModulAjarScope(req, res, cabangId, targetJenjangId, targetRombelId)) return;
 
-  db.prepare(`
+  db.prepare(
+    `
     UPDATE modul_ajar
     SET cabang_id=?,jenjang_id=?,rombel_id=?,paket=?,title=?,week_start=?,week_end=?,
         goals=?,suggested_activities=?,suggested_domains=?,attachment_url=?,updated_at=?
     WHERE id=?
-  `).run(
+  `
+  ).run(
     cabangId,
     targetJenjangId || null,
     targetRombelId || null,
@@ -333,22 +353,28 @@ router.get('/focus-theme', auth(['admin', 'admin_cabang', 'kepsek', 'guru']), (r
   const rombel = canUseRombel(req, res, rombel_id);
   if (!rombel) return;
 
-  const row = db.prepare(`
+  const row = db
+    .prepare(
+      `
     SELECT ft.*,m.title AS modul_ajar_title
     FROM focus_theme ft
     LEFT JOIN modul_ajar m ON m.id=ft.modul_ajar_id
     WHERE ft.rombel_id=? AND ft.tanggal=?
-  `).get(rombel_id, tanggal);
+  `
+    )
+    .get(rombel_id, tanggal);
   if (!row) return res.json(null);
-  if (Number(row.cabang_id) !== Number(rombel.cabang_id)) return res.status(400).json({ error: 'Tema tidak sesuai rombel' });
+  if (Number(row.cabang_id) !== Number(rombel.cabang_id))
+    return res.status(400).json({ error: 'Tema tidak sesuai rombel' });
   res.json(themeRow(row));
 });
 
 router.post('/focus-theme', auth(['guru', 'admin', 'admin_cabang', 'kepsek']), (req, res) => {
   const d = req.body || {};
   const cabangId = scopeCabang(req, d.cabang_id);
-  if (!cabangId || !d.rombel_id || !d.tanggal || !d.title) return res.status(400).json({ error: 'Cabang, rombel, tanggal, dan judul wajib' });
-  
+  if (!cabangId || !d.rombel_id || !d.tanggal || !d.title)
+    return res.status(400).json({ error: 'Cabang, rombel, tanggal, dan judul wajib' });
+
   const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
   if (!dateRegex.test(d.tanggal)) {
     return res.status(400).json({ error: 'Format tanggal tidak valid (wajib YYYY-MM-DD)' });
@@ -364,12 +390,14 @@ router.post('/focus-theme', auth(['guru', 'admin', 'admin_cabang', 'kepsek']), (
   const now = nowUtc();
 
   if (before) {
-    db.prepare(`
+    db.prepare(
+      `
       UPDATE focus_theme
       SET modul_ajar_id=?,cabang_id=?,rombel_id=?,tanggal=?,title=?,activity_summary=?,
           suggested_domains=?,teacher_prompt=?,updated_at=?,menu_makanan=?
       WHERE id=?
-    `).run(
+    `
+    ).run(
       d.modul_ajar_id || null,
       cabangId,
       d.rombel_id,
@@ -386,24 +414,28 @@ router.post('/focus-theme', auth(['guru', 'admin', 'admin_cabang', 'kepsek']), (
     return res.json({ id: before.id, action: 'updated' });
   }
 
-  const r = db.prepare(`
+  const r = db
+    .prepare(
+      `
     INSERT INTO focus_theme
       (modul_ajar_id,cabang_id,rombel_id,tanggal,title,activity_summary,suggested_domains,teacher_prompt,created_by,created_at,updated_at,menu_makanan)
     VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
-  `).run(
-    d.modul_ajar_id || null,
-    cabangId,
-    d.rombel_id,
-    d.tanggal,
-    d.title,
-    d.activity_summary || null,
-    jsonArray(d.suggested_domains),
-    d.teacher_prompt || null,
-    req.user.id,
-    now,
-    now,
-    d.menu_makanan || null
-  );
+  `
+    )
+    .run(
+      d.modul_ajar_id || null,
+      cabangId,
+      d.rombel_id,
+      d.tanggal,
+      d.title,
+      d.activity_summary || null,
+      jsonArray(d.suggested_domains),
+      d.teacher_prompt || null,
+      req.user.id,
+      now,
+      now,
+      d.menu_makanan || null
+    );
   audit(req.user, 'create', 'focus_theme', r.lastInsertRowid, { cabang_id: cabangId, after: d });
   res.json({ id: r.lastInsertRowid, action: 'created' });
 });
@@ -421,11 +453,15 @@ router.post(
   },
   async (req, res) => {
     if (req.user.role === 'guru') {
-      const leadCount = db.prepare(`
+      const leadCount = db
+        .prepare(
+          `
         SELECT COUNT(*) as count FROM guru_rombel gr
         JOIN rombel r ON r.id = gr.rombel_id
         WHERE gr.pengguna_id = ? AND gr.role = 'utama' AND r.cabang_id = ?
-      `).get(req.user.id, req.user.cabang_id);
+      `
+        )
+        .get(req.user.id, req.user.cabang_id);
       if (!leadCount || leadCount.count === 0) {
         return res.status(403).json({ error: 'Akses ditolak: Anda bukan guru utama' });
       }
@@ -528,7 +564,11 @@ ${rawText}`;
         // Try to find JSON object in the response
         const match = rawOutput.match(/\{[\s\S]*\}/);
         if (match) {
-          try { parsed = JSON.parse(match[0]); } catch { parsed = null; }
+          try {
+            parsed = JSON.parse(match[0]);
+          } catch {
+            parsed = null;
+          }
         }
       }
 

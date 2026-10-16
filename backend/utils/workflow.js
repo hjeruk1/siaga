@@ -12,9 +12,12 @@ function todayWIB(date = new Date()) {
 
 function nowTimeWIB() {
   const parts = new Intl.DateTimeFormat('sv-SE', {
-    timeZone: WIB_TZ, hour: '2-digit', minute: '2-digit', hour12: false
+    timeZone: WIB_TZ,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
   }).formatToParts(new Date());
-  const get = type => (parts.find(p => p.type === type) || {}).value || '';
+  const get = (type) => (parts.find((p) => p.type === type) || {}).value || '';
   return `${get('hour')}:${get('minute')}`;
 }
 
@@ -57,7 +60,9 @@ function requireActiveCabang(req, res, cabangId) {
 }
 
 function activeEnrollment(siswaId, tanggal = todayWIB()) {
-  return db.prepare(`
+  return db
+    .prepare(
+      `
     SELECT e.*,c.nama AS cabang_nama,c.kode AS cabang_kode,j.nama AS jenjang_nama,j.tipe AS jenjang_tipe,r.nama AS rombel_nama
     FROM siswa_enrollment e
     JOIN cabang c ON c.id=e.cabang_id
@@ -65,11 +70,15 @@ function activeEnrollment(siswaId, tanggal = todayWIB()) {
     JOIN rombel r ON r.id=e.rombel_id
     WHERE e.siswa_id=? AND e.tanggal_mulai<=? AND (e.tanggal_selesai IS NULL OR e.tanggal_selesai>=?)
     ORDER BY e.tanggal_mulai DESC,e.id DESC LIMIT 1
-  `).get(siswaId, tanggal, tanggal);
+  `
+    )
+    .get(siswaId, tanggal, tanggal);
 }
 
 function latestActiveEnrollment(siswaId) {
-  return db.prepare(`
+  return db
+    .prepare(
+      `
     SELECT e.*,c.nama AS cabang_nama,c.kode AS cabang_kode,j.nama AS jenjang_nama,j.tipe AS jenjang_tipe,r.nama AS rombel_nama
     FROM siswa_enrollment e
     JOIN cabang c ON c.id=e.cabang_id
@@ -77,24 +86,32 @@ function latestActiveEnrollment(siswaId) {
     JOIN rombel r ON r.id=e.rombel_id
     WHERE e.siswa_id=? AND e.status='aktif'
     ORDER BY e.tanggal_mulai DESC,e.id DESC LIMIT 1
-  `).get(siswaId);
+  `
+    )
+    .get(siswaId);
 }
 
 function canAccessSiswa(user, siswaId, options = {}) {
   const siswa = db.prepare('SELECT * FROM siswa WHERE id=?').get(siswaId);
   if (!siswa) return null;
-  const enrollment = activeEnrollment(siswaId, options.tanggal || todayWIB()) || (!options.tanggal ? latestActiveEnrollment(siswaId) : null);
+  const enrollment =
+    activeEnrollment(siswaId, options.tanggal || todayWIB()) ||
+    (!options.tanggal ? latestActiveEnrollment(siswaId) : null);
   if (!enrollment) return null;
   if (user.role === 'admin') return { siswa, enrollment };
   if (['admin_cabang', 'kepsek', 'gerbang'].includes(user.role)) {
     return Number(user.cabang_id) === Number(enrollment.cabang_id) ? { siswa, enrollment } : false;
   }
   if (user.role === 'guru') {
-    const assigned = db.prepare('SELECT 1 FROM guru_rombel WHERE pengguna_id=? AND rombel_id=?').get(user.id, enrollment.rombel_id);
+    const assigned = db
+      .prepare('SELECT 1 FROM guru_rombel WHERE pengguna_id=? AND rombel_id=?')
+      .get(user.id, enrollment.rombel_id);
     return assigned ? { siswa, enrollment } : false;
   }
   if (user.role === 'wali') {
-    const linked = db.prepare('SELECT 1 FROM wali_siswa WHERE wali_pengguna_id=? AND siswa_id=? AND aktif=1').get(user.id, siswaId);
+    const linked = db
+      .prepare('SELECT 1 FROM wali_siswa WHERE wali_pengguna_id=? AND siswa_id=? AND aktif=1')
+      .get(user.id, siswaId);
     return linked ? { siswa, enrollment } : false;
   }
   return false;
@@ -102,7 +119,9 @@ function canAccessSiswa(user, siswaId, options = {}) {
 
 function canWaliAccessSiswa(user, siswaId) {
   if (user?.role !== 'wali') return false;
-  return !!db.prepare('SELECT 1 FROM wali_siswa WHERE wali_pengguna_id=? AND siswa_id=? AND aktif=1').get(user.id, siswaId);
+  return !!db
+    .prepare('SELECT 1 FROM wali_siswa WHERE wali_pengguna_id=? AND siswa_id=? AND aktif=1')
+    .get(user.id, siswaId);
 }
 
 function siswaScopeSql(user, alias = 's', requestedCabangId) {
@@ -142,25 +161,27 @@ function siswaScopeSql(user, alias = 's', requestedCabangId) {
 }
 
 function audit(actor, action, entityType, entityId, data = {}) {
-  db.prepare(`INSERT INTO audit_log(actor_pengguna_id,action,entity_type,entity_id,cabang_id,before_json,after_json,reason,created_at)
-    VALUES(?,?,?,?,?,?,?,?,?)`)
-    .run(
-      actor?.id || null,
-      action,
-      entityType,
-      entityId || null,
-      data.cabang_id || null,
-      data.before ? JSON.stringify(data.before) : null,
-      data.after ? JSON.stringify(data.after) : null,
-      data.reason || null,
-      nowUtc()
-    );
+  db.prepare(
+    `INSERT INTO audit_log(actor_pengguna_id,action,entity_type,entity_id,cabang_id,before_json,after_json,reason,created_at)
+    VALUES(?,?,?,?,?,?,?,?,?)`
+  ).run(
+    actor?.id || null,
+    action,
+    entityType,
+    entityId || null,
+    data.cabang_id || null,
+    data.before ? JSON.stringify(data.before) : null,
+    data.after ? JSON.stringify(data.after) : null,
+    data.reason || null,
+    nowUtc()
+  );
 }
 
 function notify(recipientId, tipe, title, body, entityType, entityId, cabangId) {
-  db.prepare(`INSERT INTO notifikasi(recipient_pengguna_id,tipe,title,body,entity_type,entity_id,cabang_id,created_at)
-    VALUES(?,?,?,?,?,?,?,?)`)
-    .run(recipientId, tipe, title, body || null, entityType || null, entityId || null, cabangId || null, nowUtc());
+  db.prepare(
+    `INSERT INTO notifikasi(recipient_pengguna_id,tipe,title,body,entity_type,entity_id,cabang_id,created_at)
+    VALUES(?,?,?,?,?,?,?,?)`
+  ).run(recipientId, tipe, title, body || null, entityType || null, entityId || null, cabangId || null, nowUtc());
 }
 
 function nextSequence(key) {
@@ -174,7 +195,9 @@ function nextSequence(key) {
 }
 
 function isSchoolDay(tanggal, cabangId) {
-  const cabangEvent = db.prepare("SELECT * FROM kalender_event WHERE scope='cabang' AND cabang_id=? AND tanggal=?").get(cabangId, tanggal);
+  const cabangEvent = db
+    .prepare("SELECT * FROM kalender_event WHERE scope='cabang' AND cabang_id=? AND tanggal=?")
+    .get(cabangId, tanggal);
   if (cabangEvent) return cabangEvent.tipe === 'masuk';
   const yayasanEvent = db.prepare("SELECT * FROM kalender_event WHERE scope='yayasan' AND tanggal=?").get(tanggal);
   if (yayasanEvent) return yayasanEvent.tipe === 'masuk';

@@ -14,7 +14,7 @@ function useMaster(user, { autoDefaultCabang = false } = {}) {
     const [c, j] = await Promise.all([api.cabang(), api.jenjang()]);
     setCabang(c);
     setJenjang(j);
-    const preferred = c.find(x => x.kode === 'GDN' && x.aktif) || c.find(x => x.aktif) || c[0];
+    const preferred = c.find((x) => x.kode === 'GDN' && x.aktif) || c.find((x) => x.aktif) || c[0];
     const cid = cabangId || (autoDefaultCabang ? preferred?.id : '');
     if (user.role === 'admin' && !cabangId && cid) setCabangId(cid);
     setRombel(await api.rombel(cid));
@@ -31,19 +31,27 @@ function CabangFilter({ user, cabang, cabangId, setCabangId, className = '', pla
   if (user.role !== 'admin') return null;
   const classes = plain ? className : `px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm ${className}`;
   return (
-    <CustomSelect value={cabangId} onChange={e => setCabangId(e.target.value)} className={classes}>
+    <CustomSelect value={cabangId} onChange={(e) => setCabangId(e.target.value)} className={classes}>
       <option value="">Semua Cabang</option>
-      {cabang.map(c => <option key={c.id} value={c.id}>{c.nama}</option>)}
+      {cabang.map((c) => (
+        <option key={c.id} value={c.id}>
+          {c.nama}
+        </option>
+      ))}
     </CustomSelect>
   );
 }
 
 function Panel({ title, right, children, className = '' }) {
   return (
-    <section className={`bg-white border border-slate-200 rounded-2xl p-3 sm:p-4 max-w-full overflow-hidden shadow-[0_18px_60px_rgba(15,23,42,.05)] ${className}`}>
+    <section
+      className={`bg-white border border-slate-200 rounded-2xl p-3 sm:p-4 max-w-full overflow-hidden shadow-[0_18px_60px_rgba(15,23,42,.05)] ${className}`}
+    >
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
         <div>
-          <div className="inline-flex rounded-full bg-primary-container px-2.5 py-1 text-[11px] font-black uppercase tracking-wide text-primary">Rencana kelas</div>
+          <div className="inline-flex rounded-full bg-primary-container px-2.5 py-1 text-[11px] font-black uppercase tracking-wide text-primary">
+            Rencana kelas
+          </div>
           <h2 className="mt-2 text-lg font-black text-text-main tracking-[-0.01em]">{title}</h2>
         </div>
         {right}
@@ -55,12 +63,20 @@ function Panel({ title, right, children, className = '' }) {
 
 function Input({ value, onChange, placeholder, className = '', ...props }) {
   if (props.type === 'date') {
-    return <CustomDatePicker value={value} onChange={onChange} placeholder={placeholder} className={`input w-full ${className}`} disabled={props.disabled} />;
+    return (
+      <CustomDatePicker
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+        className={`input w-full ${className}`}
+        disabled={props.disabled}
+      />
+    );
   }
   return (
     <input
       value={value}
-      onChange={e => onChange(e.target.value)}
+      onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
       className={`input w-full ${className}`}
       {...props}
@@ -74,7 +90,7 @@ function Textarea({ label, value, onChange, placeholder }) {
       <div className="label">{label}</div>
       <textarea
         value={value}
-        onChange={e => onChange(e.target.value)}
+        onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         rows={3}
         className="input w-full min-h-20 resize-none"
@@ -86,7 +102,7 @@ function Textarea({ label, value, onChange, placeholder }) {
 const normalizeActivities = (v) => {
   const result = {};
   const DAYS = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
-  
+
   let parsed = {};
   if (v && typeof v === 'object') {
     parsed = v;
@@ -96,7 +112,7 @@ const normalizeActivities = (v) => {
     } catch {}
   }
 
-  DAYS.forEach(day => {
+  DAYS.forEach((day) => {
     const dayData = parsed[day] || {};
     result[day] = {
       opening: Array.isArray(dayData.opening) ? dayData.opening.filter(Boolean) : [],
@@ -114,11 +130,11 @@ export default function KegiatanMingguanTab({ user, toast }) {
 
   const leadRombels = useMemo(() => {
     if (user.role !== 'guru') return [];
-    return m.rombel.filter(r => r.gurus?.some(g => String(g.id) === String(user.id) && g.role === 'utama'));
+    return m.rombel.filter((r) => r.gurus?.some((g) => String(g.id) === String(user.id) && g.role === 'utama'));
   }, [user?.id, user?.role, m.rombel]);
 
   const allowedJenjangIds = useMemo(() => {
-    return Array.from(new Set(leadRombels.map(r => String(r.jenjang_id))));
+    return Array.from(new Set(leadRombels.map((r) => String(r.jenjang_id))));
   }, [leadRombels]);
 
   const isLeadTeacher = useMemo(() => {
@@ -130,7 +146,7 @@ export default function KegiatanMingguanTab({ user, toast }) {
     if (user.role === 'admin' || user.role === 'admin_cabang' || user.role === 'kepsek') return true;
     if (user.role === 'guru') {
       if (row.rombel_id) {
-        return leadRombels.some(r => String(r.id) === String(row.rombel_id));
+        return leadRombels.some((r) => String(r.id) === String(row.rombel_id));
       }
       if (row.jenjang_id) {
         return allowedJenjangIds.includes(String(row.jenjang_id));
@@ -169,11 +185,11 @@ export default function KegiatanMingguanTab({ user, toast }) {
 
   const renderSectionBuilder = (targetState, setTargetState, sectionKey, sectionLabel) => {
     const currentActs = targetState.suggested_activities?.[activeDay]?.[sectionKey] || [];
-    
+
     const updateItem = (idx, newVal) => {
       const updated = [...currentActs];
       updated[idx] = newVal;
-      setTargetState(prev => ({
+      setTargetState((prev) => ({
         ...prev,
         suggested_activities: {
           ...prev.suggested_activities,
@@ -187,7 +203,7 @@ export default function KegiatanMingguanTab({ user, toast }) {
 
     const removeItem = (idx) => {
       const updated = currentActs.filter((_, i) => i !== idx);
-      setTargetState(prev => ({
+      setTargetState((prev) => ({
         ...prev,
         suggested_activities: {
           ...prev.suggested_activities,
@@ -200,7 +216,7 @@ export default function KegiatanMingguanTab({ user, toast }) {
     };
 
     const addItem = () => {
-      setTargetState(prev => ({
+      setTargetState((prev) => ({
         ...prev,
         suggested_activities: {
           ...prev.suggested_activities,
@@ -215,7 +231,7 @@ export default function KegiatanMingguanTab({ user, toast }) {
     return (
       <div className="bg-white p-3 rounded-xl border border-slate-200/80 space-y-2">
         <div className="text-[10px] font-black text-slate-500 uppercase tracking-wider">{sectionLabel}</div>
-        
+
         <div className="space-y-1.5">
           {currentActs.map((act, idx) => (
             <div key={idx} className="flex gap-1.5 items-center">
@@ -229,15 +245,17 @@ export default function KegiatanMingguanTab({ user, toast }) {
               <button
                 type="button"
                 onClick={() => removeItem(idx)}
-        className="w-8 h-8 rounded-lg border border-slate-200 hover:border-red-200 hover:bg-red-50 text-slate-400 hover:text-red-600 transition-all flex items-center justify-center shrink-0"
-        title="Hapus"
-      >
-                <X className="w-3.5 h-3.5" strokeWidth={2.4}/>
-      </button>
+                className="w-8 h-8 rounded-lg border border-slate-200 hover:border-red-200 hover:bg-red-50 text-slate-400 hover:text-red-600 transition-all flex items-center justify-center shrink-0"
+                title="Hapus"
+              >
+                <X className="w-3.5 h-3.5" strokeWidth={2.4} />
+              </button>
             </div>
           ))}
           {currentActs.length === 0 && (
-            <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-center text-[11px] font-bold text-slate-400">Belum ada kegiatan di bagian ini.</p>
+            <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-center text-[11px] font-bold text-slate-400">
+              Belum ada kegiatan di bagian ini.
+            </p>
           )}
         </div>
 
@@ -266,25 +284,29 @@ export default function KegiatanMingguanTab({ user, toast }) {
       let matchedJenjangId = '';
       let matchedCabangId = '';
       if (result.metadata?.kelompok && m.rombel) {
-        const cleanExtracted = result.metadata.kelompok.toLowerCase()
+        const cleanExtracted = result.metadata.kelompok
+          .toLowerCase()
           .replace(/kelompok/g, '')
           .replace(/usia/g, '')
           .replace(/kelas/g, '')
           .replace(/tahun/g, '')
           .replace(/[^a-z0-9]/g, '')
           .trim();
-        
-        const matched = m.rombel.find(r => {
+
+        const matched = m.rombel.find((r) => {
           if (m.cabangId && String(r.cabang_id) !== String(m.cabangId)) return false;
-          if (user.role === 'guru' && !leadRombels.some(lr => String(lr.id) === String(r.id))) return false;
-          const cleanName = r.nama.toLowerCase()
+          if (user.role === 'guru' && !leadRombels.some((lr) => String(lr.id) === String(r.id))) return false;
+          const cleanName = r.nama
+            .toLowerCase()
             .replace(/kelompok/g, '')
             .replace(/usia/g, '')
             .replace(/kelas/g, '')
             .replace(/tahun/g, '')
             .replace(/[^a-z0-9]/g, '')
             .trim();
-          return cleanExtracted === cleanName || cleanExtracted.includes(cleanName) || cleanName.includes(cleanExtracted);
+          return (
+            cleanExtracted === cleanName || cleanExtracted.includes(cleanName) || cleanName.includes(cleanExtracted)
+          );
         });
 
         if (matched) {
@@ -294,7 +316,7 @@ export default function KegiatanMingguanTab({ user, toast }) {
         }
       }
 
-      setForm(f => ({
+      setForm((f) => ({
         ...f,
         cabang_id: matchedCabangId || f.cabang_id || m.cabangId || '',
         title: result.title || f.title,
@@ -308,7 +330,10 @@ export default function KegiatanMingguanTab({ user, toast }) {
       setParsedFrom(result.file_name || file.name);
       setOpenForm(true);
       setActiveDay('Senin');
-      toast('ok', matchedRombelId ? 'Data berhasil diekstrak & rombel otomatis dipilih!' : 'Data berhasil diekstrak dari file');
+      toast(
+        'ok',
+        matchedRombelId ? 'Data berhasil diekstrak & rombel otomatis dipilih!' : 'Data berhasil diekstrak dari file'
+      );
     } catch (e) {
       toast('err', 'Gagal memproses file: ' + e.message);
     } finally {
@@ -316,22 +341,28 @@ export default function KegiatanMingguanTab({ user, toast }) {
     }
   }
 
-  const parseList = v => String(v || '').split(/[\n,]/).map(x => x.trim()).filter(Boolean);
-  const joinList = v => Array.isArray(v) ? v.join(', ') : String(v || '');
-  
-  const scopedRombel = draft => {
+  const parseList = (v) =>
+    String(v || '')
+      .split(/[\n,]/)
+      .map((x) => x.trim())
+      .filter(Boolean);
+  const joinList = (v) => (Array.isArray(v) ? v.join(', ') : String(v || ''));
+
+  const scopedRombel = (draft) => {
     const cid = draft.cabang_id || m.cabangId;
     if (!cid) return [];
-    return m.rombel.filter(r => 
-      String(r.cabang_id) === String(cid) &&
-      (!draft.jenjang_id || String(r.jenjang_id) === String(draft.jenjang_id)) &&
-      (user.role !== 'guru' || leadRombels.some(lr => String(lr.id) === String(r.id)))
+    return m.rombel.filter(
+      (r) =>
+        String(r.cabang_id) === String(cid) &&
+        (!draft.jenjang_id || String(r.jenjang_id) === String(draft.jenjang_id)) &&
+        (user.role !== 'guru' || leadRombels.some((lr) => String(lr.id) === String(r.id)))
     );
   };
 
-  const filteredRows = rows.filter(r => 
-    (!filterJenjang || String(r.jenjang_id) === String(filterJenjang)) &&
-    (!filterRombel || String(r.rombel_id) === String(filterRombel))
+  const filteredRows = rows.filter(
+    (r) =>
+      (!filterJenjang || String(r.jenjang_id) === String(filterJenjang)) &&
+      (!filterRombel || String(r.rombel_id) === String(filterRombel))
   );
 
   async function load() {
@@ -341,7 +372,7 @@ export default function KegiatanMingguanTab({ user, toast }) {
   }
 
   useEffect(() => {
-    load().catch(e => toast('err', e.message));
+    load().catch((e) => toast('err', e.message));
   }, [m.cabangId, tanggal]);
 
   useEffect(() => {
@@ -398,7 +429,7 @@ export default function KegiatanMingguanTab({ user, toast }) {
       }
     }
     if (draft.rombel_id) {
-      const rombel = m.rombel.find(r => String(r.id) === String(draft.rombel_id));
+      const rombel = m.rombel.find((r) => String(r.id) === String(draft.rombel_id));
       if (rombel && String(rombel.cabang_id) !== String(finalCabangId)) {
         toast('err', 'Rombel tidak sesuai cabang');
         return;
@@ -446,7 +477,7 @@ export default function KegiatanMingguanTab({ user, toast }) {
         type="file"
         accept=".doc,.docx,.pdf"
         className="hidden"
-        onChange={e => {
+        onChange={(e) => {
           const f = e.target.files?.[0];
           if (f) parseFile(f);
           e.target.value = '';
@@ -484,31 +515,66 @@ export default function KegiatanMingguanTab({ user, toast }) {
         <div className={`grid grid-cols-2 ${user.role === 'admin' ? 'sm:grid-cols-5' : 'sm:grid-cols-4'} gap-2`}>
           <CabangFilter user={user} {...m} plain className="input w-full" />
           <CustomDatePicker value={tanggal} onChange={setTanggal} className="input w-full" />
-          <CustomSelect value={filterJenjang} onChange={e => { setFilterJenjang(e.target.value); setFilterRombel(''); }} className="input">
+          <CustomSelect
+            value={filterJenjang}
+            onChange={(e) => {
+              setFilterJenjang(e.target.value);
+              setFilterRombel('');
+            }}
+            className="input"
+          >
             <option value="">Semua jenjang</option>
-            {m.jenjang.map(j => <option key={j.id} value={j.id}>{j.nama}</option>)}
+            {m.jenjang.map((j) => (
+              <option key={j.id} value={j.id}>
+                {j.nama}
+              </option>
+            ))}
           </CustomSelect>
-          <CustomSelect value={filterRombel} onChange={e => setFilterRombel(e.target.value)} className="input">
+          <CustomSelect value={filterRombel} onChange={(e) => setFilterRombel(e.target.value)} className="input">
             <option value="">Semua rombel</option>
-            {m.rombel.filter(r => !filterJenjang || String(r.jenjang_id) === String(filterJenjang)).map(r =>
-              <option key={r.id} value={r.id}>{r.nama}{!m.cabangId ? ` (${r.cabang_nama})` : ''}</option>
-            )}
+            {m.rombel
+              .filter((r) => !filterJenjang || String(r.jenjang_id) === String(filterJenjang))
+              .map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.nama}
+                  {!m.cabangId ? ` (${r.cabang_nama})` : ''}
+                </option>
+              ))}
           </CustomSelect>
-          <ActionButton icon={RefreshCw} onClick={load} variant="secondary" className="w-full col-span-2 sm:col-span-1">Refresh</ActionButton>
+          <ActionButton icon={RefreshCw} onClick={load} variant="secondary" className="w-full col-span-2 sm:col-span-1">
+            Refresh
+          </ActionButton>
         </div>
         <div className="overflow-x-auto max-w-full rounded-xl border border-slate-100 custom-scrollbar">
           <table className="w-full min-w-[960px] text-sm">
             <thead>
               <tr>
-                {['Minggu', 'Judul Rencana', 'Cabang', 'Jenjang', 'Rombel', 'Aktivitas', 'Domain', 'Dibuat oleh', ''].map((h, i) => (
-                  <th key={`${i}-${h}`} className={`text-left py-2 px-3 bg-slate-50 text-slate-500 font-black ${i === 8 ? 'sticky right-0 z-10 border-l border-slate-200/80' : ''}`}>{h}</th>
+                {[
+                  'Minggu',
+                  'Judul Rencana',
+                  'Cabang',
+                  'Jenjang',
+                  'Rombel',
+                  'Aktivitas',
+                  'Domain',
+                  'Dibuat oleh',
+                  ''
+                ].map((h, i) => (
+                  <th
+                    key={`${i}-${h}`}
+                    className={`text-left py-2 px-3 bg-slate-50 text-slate-500 font-black ${i === 8 ? 'sticky right-0 z-10 border-l border-slate-200/80' : ''}`}
+                  >
+                    {h}
+                  </th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filteredRows.map(r => (
+              {filteredRows.map((r) => (
                 <tr key={r.id} className={editForm?.id === r.id ? 'bg-primary-container' : 'bg-white'}>
-                  <td className="py-2 px-3 text-slate-600 whitespace-nowrap">{r.week_start} - {r.week_end}</td>
+                  <td className="py-2 px-3 text-slate-600 whitespace-nowrap">
+                    {r.week_start} - {r.week_end}
+                  </td>
                   <td className="py-2 px-3 font-black text-text-main min-w-56">{r.title}</td>
                   <td className="py-2 px-3 text-slate-600 font-bold">{r.cabang_nama || '-'}</td>
                   <td className="py-2 px-3 text-slate-600">{r.jenjang_nama || '-'}</td>
@@ -517,21 +583,39 @@ export default function KegiatanMingguanTab({ user, toast }) {
                     {(() => {
                       const norm = normalizeActivities(r.suggested_activities);
                       const allActs = Object.values(norm).reduce((acc, day) => {
-                        return [...acc, ...(day.opening || []), ...(day.focus_theme || []), ...(day.break || []), ...(day.closing || [])];
+                        return [
+                          ...acc,
+                          ...(day.opening || []),
+                          ...(day.focus_theme || []),
+                          ...(day.break || []),
+                          ...(day.closing || [])
+                        ];
                       }, []);
-                      return allActs.length > 0
-                        ? <span title={allActs.join(', ')}>
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-primary-container text-primary-active rounded-full text-[10px] font-black">{allActs.length} kegiatan</span>
-                            <span className="block text-[11px] text-slate-500 mt-0.5 truncate max-w-40">{allActs.slice(0, 2).join(', ')}{allActs.length > 2 ? '…' : ''}</span>
+                      return allActs.length > 0 ? (
+                        <span title={allActs.join(', ')}>
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-primary-container text-primary-active rounded-full text-[10px] font-black">
+                            {allActs.length} kegiatan
                           </span>
-                        : <span className="text-slate-300 text-xs">-</span>;
+                          <span className="block text-[11px] text-slate-500 mt-0.5 truncate max-w-40">
+                            {allActs.slice(0, 2).join(', ')}
+                            {allActs.length > 2 ? '…' : ''}
+                          </span>
+                        </span>
+                      ) : (
+                        <span className="text-slate-300 text-xs">-</span>
+                      );
                     })()}
                   </td>
                   <td className="py-2 px-3 text-slate-600 max-w-64">{(r.suggested_domains || []).join(', ') || '-'}</td>
                   <td className="py-2 px-3 text-slate-600">{r.created_by_name || '-'}</td>
                   <td className="py-2 px-3 sticky right-0 z-10 bg-white border-l border-slate-200/80">
                     {canEditRow(r) ? (
-                      <IconButton icon={Pencil} label={`Edit Focus Theme ${r.title}`} onClick={() => edit(r)} size="sm" />
+                      <IconButton
+                        icon={Pencil}
+                        label={`Edit Focus Theme ${r.title}`}
+                        onClick={() => edit(r)}
+                        size="sm"
+                      />
                     ) : (
                       <span className="text-slate-400 text-xs italic font-bold">View-only</span>
                     )}
@@ -541,7 +625,9 @@ export default function KegiatanMingguanTab({ user, toast }) {
               {filteredRows.length === 0 && (
                 <tr>
                   <td colSpan={9} className="py-8">
-                    <div className="mx-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center text-sm font-bold text-slate-400">Belum ada Focus Theme mingguan untuk filter ini.</div>
+                    <div className="mx-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center text-sm font-bold text-slate-400">
+                      Belum ada Focus Theme mingguan untuk filter ini.
+                    </div>
                   </td>
                 </tr>
               )}
@@ -549,9 +635,15 @@ export default function KegiatanMingguanTab({ user, toast }) {
           </table>
         </div>
       </div>
-      
+
       {openForm && (
-        <Modal title={parsedFrom ? 'Tambah Focus Theme (dari file)' : 'Tambah Focus Theme'} onClose={() => { setOpenForm(false); setParsedFrom(null); }}>
+        <Modal
+          title={parsedFrom ? 'Tambah Focus Theme (dari file)' : 'Tambah Focus Theme'}
+          onClose={() => {
+            setOpenForm(false);
+            setParsedFrom(null);
+          }}
+        >
           <div className="space-y-3">
             {parsedFrom && (
               <div className="flex flex-col gap-1.5 bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2">
@@ -560,13 +652,34 @@ export default function KegiatanMingguanTab({ user, toast }) {
                     <div className="text-xs font-black text-emerald-700">Data diekstrak otomatis dari file</div>
                     <div className="text-[11px] text-emerald-600 truncate max-w-xs">{parsedFrom}</div>
                   </div>
-                  <button onClick={() => { setParsedFrom(null); setForm(f => ({ ...f, parsed_metadata: null })); }} className="ml-auto text-emerald-500 hover:text-emerald-700 rounded-lg p-1 hover:bg-emerald-100" aria-label="Hapus data ekstraksi"><X className="w-4 h-4"/></button>
+                  <button
+                    onClick={() => {
+                      setParsedFrom(null);
+                      setForm((f) => ({ ...f, parsed_metadata: null }));
+                    }}
+                    className="ml-auto text-emerald-500 hover:text-emerald-700 rounded-lg p-1 hover:bg-emerald-100"
+                    aria-label="Hapus data ekstraksi"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
                 {form.parsed_metadata && (
                   <div className="text-[10px] bg-white/60 border border-emerald-100/50 rounded-lg px-2.5 py-1 text-emerald-800 flex flex-wrap gap-x-3 gap-y-1 mt-0.5">
-                    {form.parsed_metadata.kelompok && <span>Kelompok: <strong>{form.parsed_metadata.kelompok}</strong></span>}
-                    {form.parsed_metadata.semester && <span>Semester: <strong>{form.parsed_metadata.semester}</strong></span>}
-                    {form.parsed_metadata.minggu && <span>Weeks: <strong>Minggu {form.parsed_metadata.minggu}</strong></span>}
+                    {form.parsed_metadata.kelompok && (
+                      <span>
+                        Kelompok: <strong>{form.parsed_metadata.kelompok}</strong>
+                      </span>
+                    )}
+                    {form.parsed_metadata.semester && (
+                      <span>
+                        Semester: <strong>{form.parsed_metadata.semester}</strong>
+                      </span>
+                    )}
+                    {form.parsed_metadata.minggu && (
+                      <span>
+                        Weeks: <strong>Minggu {form.parsed_metadata.minggu}</strong>
+                      </span>
+                    )}
                   </div>
                 )}
               </div>
@@ -575,9 +688,17 @@ export default function KegiatanMingguanTab({ user, toast }) {
               {user.role === 'admin' && (
                 <div className="sm:col-span-2">
                   <label className="label text-[11px] font-bold text-slate-500 mb-1 block">Cabang Sekolah</label>
-                  <CustomSelect value={form.cabang_id} onChange={e => setForm(f => ({ ...f, cabang_id: e.target.value, rombel_id: '' }))} className="input w-full">
+                  <CustomSelect
+                    value={form.cabang_id}
+                    onChange={(e) => setForm((f) => ({ ...f, cabang_id: e.target.value, rombel_id: '' }))}
+                    className="input w-full"
+                  >
                     <option value="">Pilih Cabang</option>
-                    {m.cabang.map(c => <option key={c.id} value={c.id}>{c.nama}</option>)}
+                    {m.cabang.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.nama}
+                      </option>
+                    ))}
                   </CustomSelect>
                 </div>
               )}
@@ -585,40 +706,78 @@ export default function KegiatanMingguanTab({ user, toast }) {
               <div className="sm:col-span-2">
                 <label className="label text-[11px] font-bold text-slate-500 mb-1 block">Judul Rencana Kegiatan</label>
                 <div className="relative">
-                  {parsedFrom && form.title && <span className="absolute -top-1.5 right-2 text-[9px] font-black text-emerald-600 bg-emerald-50 px-1.5 rounded-full border border-emerald-200">AI ✨</span>}
-                  <Input placeholder="Judul rencana kegiatan" value={form.title} onChange={v => setForm(f => ({ ...f, title: v }))} />
+                  {parsedFrom && form.title && (
+                    <span className="absolute -top-1.5 right-2 text-[9px] font-black text-emerald-600 bg-emerald-50 px-1.5 rounded-full border border-emerald-200">
+                      AI ✨
+                    </span>
+                  )}
+                  <Input
+                    placeholder="Judul rencana kegiatan"
+                    value={form.title}
+                    onChange={(v) => setForm((f) => ({ ...f, title: v }))}
+                  />
                 </div>
               </div>
 
               <div>
                 <label className="label text-[11px] font-bold text-slate-500 mb-1 block">Mulai Minggu</label>
-                <CustomDatePicker value={form.week_start} onChange={v => setForm(f => ({ ...f, week_start: v }))} className="input w-full" />
+                <CustomDatePicker
+                  value={form.week_start}
+                  onChange={(v) => setForm((f) => ({ ...f, week_start: v }))}
+                  className="input w-full"
+                />
               </div>
               <div>
                 <label className="label text-[11px] font-bold text-slate-500 mb-1 block">Sampai Minggu</label>
-                <CustomDatePicker value={form.week_end} onChange={v => setForm(f => ({ ...f, week_end: v }))} className="input w-full" />
+                <CustomDatePicker
+                  value={form.week_end}
+                  onChange={(v) => setForm((f) => ({ ...f, week_end: v }))}
+                  className="input w-full"
+                />
               </div>
 
               <div>
                 <label className="label text-[11px] font-bold text-slate-500 mb-1 block">Jenjang</label>
-                <CustomSelect value={form.jenjang_id} onChange={e => setForm(f => ({ ...f, jenjang_id: e.target.value, rombel_id: '' }))} className="input w-full">
+                <CustomSelect
+                  value={form.jenjang_id}
+                  onChange={(e) => setForm((f) => ({ ...f, jenjang_id: e.target.value, rombel_id: '' }))}
+                  className="input w-full"
+                >
                   {user.role !== 'guru' && <option value="">Semua jenjang</option>}
                   {m.jenjang
-                    .filter(j => user.role !== 'guru' || allowedJenjangIds.includes(String(j.id)))
-                    .map(j => <option key={j.id} value={j.id}>{j.nama}</option>)}
+                    .filter((j) => user.role !== 'guru' || allowedJenjangIds.includes(String(j.id)))
+                    .map((j) => (
+                      <option key={j.id} value={j.id}>
+                        {j.nama}
+                      </option>
+                    ))}
                 </CustomSelect>
               </div>
               <div>
-                <label className="label text-[11px] font-bold text-slate-500 mb-1 block">Rombongan Belajar (Rombel)</label>
-                <CustomSelect value={form.rombel_id} onChange={e => setForm(f => ({ ...f, rombel_id: e.target.value }))} className="input w-full">
+                <label className="label text-[11px] font-bold text-slate-500 mb-1 block">
+                  Rombongan Belajar (Rombel)
+                </label>
+                <CustomSelect
+                  value={form.rombel_id}
+                  onChange={(e) => setForm((f) => ({ ...f, rombel_id: e.target.value }))}
+                  className="input w-full"
+                >
                   <option value="">Semua rombel</option>
-                  {scopedRombel(form).map(r => <option key={r.id} value={r.id}>{r.nama}</option>)}
+                  {scopedRombel(form).map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.nama}
+                    </option>
+                  ))}
                 </CustomSelect>
               </div>
 
               <div className="sm:col-span-2">
                 <label className="label text-[11px] font-bold text-slate-500 mb-1 block">Paket Program</label>
-                <CustomSelect value={form.paket} onChange={e => setForm(f => ({ ...f, paket: e.target.value }))} className="input w-full">
+                <CustomSelect
+                  value={form.paket}
+                  onChange={(e) => setForm((f) => ({ ...f, paket: e.target.value }))}
+                  className="input w-full"
+                >
                   <option value="">Semua paket</option>
                   <option value="reguler">Reguler</option>
                   <option value="full_day">Full day</option>
@@ -626,21 +785,36 @@ export default function KegiatanMingguanTab({ user, toast }) {
                 </CustomSelect>
               </div>
             </div>
-            
+
             <div className="relative">
-              {parsedFrom && form.goals && <span className="absolute -top-1.5 right-2 text-[9px] font-black text-emerald-600 bg-emerald-50 px-1.5 rounded-full border border-emerald-200">AI ✨</span>}
-              <Textarea label="Tujuan pembelajaran" value={form.goals} onChange={v => setForm(f => ({ ...f, goals: v }))} placeholder="Pisahkan dengan koma atau baris baru" />
+              {parsedFrom && form.goals && (
+                <span className="absolute -top-1.5 right-2 text-[9px] font-black text-emerald-600 bg-emerald-50 px-1.5 rounded-full border border-emerald-200">
+                  AI ✨
+                </span>
+              )}
+              <Textarea
+                label="Tujuan pembelajaran"
+                value={form.goals}
+                onChange={(v) => setForm((f) => ({ ...f, goals: v }))}
+                placeholder="Pisahkan dengan koma atau baris baru"
+              />
             </div>
-            
+
             <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 space-y-3">
               <div className="flex justify-between items-center">
-                <span className="text-xs font-black text-slate-500 uppercase tracking-wider">Rangkaian Kegiatan Harian</span>
-                {parsedFrom && <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 px-1.5 rounded-full border border-emerald-200">AI ✨</span>}
+                <span className="text-xs font-black text-slate-500 uppercase tracking-wider">
+                  Rangkaian Kegiatan Harian
+                </span>
+                {parsedFrom && (
+                  <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 px-1.5 rounded-full border border-emerald-200">
+                    AI ✨
+                  </span>
+                )}
               </div>
-              
+
               {/* Day Tabs */}
               <div className="flex border-b border-slate-200 gap-1 overflow-x-auto pb-1">
-                {['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat'].map(day => (
+                {['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat'].map((day) => (
                   <button
                     key={day}
                     type="button"
@@ -663,12 +837,32 @@ export default function KegiatanMingguanTab({ user, toast }) {
             </div>
 
             <div className="relative">
-              {parsedFrom && form.suggested_domains && <span className="absolute -top-1.5 right-2 text-[9px] font-black text-emerald-600 bg-emerald-50 px-1.5 rounded-full border border-emerald-200">AI ✨</span>}
-              <Textarea label="Domain observasi" value={form.suggested_domains} onChange={v => setForm(f => ({ ...f, suggested_domains: v }))} placeholder="Literasi, Numerasi, Sosial Emosional" />
+              {parsedFrom && form.suggested_domains && (
+                <span className="absolute -top-1.5 right-2 text-[9px] font-black text-emerald-600 bg-emerald-50 px-1.5 rounded-full border border-emerald-200">
+                  AI ✨
+                </span>
+              )}
+              <Textarea
+                label="Domain observasi"
+                value={form.suggested_domains}
+                onChange={(v) => setForm((f) => ({ ...f, suggested_domains: v }))}
+                placeholder="Literasi, Numerasi, Sosial Emosional"
+              />
             </div>
             <div className="flex gap-2">
-              <ActionButton icon={FilePlus} onClick={() => save(form)} disabled={busy}>{busy ? 'Menyimpan...' : 'Tambah Rencana'}</ActionButton>
-              <ActionButton icon={X} onClick={() => { setOpenForm(false); setParsedFrom(null); }} variant="secondary">Batal</ActionButton>
+              <ActionButton icon={FilePlus} onClick={() => save(form)} disabled={busy}>
+                {busy ? 'Menyimpan...' : 'Tambah Rencana'}
+              </ActionButton>
+              <ActionButton
+                icon={X}
+                onClick={() => {
+                  setOpenForm(false);
+                  setParsedFrom(null);
+                }}
+                variant="secondary"
+              >
+                Batal
+              </ActionButton>
             </div>
           </div>
         </Modal>
@@ -681,48 +875,90 @@ export default function KegiatanMingguanTab({ user, toast }) {
               {user.role === 'admin' && (
                 <div className="sm:col-span-2">
                   <label className="label text-[11px] font-bold text-slate-500 mb-1 block">Cabang Sekolah</label>
-                  <CustomSelect value={editForm.cabang_id} onChange={e => setEditForm(f => ({ ...f, cabang_id: e.target.value, rombel_id: '' }))} className="input w-full">
+                  <CustomSelect
+                    value={editForm.cabang_id}
+                    onChange={(e) => setEditForm((f) => ({ ...f, cabang_id: e.target.value, rombel_id: '' }))}
+                    className="input w-full"
+                  >
                     <option value="">Pilih Cabang</option>
-                    {m.cabang.map(c => <option key={c.id} value={c.id}>{c.nama}</option>)}
+                    {m.cabang.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.nama}
+                      </option>
+                    ))}
                   </CustomSelect>
                 </div>
               )}
 
               <div className="sm:col-span-2">
                 <label className="label text-[11px] font-bold text-slate-500 mb-1 block">Judul Rencana Kegiatan</label>
-                <Input placeholder="Judul rencana kegiatan" value={editForm.title} onChange={v => setEditForm(f => ({ ...f, title: v }))} />
+                <Input
+                  placeholder="Judul rencana kegiatan"
+                  value={editForm.title}
+                  onChange={(v) => setEditForm((f) => ({ ...f, title: v }))}
+                />
               </div>
 
               <div>
                 <label className="label text-[11px] font-bold text-slate-500 mb-1 block">Mulai Minggu</label>
-                <CustomDatePicker value={editForm.week_start} onChange={v => setEditForm(f => ({ ...f, week_start: v }))} className="input w-full" />
+                <CustomDatePicker
+                  value={editForm.week_start}
+                  onChange={(v) => setEditForm((f) => ({ ...f, week_start: v }))}
+                  className="input w-full"
+                />
               </div>
               <div>
                 <label className="label text-[11px] font-bold text-slate-500 mb-1 block">Sampai Minggu</label>
-                <CustomDatePicker value={editForm.week_end} onChange={v => setEditForm(f => ({ ...f, week_end: v }))} className="input w-full" />
+                <CustomDatePicker
+                  value={editForm.week_end}
+                  onChange={(v) => setEditForm((f) => ({ ...f, week_end: v }))}
+                  className="input w-full"
+                />
               </div>
 
               <div>
                 <label className="label text-[11px] font-bold text-slate-500 mb-1 block">Jenjang</label>
-                <CustomSelect value={editForm.jenjang_id} onChange={e => setEditForm(f => ({ ...f, jenjang_id: e.target.value, rombel_id: '' }))} className="input w-full">
+                <CustomSelect
+                  value={editForm.jenjang_id}
+                  onChange={(e) => setEditForm((f) => ({ ...f, jenjang_id: e.target.value, rombel_id: '' }))}
+                  className="input w-full"
+                >
                   {user.role !== 'guru' && <option value="">Semua jenjang</option>}
                   {user.role === 'guru' && editForm.rombel_id && <option value="">Ikuti jenjang rombel</option>}
                   {m.jenjang
-                    .filter(j => user.role !== 'guru' || allowedJenjangIds.includes(String(j.id)))
-                    .map(j => <option key={j.id} value={j.id}>{j.nama}</option>)}
+                    .filter((j) => user.role !== 'guru' || allowedJenjangIds.includes(String(j.id)))
+                    .map((j) => (
+                      <option key={j.id} value={j.id}>
+                        {j.nama}
+                      </option>
+                    ))}
                 </CustomSelect>
               </div>
               <div>
-                <label className="label text-[11px] font-bold text-slate-500 mb-1 block">Rombongan Belajar (Rombel)</label>
-                <CustomSelect value={editForm.rombel_id} onChange={e => setEditForm(f => ({ ...f, rombel_id: e.target.value }))} className="input w-full">
+                <label className="label text-[11px] font-bold text-slate-500 mb-1 block">
+                  Rombongan Belajar (Rombel)
+                </label>
+                <CustomSelect
+                  value={editForm.rombel_id}
+                  onChange={(e) => setEditForm((f) => ({ ...f, rombel_id: e.target.value }))}
+                  className="input w-full"
+                >
                   <option value="">Semua rombel</option>
-                  {scopedRombel(editForm).map(r => <option key={r.id} value={r.id}>{r.nama}</option>)}
+                  {scopedRombel(editForm).map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.nama}
+                    </option>
+                  ))}
                 </CustomSelect>
               </div>
 
               <div className="sm:col-span-2">
                 <label className="label text-[11px] font-bold text-slate-500 mb-1 block">Paket Program</label>
-                <CustomSelect value={editForm.paket} onChange={e => setEditForm(f => ({ ...f, paket: e.target.value }))} className="input w-full">
+                <CustomSelect
+                  value={editForm.paket}
+                  onChange={(e) => setEditForm((f) => ({ ...f, paket: e.target.value }))}
+                  className="input w-full"
+                >
                   <option value="">Semua paket</option>
                   <option value="reguler">Reguler</option>
                   <option value="full_day">Full day</option>
@@ -730,15 +966,22 @@ export default function KegiatanMingguanTab({ user, toast }) {
                 </CustomSelect>
               </div>
             </div>
-            
-            <Textarea label="Tujuan pembelajaran" value={editForm.goals} onChange={v => setEditForm(f => ({ ...f, goals: v }))} placeholder="Pisahkan dengan koma atau baris baru" />
-            
+
+            <Textarea
+              label="Tujuan pembelajaran"
+              value={editForm.goals}
+              onChange={(v) => setEditForm((f) => ({ ...f, goals: v }))}
+              placeholder="Pisahkan dengan koma atau baris baru"
+            />
+
             <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 space-y-3">
-              <div className="text-xs font-black text-slate-400 uppercase tracking-wider">Rangkaian Kegiatan Harian</div>
-              
+              <div className="text-xs font-black text-slate-400 uppercase tracking-wider">
+                Rangkaian Kegiatan Harian
+              </div>
+
               {/* Day Tabs */}
               <div className="flex border-b border-slate-200 gap-1 overflow-x-auto pb-1">
-                {['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat'].map(day => (
+                {['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat'].map((day) => (
                   <button
                     key={day}
                     type="button"
@@ -760,10 +1003,19 @@ export default function KegiatanMingguanTab({ user, toast }) {
               </div>
             </div>
 
-            <Textarea label="Domain observasi" value={editForm.suggested_domains} onChange={v => setEditForm(f => ({ ...f, suggested_domains: v }))} placeholder="Literasi, Numerasi, Sosial Emosional" />
+            <Textarea
+              label="Domain observasi"
+              value={editForm.suggested_domains}
+              onChange={(v) => setEditForm((f) => ({ ...f, suggested_domains: v }))}
+              placeholder="Literasi, Numerasi, Sosial Emosional"
+            />
             <div className="flex gap-2">
-              <ActionButton icon={Save} onClick={() => save(editForm)} disabled={busy}>{busy ? 'Menyimpan...' : 'Simpan Perubahan'}</ActionButton>
-              <ActionButton icon={X} onClick={() => setEditForm(null)} variant="secondary">Batal</ActionButton>
+              <ActionButton icon={Save} onClick={() => save(editForm)} disabled={busy}>
+                {busy ? 'Menyimpan...' : 'Simpan Perubahan'}
+              </ActionButton>
+              <ActionButton icon={X} onClick={() => setEditForm(null)} variant="secondary">
+                Batal
+              </ActionButton>
             </div>
           </div>
         </Modal>

@@ -9,10 +9,7 @@ const uploadImage = multer({
 });
 
 async function saveSquareJpeg(buffer, outPath) {
-  await sharp(buffer)
-    .resize(400, 400, { fit: 'cover', position: 'centre' })
-    .jpeg({ quality: 85 })
-    .toFile(outPath);
+  await sharp(buffer).resize(400, 400, { fit: 'cover', position: 'centre' }).jpeg({ quality: 85 }).toFile(outPath);
 }
 
 function ensureDir(dir) {

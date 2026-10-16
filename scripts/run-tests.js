@@ -5,15 +5,16 @@ const { spawn, spawnSync } = require('child_process');
 
 const root = path.resolve(__dirname, '..');
 const suite = process.argv[2] || 'main';
-const files = suite === 'workflow'
-  ? ['scripts/workflow-regression.test.js']
-  : [
-      'scripts/test.js',
-      'scripts/daily-record-v2.test.js',
-      'scripts/adminview-stabilization.test.js',
-      'scripts/export-absensi.test.js',
-      'scripts/billing-money.test.js'
-    ];
+const files =
+  suite === 'workflow'
+    ? ['scripts/workflow-regression.test.js']
+    : [
+        'scripts/test.js',
+        'scripts/daily-record-v2.test.js',
+        'scripts/adminview-stabilization.test.js',
+        'scripts/export-absensi.test.js',
+        'scripts/billing-money.test.js'
+      ];
 const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'siaga-test-'));
 const dbPath = path.join(tempDir, 'siaga.db');
 const port = 4100 + Math.floor(Math.random() * 700);
@@ -62,7 +63,7 @@ async function waitForServer() {
     } catch (error) {
       lastError = error;
     }
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise((resolve) => setTimeout(resolve, 100));
   }
   throw new Error(
     `Server test tidak siap dalam ${Math.round(timeoutMs / 1000)} detik (${lastError?.message || 'tanpa respons'})`

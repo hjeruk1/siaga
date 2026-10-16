@@ -14,7 +14,9 @@ const MAX_ATTEMPTS = 8;
 
 function attemptKey(req, tipe, identity) {
   const ip = req.ip || req.socket.remoteAddress || 'unknown';
-  return `${ip}:${tipe}:${String(identity || '').trim().toLowerCase()}`;
+  return `${ip}:${tipe}:${String(identity || '')
+    .trim()
+    .toLowerCase()}`;
 }
 
 function checkLoginLimit(key) {
@@ -73,13 +75,7 @@ function validPassword(value) {
 
 function mediaCookieOptions() {
   const secure = process.env.NODE_ENV === 'production';
-  return [
-    `${MEDIA_COOKIE}=`,
-    'Path=/',
-    'HttpOnly',
-    'SameSite=Strict',
-    secure ? 'Secure' : null
-  ].filter(Boolean);
+  return [`${MEDIA_COOKIE}=`, 'Path=/', 'HttpOnly', 'SameSite=Strict', secure ? 'Secure' : null].filter(Boolean);
 }
 
 function setMediaCookie(res, token, maxAgeSeconds = 12 * 60 * 60) {
@@ -97,10 +93,12 @@ router.post('/login', (req, res) => {
   if (!identity || !pass) return res.status(400).json({ error: 'Username/nomor WA dan password wajib diisi' });
   if (identity.length > 80 || pass.length > 128) return res.status(400).json({ error: 'Login gagal' });
   const key = attemptKey(req, loginType, identity);
-  if (checkLoginLimit(key)) return res.status(429).json({ error: 'Terlalu banyak percobaan login. Coba lagi beberapa menit.' });
-  const user = loginType === 'wali'
-    ? db.prepare("SELECT * FROM pengguna WHERE tipe='wali' AND no_wa=?").get(identity)
-    : db.prepare("SELECT * FROM pengguna WHERE tipe='staff' AND username=?").get(identity);
+  if (checkLoginLimit(key))
+    return res.status(429).json({ error: 'Terlalu banyak percobaan login. Coba lagi beberapa menit.' });
+  const user =
+    loginType === 'wali'
+      ? db.prepare("SELECT * FROM pengguna WHERE tipe='wali' AND no_wa=?").get(identity)
+      : db.prepare("SELECT * FROM pengguna WHERE tipe='staff' AND username=?").get(identity);
   if (!bcrypt.compareSync(pass, user?.password_hash || DUMMY_HASH)) {
     recordLoginFailure(key);
     return res.status(401).json({ error: 'Login gagal' });
@@ -126,14 +124,16 @@ router.get('/me', auth(), (req, res) => {
 
 router.post('/change-password', auth(), (req, res) => {
   const { old_password, new_password } = req.body || {};
-  if (!validPassword(new_password)) return res.status(400).json({ error: 'Password baru minimal 10 karakter serta mengandung huruf dan angka' });
+  if (!validPassword(new_password))
+    return res.status(400).json({ error: 'Password baru minimal 10 karakter serta mengandung huruf dan angka' });
   const row = db.prepare('SELECT password_hash FROM pengguna WHERE id=?').get(req.user.id);
   if (!row) return res.status(404).json({ error: 'Akun tidak ditemukan' });
   if (!req.user.must_change_password && !bcrypt.compareSync(old_password || '', row.password_hash)) {
     return res.status(400).json({ error: 'Password lama salah' });
   }
-  db.prepare('UPDATE pengguna SET password_hash=?,status=?,must_change_password=0,auth_version=auth_version+1,updated_at=? WHERE id=?')
-    .run(bcrypt.hashSync(new_password, 10), 'aktif', nowUtc(), req.user.id);
+  db.prepare(
+    'UPDATE pengguna SET password_hash=?,status=?,must_change_password=0,auth_version=auth_version+1,updated_at=? WHERE id=?'
+  ).run(bcrypt.hashSync(new_password, 10), 'aktif', nowUtc(), req.user.id);
   audit(req.user, 'password_changed', 'pengguna', req.user.id);
   const loaded = loadUser(req.user.id);
   const token = jwt.sign({ id: loaded.id, v: Number(loaded.auth_version || 0) }, SECRET, { expiresIn: '12h' });

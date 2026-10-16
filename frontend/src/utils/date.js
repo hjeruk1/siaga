@@ -9,8 +9,8 @@ export function nowWIB(date = new Date()) {
     timeZone: WIB_TZ,
     hour: '2-digit',
     minute: '2-digit',
-    hour12: false,
+    hour12: false
   }).formatToParts(date);
-  const get = type => (parts.find(part => part.type === type) || {}).value || '';
+  const get = (type) => (parts.find((part) => part.type === type) || {}).value || '';
   return { h: parseInt(get('hour'), 10), m: parseInt(get('minute'), 10) };
 }

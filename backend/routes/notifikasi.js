@@ -4,12 +4,18 @@ const auth = require('../middleware/auth');
 const { nowUtc } = require('../utils/workflow');
 
 router.get('/', auth(), (req, res) => {
-  res.json(db.prepare(`
+  res.json(
+    db
+      .prepare(
+        `
     SELECT * FROM notifikasi
     WHERE recipient_pengguna_id=?
     ORDER BY read_at IS NULL DESC,created_at DESC
     LIMIT 80
-  `).all(req.user.id));
+  `
+      )
+      .all(req.user.id)
+  );
 });
 
 router.put('/:id/read', auth(), (req, res) => {
@@ -21,7 +27,10 @@ router.put('/:id/read', auth(), (req, res) => {
 });
 
 router.put('/read-all', auth(), (req, res) => {
-  db.prepare('UPDATE notifikasi SET read_at=COALESCE(read_at,?) WHERE recipient_pengguna_id=?').run(nowUtc(), req.user.id);
+  db.prepare('UPDATE notifikasi SET read_at=COALESCE(read_at,?) WHERE recipient_pengguna_id=?').run(
+    nowUtc(),
+    req.user.id
+  );
   res.json({ success: true });
 });
 

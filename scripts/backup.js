@@ -16,7 +16,7 @@ if (!fs.existsSync(backupDir)) {
 
 // Generate human-readable timestamp filename: YYYY-MM-DD-HHmmss
 const now = new Date();
-const pad = n => String(n).padStart(2, '0');
+const pad = (n) => String(n).padStart(2, '0');
 const timestamp = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
 const filename = `siaga-backup-${timestamp}.db`;
 const dest = path.join(backupDir, filename);
@@ -38,9 +38,10 @@ function verifyBackup() {
 }
 
 function enforceRetention() {
-  const files = fs.readdirSync(backupDir)
-    .filter(name => /^siaga-backup-.*\.db$/.test(name))
-    .map(name => ({ name, mtime: fs.statSync(path.join(backupDir, name)).mtimeMs }))
+  const files = fs
+    .readdirSync(backupDir)
+    .filter((name) => /^siaga-backup-.*\.db$/.test(name))
+    .map((name) => ({ name, mtime: fs.statSync(path.join(backupDir, name)).mtimeMs }))
     .sort((a, b) => b.mtime - a.mtime);
   for (const old of files.slice(retentionCount)) {
     const oldPath = path.join(backupDir, old.name);
@@ -61,13 +62,15 @@ async function uploadToGcs(filePath, bucketName, keyFilePath, objectName) {
   if (!credentials.client_email || !credentials.private_key) throw new Error('Service account GCS tidak valid');
   const now = Math.floor(Date.now() / 1000);
   const header = base64url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
-  const payload = base64url(JSON.stringify({
-    iss: credentials.client_email,
-    scope: 'https://www.googleapis.com/auth/devstorage.read_write',
-    aud: credentials.token_uri || 'https://oauth2.googleapis.com/token',
-    iat: now,
-    exp: now + 3600
-  }));
+  const payload = base64url(
+    JSON.stringify({
+      iss: credentials.client_email,
+      scope: 'https://www.googleapis.com/auth/devstorage.read_write',
+      aud: credentials.token_uri || 'https://oauth2.googleapis.com/token',
+      iat: now,
+      exp: now + 3600
+    })
+  );
   const unsigned = `${header}.${payload}`;
   const signature = crypto.sign('RSA-SHA256', Buffer.from(unsigned), credentials.private_key).toString('base64url');
   const assertion = `${unsigned}.${signature}`;
@@ -91,7 +94,8 @@ async function uploadToGcs(filePath, bucketName, keyFilePath, objectName) {
     body: fs.createReadStream(filePath),
     duplex: 'half'
   });
-  if (!uploadResponse.ok) throw new Error(`Upload GCS gagal (${uploadResponse.status}): ${(await uploadResponse.text()).slice(0, 300)}`);
+  if (!uploadResponse.ok)
+    throw new Error(`Upload GCS gagal (${uploadResponse.status}): ${(await uploadResponse.text()).slice(0, 300)}`);
 }
 
 console.log(`\n[Backup] Memulai pencadangan database online...`);
@@ -102,7 +106,7 @@ db.backup(dest)
     verifyBackup();
     enforceRetention();
     console.log(`[Backup] Sukses! Cadangan database lokal berhasil dibuat.`);
-    
+
     // GCS upload flow
     const bucketName = process.env.GCS_BUCKET_NAME;
     const keyFilePath = process.env.GCS_KEY_FILE_PATH;
@@ -130,22 +134,22 @@ db.backup(dest)
 
     try {
       uploadToGcs(dest, bucketName, resolvedKeyPath, `backups/${filename}`)
-      .then(() => {
-        console.log(`[Backup GCS] Sukses! File database berhasil diunggah ke Google Cloud Storage.\n`);
-        process.exit(0);
-      })
-      .catch(uploadErr => {
-        console.error(`[Backup GCS] GAGAL mengunggah ke GCS:`, uploadErr.message || uploadErr);
-        console.log(`[Backup GCS] Backup lokal tetap tersimpan di: ${dest}\n`);
-        process.exit(1);
-      });
+        .then(() => {
+          console.log(`[Backup GCS] Sukses! File database berhasil diunggah ke Google Cloud Storage.\n`);
+          process.exit(0);
+        })
+        .catch((uploadErr) => {
+          console.error(`[Backup GCS] GAGAL mengunggah ke GCS:`, uploadErr.message || uploadErr);
+          console.log(`[Backup GCS] Backup lokal tetap tersimpan di: ${dest}\n`);
+          process.exit(1);
+        });
     } catch (err) {
       console.error(`[Backup GCS] GAGAL inisialisasi client GCS:`, err.message || err);
       console.log(`[Backup GCS] Backup lokal tetap tersimpan di: ${dest}\n`);
       process.exit(1);
     }
   })
-  .catch(err => {
+  .catch((err) => {
     console.error(`[Backup] GAGAL membuat backup lokal:`, err);
     process.exit(1);
   });
