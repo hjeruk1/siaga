@@ -152,6 +152,55 @@ function refreshBillStatus(tagihanId) {
   db.prepare('UPDATE tagihan SET status=?,updated_at=? WHERE id=?').run(status, nowUtc(), tagihanId);
 }
 
+// ---- Saldo kredit ----
+// Kelebihan pembayaran (mis. bayar 1.200.000 untuk tagihan 1.000.000) tidak bisa
+// dialokasikan ke tagihan mana pun. Sebelumnya selisihnya tidak dicatat ke mana
+// pun, sehingga uang yang sudah diterima sekolah tidak menempel pada tagihan
+// mana pun dan hilang dari catatan.
+//
+// tipe pada saldo_kredit:
+//   credit -> kredit diberikan oleh sebuah pembayaran
+//   used   -> kredit dipakai untuk melunasi tagihan
+//   void   -> kredit dibatalkan karena pembayaran di-void atau ditolak
+//
+// Aturan saldo:
+//   credit -> menambah saldo (bila pembayaran induknya sudah confirmed, atau
+//             kredit lahir dari tagihan yang di-void sehingga tidak menunggu siapa pun)
+//   used   -> mengurangi saldo (kredit sudah dipakai melunasi tagihan)
+//   void   -> TIDAK berpengaruh dua arah. Baris ini adalah kredit yang dibatalkan,
+//             jadi tidak boleh menambah saldo, tapi juga tidak boleh menguranginya
+//             karena memang tidak pernah dihitung.
+function creditBalance(siswaId) {
+  return db
+    .prepare(
+      `SELECT
+         COALESCE(SUM(CASE
+           WHEN sk.tipe='credit' AND (sk.pembayaran_id IS NULL OR p.status='confirmed') THEN sk.nominal
+           ELSE 0 END),0)
+         - COALESCE(SUM(CASE WHEN sk.tipe='used' THEN sk.nominal ELSE 0 END),0) AS saldo
+       FROM saldo_kredit sk
+       LEFT JOIN pembayaran p ON p.id=sk.pembayaran_id
+       WHERE sk.siswa_id=?`
+    )
+    .get(siswaId).saldo;
+}
+
+function recordCredit(paymentId, siswaId, cabangId, nominal, catatan) {
+  if (!(nominal > 0)) return null;
+  return db
+    .prepare(
+      `INSERT INTO saldo_kredit(siswa_id,cabang_id,pembayaran_id,nominal,tipe,catatan,created_at)
+       VALUES(?,?,?,?,'credit',?,?)`
+    )
+    .run(siswaId, cabangId, paymentId, nominal, catatan, nowUtc()).lastInsertRowid;
+}
+
+// Membatalkan kredit yang diberikan sebuah pembayaran. Dipanggil saat pembayaran
+// ditolak atau di-void: uangnya tidak lagi menjadi hak siswa.
+function reverseCredit(paymentId) {
+  db.prepare("UPDATE saldo_kredit SET tipe='void' WHERE pembayaran_id=? AND tipe='credit'").run(paymentId);
+}
+
 router.get('/tarif', auth(['admin', 'admin_cabang', 'kepsek']), (req, res) => {
   const cabangId = cabangParam(req);
   if (cabangId && !requireCabang(req, res, cabangId)) return;
@@ -551,6 +600,25 @@ router.get('/tagihan', auth(['admin', 'admin_cabang', 'kepsek']), (req, res) => 
   res.json(rows);
 });
 
+// Saldo kredit seorang siswa: kelebihan pembayaran yang belum dipakai.
+// Berguna saat orang tua membayar lebih dari tagihan berjalan — uangnya tidak
+// hilang, melainkan menunggu dipakai untuk tagihan berikutnya.
+router.get('/siswa/:siswaId/saldo', auth(['admin', 'admin_cabang', 'kepsek']), (req, res) => {
+  const siswaId = Number(req.params.siswaId);
+  if (!canReadStudentBilling(req, siswaId)) return res.status(403).json({ error: 'Akses ditolak' });
+  const riwayat = db
+    .prepare(
+      `SELECT sk.*, p.receipt_no
+       FROM saldo_kredit sk
+       LEFT JOIN pembayaran p ON p.id=sk.pembayaran_id
+       WHERE sk.siswa_id=?
+       ORDER BY sk.created_at DESC
+       LIMIT 50`
+    )
+    .all(siswaId);
+  res.json({ siswa_id: siswaId, saldo: creditBalance(siswaId), riwayat });
+});
+
 router.put('/tagihan/:id/koreksi', auth(['admin', 'admin_cabang']), (req, res) => {
   const bill = db.prepare('SELECT * FROM tagihan WHERE id=?').get(req.params.id);
   if (!bill) return res.status(404).json({ error: 'Tagihan tidak ditemukan' });
@@ -582,15 +650,33 @@ router.post('/tagihan/:id/void', auth(['admin', 'admin_cabang']), (req, res) => 
   const bill = db.prepare('SELECT * FROM tagihan WHERE id=?').get(req.params.id);
   if (!bill) return res.status(404).json({ error: 'Tagihan tidak ditemukan' });
   if (!requireCabang(req, res, bill.cabang_id)) return;
+  // Tanpa penjaga ini, tagihan yang sudah void bisa di-void berulang dan setiap
+  // pemanggilan akan mencatat kredit baru untuk uang yang sama.
+  if (bill.status === 'void') return res.status(400).json({ error: 'Tagihan sudah void' });
   const reason = String(req.body?.reason || '').trim();
   if (!reason) return res.status(400).json({ error: 'Alasan wajib' });
+
+  // Uang yang sudah dibayar untuk tagihan ini tidak boleh ikut hangus bersama
+  // kewajibannya. Karena layanannya dibatalkan, uangnya menjadi saldo kredit
+  // siswa untuk tagihan berikutnya. Sebelumnya alokasinya tetap menempel pada
+  // tagihan yang sudah batal dan uangnya tidak terlacak.
+  const paid = paidAmount(bill.id);
   db.prepare("UPDATE tagihan SET status='void',koreksi_reason=?,updated_at=? WHERE id=?").run(
     reason,
     nowUtc(),
     bill.id
   );
-  audit(req.user, 'void_bill', 'tagihan', bill.id, { cabang_id: bill.cabang_id, before: bill, reason });
-  res.json({ success: true });
+  if (paid > 0) {
+    recordCredit(
+      null,
+      bill.siswa_id,
+      bill.cabang_id,
+      paid,
+      `Pengembalian tagihan #${bill.id} (${bill.periode} ${bill.nama}) yang di-void`
+    );
+  }
+  audit(req.user, 'void_bill', 'tagihan', bill.id, { cabang_id: bill.cabang_id, before: bill, reason, credit: paid });
+  res.json({ success: true, credit: paid });
 });
 
 router.get('/pembayaran/preview-alokasi', auth(['admin', 'admin_cabang']), (req, res) => {
@@ -697,6 +783,66 @@ router.post('/pembayaran', auth(['admin', 'admin_cabang']), validateBody(pembaya
         nowUtc(),
         nowUtc()
       );
+    // ---- Pakai saldo kredit (opt-in) ----
+    // Kelebihan pembayaran sebelumnya dipakai menutup tagihan terbuka sebelum
+    // uang yang baru disalurkan. Tanpa langkah ini saldo kredit hanya tercatat
+    // tetapi tidak pernah bisa dipakai, sehingga janji di UI ("sisa dana
+    // disimpan sebagai saldo kredit") tetap menyesatkan.
+    //
+    // SENGAJA opt-in lewat pakai_kredit: true. Memakainya secara otomatis
+    // mengubah arti setiap pembayaran: tagihan bisa lunas tanpa uang baru masuk,
+    // dan pembayaran yang ada akan berperilaku berbeda tanpa diminta. Pergerakan
+    // uang sebaiknya selalu diminta eksplisit.
+    //
+    // Pencatatannya memakai satu baris pembayaran ber-metode 'lainnya' supaya
+    // alokasi menempel lewat jalur yang sama dengan pembayaran biasa. Tidak ada
+    // struk karena tidak ada uang yang berpindah tangan.
+    if (d.pakai_kredit === true) {
+      const kreditTersedia = creditBalance(d.siswa_id);
+      if (kreditTersedia > 0) {
+        const tagihanTerbuka = db
+          .prepare(
+            "SELECT id,nominal_final FROM tagihan WHERE siswa_id=? AND cabang_id=? AND status IN ('open','sebagian') ORDER BY periode,created_at"
+          )
+          .all(d.siswa_id, cabangId);
+        const penyerap = [];
+        let kreditDipakai = 0;
+        for (const t of tagihanTerbuka) {
+          if (kreditDipakai >= kreditTersedia) break;
+          const unpaid = t.nominal_final - paidAmount(t.id);
+          if (unpaid <= 0) continue;
+          const ambil = Math.min(unpaid, kreditTersedia - kreditDipakai);
+          penyerap.push({ id: t.id, nominal: ambil });
+          kreditDipakai += ambil;
+        }
+        if (kreditDipakai > 0) {
+          const kreditPaymentId = db
+            .prepare(
+              `INSERT INTO pembayaran(cabang_id,siswa_id,receipt_no,tanggal_bayar,nominal,metode,status,catatan,created_by,created_at,updated_at)
+               VALUES(?,?,NULL,?,?,'lainnya','confirmed','Penggunaan saldo kredit',?,?,?)`
+            )
+            .run(
+              cabangId,
+              d.siswa_id,
+              d.tanggal_bayar || todayWIB(),
+              kreditDipakai,
+              req.user.id,
+              nowUtc(),
+              nowUtc()
+            ).lastInsertRowid;
+          for (const t of penyerap) {
+            db.prepare(
+              'INSERT INTO pembayaran_alokasi(pembayaran_id,tagihan_id,nominal,created_at) VALUES(?,?,?,?)'
+            ).run(kreditPaymentId, t.id, t.nominal, nowUtc());
+            db.prepare(
+              "INSERT INTO saldo_kredit(siswa_id,cabang_id,pembayaran_id,nominal,tipe,catatan,created_at) VALUES(?,?,?,?,'used',?,?)"
+            ).run(d.siswa_id, cabangId, kreditPaymentId, t.nominal, `Dipakai untuk tagihan #${t.id}`, nowUtc());
+            refreshBillStatus(t.id);
+          }
+        }
+      }
+    }
+
     let remaining = paymentAmount;
     const bills =
       Array.isArray(d.alokasi) && d.alokasi.length
@@ -732,6 +878,18 @@ router.post('/pembayaran', auth(['admin', 'admin_cabang']), validateBody(pembaya
         remaining -= nominal;
         if (status === 'confirmed') refreshBillStatus(bill.id);
       }
+    }
+    // Kelebihan yang tidak tertampung tagihan menjadi saldo kredit siswa.
+    // Tanpa baris ini, uang yang sudah diterima sekolah tidak menempel pada
+    // tagihan mana pun dan tidak terlacak.
+    if (remaining > 0) {
+      recordCredit(
+        r.lastInsertRowid,
+        d.siswa_id,
+        cabangId,
+        remaining,
+        `Kelebihan pembayaran${receiptNo ? ' ' + receiptNo : ''}`
+      );
     }
     audit(req.user, 'create', 'pembayaran', r.lastInsertRowid, { cabang_id: cabangId, after: { ...d, status } });
     return { id: r.lastInsertRowid, receipt_no: receiptNo, status };
@@ -793,6 +951,7 @@ router.post('/pembayaran/:id/reject', auth(['admin']), (req, res) => {
   ).run(reason, req.user.id, nowUtc(), nowUtc(), p.id);
   const allocations = db.prepare('SELECT tagihan_id FROM pembayaran_alokasi WHERE pembayaran_id=?').all(p.id);
   for (const a of allocations) refreshBillStatus(a.tagihan_id);
+  reverseCredit(p.id);
   audit(req.user, 'reject_payment', 'pembayaran', p.id, { cabang_id: p.cabang_id, before: p, reason });
   res.json({ success: true });
 });
@@ -807,6 +966,7 @@ router.post('/pembayaran/:id/void', auth(['admin', 'admin_cabang']), (req, res) 
   db.prepare("UPDATE pembayaran SET status='void',void_reason=?,updated_at=? WHERE id=?").run(reason, nowUtc(), p.id);
   const allocations = db.prepare('SELECT tagihan_id FROM pembayaran_alokasi WHERE pembayaran_id=?').all(p.id);
   for (const a of allocations) refreshBillStatus(a.tagihan_id);
+  reverseCredit(p.id);
   audit(req.user, 'void_payment', 'pembayaran', p.id, { cabang_id: p.cabang_id, before: p, reason });
   res.json({ success: true });
 });
@@ -824,7 +984,12 @@ router.get('/pembayaran/:id/alokasi', auth(['admin', 'admin_cabang']), (req, res
   `
     )
     .get(req.params.id);
-  payment.credit_amount = payment.nominal - payment.allocated_amount;
+  // Selisih nominal dan alokasi hanya berarti "kredit" untuk pembayaran yang
+  // masih hidup. Untuk pembayaran yang sudah void atau ditolak, menyebut
+  // selisihnya kredit akan menyesatkan — uangnya sudah tidak berlaku.
+  payment.credit_amount = ['confirmed', 'pending_verification'].includes(payment.status)
+    ? payment.nominal - payment.allocated_amount
+    : 0;
   const allocations = db.prepare('SELECT * FROM pembayaran_alokasi WHERE pembayaran_id=?').all(req.params.id);
   const bills = db
     .prepare(
@@ -895,12 +1060,27 @@ router.get('/laporan', auth(['admin', 'admin_cabang', 'kepsek']), (req, res) => 
   }
   if (cabangId && !requireCabang(req, res, cabangId)) return;
 
+  // Catatan penting soal angka di laporan ini:
+  //
+  // total_outstanding adalah SISA yang benar-benar belum dibayar, bukan
+  // nominal_final seluruh tagihan. Sebelumnya tagihan berstatus 'sebagian'
+  // dihitung penuh, sehingga utang tampak lebih besar dari kenyataan —
+  // tagihan 1.000.000 yang sudah dibayar 500.000 ikut dihitung 1.000.000.
+  //
+  // total_paid hanya menghitung alokasi ke tagihan yang tidak void. Alokasi ke
+  // tagihan yang sudah dibatalkan tidak lagi mewakili uang yang berlaku.
   let summaryQuery = `
     SELECT
       COUNT(*) AS total_tagihan,
       COALESCE(SUM(CASE WHEN status!='void' THEN nominal_final ELSE 0 END),0) AS total_nominal,
       COALESCE(SUM(CASE WHEN status='lunas' THEN nominal_final ELSE 0 END),0) AS total_lunas,
-      COALESCE(SUM(CASE WHEN status IN ('open','sebagian') THEN nominal_final ELSE 0 END),0) AS total_outstanding,
+      COALESCE(SUM(CASE WHEN status IN ('open','sebagian')
+        THEN nominal_final - COALESCE((
+          SELECT SUM(pa.nominal) FROM pembayaran_alokasi pa
+          JOIN pembayaran p ON p.id=pa.pembayaran_id
+          WHERE pa.tagihan_id=tagihan.id AND p.status='confirmed'
+        ),0)
+        ELSE 0 END),0) AS total_outstanding,
       COUNT(CASE WHEN status='lunas' THEN 1 END) AS count_lunas,
       COUNT(CASE WHEN status IN ('open','sebagian') THEN 1 END) AS count_outstanding,
       COUNT(CASE WHEN status='void' THEN 1 END) AS count_void
@@ -911,14 +1091,20 @@ router.get('/laporan', auth(['admin', 'admin_cabang', 'kepsek']), (req, res) => 
     FROM pembayaran_alokasi pa
     JOIN pembayaran p ON p.id=pa.pembayaran_id
     JOIN tagihan t ON t.id=pa.tagihan_id
-    WHERE p.status='confirmed'
+    WHERE p.status='confirmed' AND t.status!='void'
   `;
   let byJenisQuery = `
     SELECT jenis,
       COUNT(*) AS count,
       COALESCE(SUM(CASE WHEN status!='void' THEN nominal_final ELSE 0 END),0) AS total,
       COALESCE(SUM(CASE WHEN status='lunas' THEN nominal_final ELSE 0 END),0) AS lunas,
-      COALESCE(SUM(CASE WHEN status IN ('open','sebagian') THEN nominal_final ELSE 0 END),0) AS outstanding
+      COALESCE(SUM(CASE WHEN status IN ('open','sebagian')
+        THEN nominal_final - COALESCE((
+          SELECT SUM(pa.nominal) FROM pembayaran_alokasi pa
+          JOIN pembayaran p ON p.id=pa.pembayaran_id
+          WHERE pa.tagihan_id=tagihan.id AND p.status='confirmed'
+        ),0)
+        ELSE 0 END),0) AS outstanding
     FROM tagihan
   `;
   let byPeriodeQuery = `
@@ -926,7 +1112,13 @@ router.get('/laporan', auth(['admin', 'admin_cabang', 'kepsek']), (req, res) => 
       COUNT(*) AS count,
       COALESCE(SUM(CASE WHEN status!='void' THEN nominal_final ELSE 0 END),0) AS total,
       COALESCE(SUM(CASE WHEN status='lunas' THEN nominal_final ELSE 0 END),0) AS lunas,
-      COALESCE(SUM(CASE WHEN status IN ('open','sebagian') THEN nominal_final ELSE 0 END),0) AS outstanding
+      COALESCE(SUM(CASE WHEN status IN ('open','sebagian')
+        THEN nominal_final - COALESCE((
+          SELECT SUM(pa.nominal) FROM pembayaran_alokasi pa
+          JOIN pembayaran p ON p.id=pa.pembayaran_id
+          WHERE pa.tagihan_id=tagihan.id AND p.status='confirmed'
+        ),0)
+        ELSE 0 END),0) AS outstanding
     FROM tagihan WHERE periode IS NOT NULL
   `;
 
@@ -1751,11 +1943,14 @@ router.get('/wali/siswa/:siswaId', auth(['wali']), (req, res) => {
     public_key: getPaymentKey(p.id)
   }));
 
+  // Saldo kredit ditampilkan agar orang tua tahu uang kelebihannya tidak hilang
+  // dan bisa dipakai untuk tagihan berikutnya.
   res.json({
     enrollment,
     tagihan,
     invoices: invoicesWithKeys,
-    pembayaran: pembayaranWithKeys
+    pembayaran: pembayaranWithKeys,
+    saldo_kredit: creditBalance(siswaId)
   });
 });
 

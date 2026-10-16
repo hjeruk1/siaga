@@ -56,6 +56,17 @@ function paidOf(tagihanId) {
     .get(tagihanId).paid;
 }
 
+// Saldo kredit siswa, dihitung dengan aturan yang sama seperti endpoint
+// /api/billing/siswa/:id/saldo supaya test tidak menyimpang dari implementasi.
+// Saldo kredit dibaca lewat endpoint, bukan dengan menulis ulang SQL-nya di sini.
+// Versi SQL-duplikat sudah pernah menyesatkan: rumusnya menyimpang dari
+// implementasi sehingga hitungan salah tanpa terdeteksi.
+async function creditOf(siswaId) {
+  const res = await req('GET', `/api/billing/siswa/${siswaId}/saldo`, undefined, adminToken);
+  assert.equal(res.status, 200, res.raw);
+  return Number(res.body.saldo);
+}
+
 async function billsOf(token, siswaId, label) {
   const res = await req('GET', `/api/billing/tagihan?siswa_id=${siswaId}`, undefined, token);
   assert.equal(res.status, 200, `GET tagihan ${label} gagal: ${res.raw}`);
@@ -242,6 +253,49 @@ test('mengalokasi pembayaran tunai secara FIFO antar periode', async () => {
   assert.equal(d1.status, 'lunas');
   assert.equal(d2.nominal_final - paidOf(billD2.id), 500000, 'sisa masuk tagihan periode kedua');
   assert.equal(d2.status, 'sebagian');
+});
+
+test('kelebihan bayar dicatat sebagai saldo kredit, bukan hilang', async () => {
+  // Siswa baru supaya test ini tidak mengandalkan sisa tagihan dari test lain:
+  // alokasi FIFO menyerap tagihan periode lebih dulu lebih dulu, sehingga siswa
+  // yang sudah punya tagihan bulan lalu akan menghabiskan pembayaran di sana.
+  const siswaF = await createStudent(adminToken, mA, `F${UNIQUE}`, 'reguler', '2026-07-01');
+
+  const gen = await req('POST', '/api/billing/generate-bulanan', { periode: P3, cabang_id: cabang.id }, adminToken);
+  assert.equal(gen.status, 200, gen.raw);
+
+  const bills = await billsOf(adminToken, siswaF.id, 'F-P3');
+  const billF = billFor(bills, siswaF.id, P3, 'spp');
+  assert.ok(billF, 'tagihan P3 siswa F ada');
+  assert.equal(Number(billF.nominal_final), 1000000, 'siswa F tanpa diskon');
+
+  // Bayar 1.200.000 untuk tagihan 1.000.000 — kelebihan 200.000.
+  const pay = await req(
+    'POST',
+    '/api/billing/pembayaran',
+    {
+      cabang_id: cabang.id,
+      siswa_id: siswaF.id,
+      nominal: 1200000,
+      metode: 'tunai',
+      tanggal_bayar: '2026-10-16',
+      catatan: 'bayar lebih, sisanya kredit'
+    },
+    adminToken
+  );
+  assert.equal(pay.status, 200, pay.raw);
+
+  const after = await billsOf(adminToken, siswaF.id, 'F-after-overpay');
+  const f2 = billFor(after, siswaF.id, P3, 'spp');
+  assert.equal(f2.status, 'lunas', 'tagihan harus lunas');
+  assert.equal(paidOf(billF.id), 1000000, 'hanya 1.000.000 yang dialokasikan ke tagihan');
+
+  // Kelebihan 200.000 HARUS tercatat. Tanpa ini, uang yang sudah diterima sekolah
+  // tidak menempel pada tagihan mana pun dan tidak terlacak.
+  const kredit = db
+    .prepare("SELECT COALESCE(SUM(nominal),0) AS n FROM saldo_kredit WHERE siswa_id=? AND tipe='credit'")
+    .get(siswaF.id).n;
+  assert.equal(kredit, 200000, 'kelebihan bayar harus tersimpan di saldo_kredit, bukan hilang');
 });
 
 test('alokasi eksplisit tidak mengisi sisa dan menyimpan kredit', async () => {
@@ -503,16 +557,206 @@ test('laporan billing konsisten dengan data tagihan dan pembayaran', async () =>
     'kelompok status menutup seluruh tagihan'
   );
 
+  // total_paid mengikuti aturan yang sama dengan total_nominal: keduanya
+  // mengabaikan tagihan void. Kalau total_paid ikut menghitung alokasi ke tagihan
+  // yang sudah batal, angkanya tidak akan pernah sinkron dengan total_nominal.
   const expectedPaid = db
     .prepare(
       `SELECT COALESCE(SUM(pa.nominal),0) AS paid
     FROM pembayaran_alokasi pa
     JOIN pembayaran p ON p.id=pa.pembayaran_id
     JOIN tagihan t ON t.id=pa.tagihan_id
-    WHERE p.status='confirmed' AND t.cabang_id=?`
+    WHERE p.status='confirmed' AND t.status!='void' AND t.cabang_id=?`
     )
     .get(cabang.id).paid;
   assert.equal(Number(summary.total_paid), expectedPaid, 'total_paid hanya menghitung pembayaran confirmed');
+
+  // total_outstanding adalah SISA yang belum dibayar, bukan nominal penuh.
+  // Tagihan 'sebagian' harus menyumbang selisihnya saja.
+  const expectedOutstanding = db
+    .prepare(
+      `SELECT COALESCE(SUM(
+         t.nominal_final - COALESCE((
+           SELECT SUM(pa.nominal) FROM pembayaran_alokasi pa
+           JOIN pembayaran p ON p.id=pa.pembayaran_id
+           WHERE pa.tagihan_id=t.id AND p.status='confirmed'
+         ),0)
+       ),0) AS sisa
+    FROM tagihan t
+    WHERE t.status IN ('open','sebagian') AND t.cabang_id=?`
+    )
+    .get(cabang.id).sisa;
+  assert.equal(
+    Number(summary.total_outstanding),
+    expectedOutstanding,
+    'total_outstanding harus sisa yang belum dibayar, bukan nominal penuh'
+  );
+});
+
+test('void tagihan mengembalikan uang yang sudah dibayar sebagai saldo kredit', async () => {
+  const siswaG = await createStudent(adminToken, mA, `G${UNIQUE}`, 'reguler', '2026-07-01');
+  const gen = await req('POST', '/api/billing/generate-bulanan', { periode: P3, cabang_id: cabang.id }, adminToken);
+  assert.equal(gen.status, 200, gen.raw);
+
+  const bills = await billsOf(adminToken, siswaG.id, 'G');
+  const billG = billFor(bills, siswaG.id, P3, 'spp');
+  assert.ok(billG, 'tagihan siswa G ada');
+
+  // Lunasi dulu, baru tagihannya di-void.
+  const pay = await req(
+    'POST',
+    '/api/billing/pembayaran',
+    { cabang_id: cabang.id, siswa_id: siswaG.id, nominal: 1000000, metode: 'tunai', tanggal_bayar: '2026-10-16' },
+    adminToken
+  );
+  assert.equal(pay.status, 200, pay.raw);
+  assert.equal(billFor(await billsOf(adminToken, siswaG.id, 'G-paid'), siswaG.id, P3, 'spp').status, 'lunas');
+
+  const voidRes = await req(
+    'POST',
+    `/api/billing/tagihan/${billG.id}/void`,
+    { reason: 'Tagihan salah generate' },
+    adminToken
+  );
+  assert.equal(voidRes.status, 200, voidRes.raw);
+  assert.equal(Number(voidRes.body.credit), 1000000, 'uang yang sudah dibayar jadi kredit');
+
+  const saldo = await req('GET', `/api/billing/siswa/${siswaG.id}/saldo`, undefined, adminToken);
+  assert.equal(saldo.status, 200, saldo.raw);
+  assert.equal(Number(saldo.body.saldo), 1000000, 'saldo kredit siswa bertambah');
+
+  // Void kedua harus ditolak, kalau tidak kredit akan tercatat dua kali.
+  const voidAgain = await req('POST', `/api/billing/tagihan/${billG.id}/void`, { reason: 'Coba lagi' }, adminToken);
+  assert.equal(voidAgain.status, 400, 'tagihan yang sudah void tidak boleh di-void lagi');
+  const saldoAfter = await req('GET', `/api/billing/siswa/${siswaG.id}/saldo`, undefined, adminToken);
+  assert.equal(Number(saldoAfter.body.saldo), 1000000, 'saldo tidak berubah saat void ditolak');
+});
+
+test('void pembayaran membatalkan saldo kredit yang diberikan', async () => {
+  const siswaH = await createStudent(adminToken, mA, `H${UNIQUE}`, 'reguler', '2026-07-01');
+  const gen = await req('POST', '/api/billing/generate-bulanan', { periode: P3, cabang_id: cabang.id }, adminToken);
+  assert.equal(gen.status, 200, gen.raw);
+  const billH = billFor(await billsOf(adminToken, siswaH.id, 'H'), siswaH.id, P3, 'spp');
+  assert.ok(billH, 'tagihan siswa H ada');
+
+  const pay = await req(
+    'POST',
+    '/api/billing/pembayaran',
+    { cabang_id: cabang.id, siswa_id: siswaH.id, nominal: 1300000, metode: 'tunai', tanggal_bayar: '2026-10-16' },
+    adminToken
+  );
+  assert.equal(pay.status, 200, pay.raw);
+  assert.equal(await creditOf(siswaH.id), 300000, 'kelebihan 300.000 jadi kredit');
+
+  const voidRes = await req(
+    'POST',
+    `/api/billing/pembayaran/${pay.body.id}/void`,
+    { reason: 'Dana kembali ke orang tua' },
+    adminToken
+  );
+  assert.equal(voidRes.status, 200, voidRes.raw);
+  assert.equal(await creditOf(siswaH.id), 0, 'kredit ikut batal saat pembayaran di-void');
+  assert.equal(
+    billFor(await billsOf(adminToken, siswaH.id, 'H-after'), siswaH.id, P3, 'spp').status,
+    'open',
+    'tagihan kembali terbuka'
+  );
+});
+
+test('saldo kredit dipakai menutup tagihan berikutnya saat diminta', async () => {
+  const siswaK = await createStudent(adminToken, mA, `K${UNIQUE}`, 'reguler', '2026-07-01');
+  const gen = await req('POST', '/api/billing/generate-bulanan', { periode: P3, cabang_id: cabang.id }, adminToken);
+  assert.equal(gen.status, 200, gen.raw);
+  const billK = billFor(await billsOf(adminToken, siswaK.id, 'K'), siswaK.id, P3, 'spp');
+  assert.ok(billK, 'tagihan siswa K ada');
+
+  // Bayar 1.500.000 untuk tagihan 1.000.000 -> kredit 500.000.
+  const pay1 = await req(
+    'POST',
+    '/api/billing/pembayaran',
+    { cabang_id: cabang.id, siswa_id: siswaK.id, nominal: 1500000, metode: 'tunai', tanggal_bayar: '2026-10-16' },
+    adminToken
+  );
+  assert.equal(pay1.status, 200, pay1.raw);
+  assert.equal(await creditOf(siswaK.id), 500000, 'kelebihan jadi kredit');
+
+  // Generate tagihan bulan depan, lalu bayar tunai. Kredit harus terpakai dulu.
+  const gen2 = await req(
+    'POST',
+    '/api/billing/generate-bulanan',
+    { periode: '2026-12', cabang_id: cabang.id },
+    adminToken
+  );
+  assert.equal(gen2.status, 200, gen2.raw);
+  const billNext = billFor(await billsOf(adminToken, siswaK.id, 'K-next'), siswaK.id, '2026-12', 'spp');
+  assert.ok(billNext, 'tagihan bulan depan ada');
+
+  const pay2 = await req(
+    'POST',
+    '/api/billing/pembayaran',
+    {
+      cabang_id: cabang.id,
+      siswa_id: siswaK.id,
+      nominal: 500000,
+      metode: 'tunai',
+      tanggal_bayar: '2026-12-05',
+      pakai_kredit: true
+    },
+    adminToken
+  );
+  assert.equal(pay2.status, 200, pay2.raw);
+
+  const after = billFor(await billsOf(adminToken, siswaK.id, 'K-after'), siswaK.id, '2026-12', 'spp');
+
+  assert.equal(after.status, 'lunas', 'tagihan bulan depan lunas: 500.000 kredit + 500.000 tunai');
+  assert.equal(await creditOf(siswaK.id), 0, 'kredit habis terpakai');
+  assert.equal(paidOf(billNext.id), 1000000, 'tagihan lunas penuh');
+});
+
+test('tanpa pakai_kredit, saldo kredit tidak tersentuh', async () => {
+  const siswaL = await createStudent(adminToken, mA, `L${UNIQUE}`, 'reguler', '2026-07-01');
+  const gen = await req('POST', '/api/billing/generate-bulanan', { periode: P3, cabang_id: cabang.id }, adminToken);
+  assert.equal(gen.status, 200, gen.raw);
+
+  const pay1 = await req(
+    'POST',
+    '/api/billing/pembayaran',
+    { cabang_id: cabang.id, siswa_id: siswaL.id, nominal: 1500000, metode: 'tunai', tanggal_bayar: '2026-10-16' },
+    adminToken
+  );
+  assert.equal(pay1.status, 200, pay1.raw);
+  assert.equal(await creditOf(siswaL.id), 500000);
+
+  const gen2 = await req(
+    'POST',
+    '/api/billing/generate-bulanan',
+    { periode: '2026-12', cabang_id: cabang.id },
+    adminToken
+  );
+  assert.equal(gen2.status, 200, gen2.raw);
+  const billNext = billFor(await billsOf(adminToken, siswaL.id, 'L-next'), siswaL.id, '2026-12', 'spp');
+  assert.ok(billNext);
+
+  const pay2 = await req(
+    'POST',
+    '/api/billing/pembayaran',
+    {
+      cabang_id: cabang.id,
+      siswa_id: siswaL.id,
+      nominal: 400000,
+      metode: 'tunai',
+      tanggal_bayar: '2026-12-05',
+      pakai_kredit: false
+    },
+    adminToken
+  );
+  assert.equal(pay2.status, 200, pay2.raw);
+  assert.equal(await creditOf(siswaL.id), 500000, 'kredit tetap utuh tanpa permintaan eksplisit');
+  assert.equal(
+    billFor(await billsOf(adminToken, siswaL.id, 'L-after'), siswaL.id, '2026-12', 'spp').status,
+    'sebagian',
+    'hanya uang tunai yang masuk'
+  );
 });
 
 test('nomor struk unik per pembayaran terkonfirmasi', async () => {
