@@ -1,4 +1,8 @@
 require('dotenv').config();
+// Error tracking harus di-init SEBELUM express di-require, kalau tidak
+// instrumentasi otomatis Sentry tidak terpasang dan hanya error yang dilempar
+// manual yang tertangkap. Jangan pindahkan baris ini ke bawah.
+const errorTracking = require('./utils/error-tracking');
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -133,6 +137,10 @@ if (process.env.NODE_ENV === 'production') {
     res.sendFile(path.join(dist, 'index.html'));
   });
 }
+
+// Sentry menangkap error lebih dulu (bila aktif), lalu meneruskannya ke handler
+// di bawah ini yang menyusun respons untuk klien.
+errorTracking.attachExpressErrorHandler(app);
 
 app.use((err, req, res, _next) => {
   if (err?.code === 'LIMIT_FILE_SIZE') {
