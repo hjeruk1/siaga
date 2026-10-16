@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../../api';
 import {
   ActionButton,
@@ -45,6 +45,9 @@ import {
   MethodBadge,
   MoneyCell
 } from './AdminShared';
+import { StatCard } from './billing/StatCard';
+import { ActionCard } from './billing/ActionCard';
+import { ConfirmModal } from './billing/ConfirmModal';
 
 export default function BillingTab({ user, toast }) {
   const m = useMaster(user);
@@ -80,6 +83,21 @@ export default function BillingTab({ user, toast }) {
     if (!localCabangIdDiskon) return siswa;
     return siswa.filter((s) => String(s.cabang_id) === String(localCabangIdDiskon));
   }, [siswa, localCabangIdDiskon]);
+
+  // Diskon dikelompokkan per siswa: satu siswa boleh punya beberapa diskon
+  // (mis. SPP 10% + SPP Rp 50.000), dan menampilkannya sebagai satu kartu per
+  // baris membuat diskon yang sama terlihat seperti beberapa diskon terpisah.
+  // Urutan mengikuti data masuk (created_at DESC), jadi diskon terbaru di atas.
+  const groupedDiskon = useMemo(() => {
+    const bySiswa = new Map();
+    for (const d of diskon) {
+      if (!bySiswa.has(d.siswa_id)) {
+        bySiswa.set(d.siswa_id, { siswa_id: d.siswa_id, siswa_nama: d.siswa_nama, items: [] });
+      }
+      bySiswa.get(d.siswa_id).items.push(d);
+    }
+    return [...bySiswa.values()];
+  }, [diskon]);
 
   // Modal visibility states
   const [showTarifModal, setShowTarifModal] = useState(false);
@@ -122,6 +140,103 @@ export default function BillingTab({ user, toast }) {
     reference: '',
     catatan: ''
   });
+
+  // ═══ GUARD ISIAN BELUM TERSIMPAN ═══
+  // Modal input tidak boleh menyisakan isian setelah ditutup: sisa data
+  // pembayaran mudah terbaca sebagai transaksi setengah jalan dan memicu
+  // pencatatan ganda (apalagi dengan tanggal yang sudah basi). Semua jalur
+  // tutup — X, klik backdrop, Escape, dan Batal — lewat guard di bawah;
+  // kalau sudah ada isian, pengguna dikonfirmasi dulu.
+  const blankTarifForm = () => ({
+    cabang_id: '',
+    tahun_ajaran: currentSchoolYear,
+    jenjang_id: '',
+    jenis: 'spp',
+    nama: 'SPP',
+    nominal: ''
+  });
+  const blankDiskonForm = () => ({ siswa_id: '', jenis: 'spp', tipe: 'nominal', nilai: '', catatan: '' });
+  const blankPayForm = () => ({
+    siswa_id: '',
+    nominal: '',
+    metode: 'tunai',
+    tanggal: todayWIB(),
+    reference: '',
+    catatan: ''
+  });
+
+  // Field yang di-prefill otomatis saat modal dibuka (cabang & tanggal) sengaja
+  // tidak dihitung sebagai perubahan, supaya dialog tidak muncul tanpa sebab.
+  const tarifFormDirty = useMemo(
+    () => Boolean(tarifForm.jenjang_id || tarifForm.nominal || tarifForm.nama !== 'SPP' || tarifForm.jenis !== 'spp'),
+    [tarifForm]
+  );
+  const diskonFormDirty = useMemo(
+    () =>
+      Boolean(
+        diskonForm.siswa_id ||
+        diskonForm.nilai ||
+        diskonForm.catatan.trim() ||
+        diskonForm.tipe !== 'nominal' ||
+        diskonForm.jenis !== 'spp'
+      ),
+    [diskonForm]
+  );
+  const payFormDirty = useMemo(
+    () =>
+      Boolean(
+        payForm.siswa_id ||
+        payForm.nominal ||
+        payForm.reference.trim() ||
+        payForm.catatan.trim() ||
+        payForm.metode !== 'tunai'
+      ),
+    [payForm]
+  );
+
+  function confirmDiscard(onDiscard) {
+    setConfirmAction({
+      title: 'Buang perubahan?',
+      message: 'Isian yang belum disimpan akan hilang.',
+      confirmLabel: 'Buang',
+      confirmVariant: 'danger',
+      fields: [],
+      onSubmit: () => {
+        onDiscard();
+        setConfirmAction(null);
+      }
+    });
+  }
+
+  function closeTarifModal() {
+    setShowTarifModal(false);
+    setTarifForm(blankTarifForm());
+  }
+  function requestCloseTarif() {
+    if (tarifFormDirty) return confirmDiscard(closeTarifModal);
+    closeTarifModal();
+  }
+
+  function closeDiskonModal() {
+    setShowDiskonModal(false);
+    setLocalCabangIdDiskon('');
+    setDiskonForm(blankDiskonForm());
+  }
+  function requestCloseDiskon() {
+    if (diskonFormDirty) return confirmDiscard(closeDiskonModal);
+    closeDiskonModal();
+  }
+
+  function closePaymentModal() {
+    setShowPaymentModal(false);
+    setAlokasiPreview(null);
+    setLocalCabangIdPayment('');
+    setPayForm(blankPayForm());
+  }
+  function requestClosePayment() {
+    if (payFormDirty) return confirmDiscard(closePaymentModal);
+    closePaymentModal();
+  }
 
   // Computed billing summary stats
   const billingStats = useMemo(() => {
@@ -227,15 +342,7 @@ export default function BillingTab({ user, toast }) {
         nominal: Number(tarifForm.nominal)
       });
       toast('ok', 'Tarif tersimpan');
-      setShowTarifModal(false);
-      setTarifForm({
-        cabang_id: '',
-        tahun_ajaran: currentSchoolYear,
-        jenjang_id: '',
-        jenis: 'spp',
-        nama: 'SPP',
-        nominal: ''
-      });
+      closeTarifModal();
       load();
     } catch (e) {
       toast('err', e.message);
@@ -292,8 +399,7 @@ export default function BillingTab({ user, toast }) {
         catatan: diskonForm.catatan
       });
       toast('ok', 'Diskon tersimpan');
-      setShowDiskonModal(false);
-      setDiskonForm({ siswa_id: '', jenis: 'spp', tipe: 'nominal', nilai: '', catatan: '' });
+      closeDiskonModal();
       load();
     } catch (e) {
       toast('err', e.message);
@@ -399,9 +505,7 @@ export default function BillingTab({ user, toast }) {
         alokasi
       });
       toast('ok', 'Pembayaran: ' + (r.receipt_no || r.status));
-      setShowPaymentModal(false);
-      setPayForm({ siswa_id: '', nominal: '', metode: 'tunai', tanggal: todayWIB(), reference: '', catatan: '' });
-      setAlokasiPreview(null);
+      closePaymentModal();
       load();
     } catch (e) {
       toast('err', e.message);
@@ -602,72 +706,40 @@ export default function BillingTab({ user, toast }) {
 
   const renderRingkasanTab = () => (
     <>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-5">
-        <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 flex flex-col">
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center">
-              <Receipt className="w-4 h-4 text-slate-500" />
-            </div>
-            <span className="text-[10px] sm:text-xs font-black text-slate-400 uppercase tracking-wider">
-              Total Tagihan
-            </span>
-          </div>
-          <div className="text-lg sm:text-2xl font-black text-text-main tabular-nums leading-tight">
-            {money(billingStats.totalTagihan)}
-          </div>
-          <div className="text-[10px] text-slate-400 mt-1.5">Tagihan aktif (di luar void)</div>
-        </div>
-        <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 flex flex-col">
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-8 h-8 rounded-xl bg-emerald-50 flex items-center justify-center">
-              <TrendingUp className="w-4 h-4 text-emerald-500" />
-            </div>
-            <span className="text-[10px] sm:text-xs font-black text-slate-400 uppercase tracking-wider">Terbayar</span>
-          </div>
-          <div className="text-lg sm:text-2xl font-black text-emerald-600 tabular-nums leading-tight">
-            {money(billingStats.totalTerbayar)}
-          </div>
-          <div className="text-[10px] text-emerald-500 mt-1.5">Koleksi terkonfirmasi</div>
-        </div>
-        <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 flex flex-col">
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-8 h-8 rounded-xl bg-amber-50 flex items-center justify-center">
-              <Clock className="w-4 h-4 text-amber-500" />
-            </div>
-            <span className="text-[10px] sm:text-xs font-black text-slate-400 uppercase tracking-wider">
-              Outstanding
-            </span>
-          </div>
-          <div className="text-lg sm:text-2xl font-black text-amber-600 tabular-nums leading-tight">
-            {money(billingStats.outstanding)}
-          </div>
-          <div className="text-[10px] text-amber-500 mt-1.5">Belum terbayar</div>
-        </div>
-        <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 flex flex-col">
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-8 h-8 rounded-xl bg-primary-container flex items-center justify-center">
-              <BarChart3 className="w-4 h-4 text-primary" />
-            </div>
-            <span className="text-[10px] sm:text-xs font-black text-slate-400 uppercase tracking-wider">
-              Rasio Koleksi
-            </span>
-          </div>
-          <div className="text-lg sm:text-2xl font-black text-primary tabular-nums leading-tight">
-            {billingStats.collectionRate}%
-          </div>
-          <div className="w-full bg-slate-100 rounded-full h-1.5 mt-2.5 overflow-hidden">
-            <div
-              className="bg-primary h-1.5 rounded-full transition-all duration-500"
-              style={{ width: `${billingStats.collectionRate}%` }}
-            />
-          </div>
-        </div>
+      <div className="mb-4 grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-4">
+        <StatCard
+          icon={Receipt}
+          label="Total Tagihan"
+          value={money(billingStats.totalTagihan)}
+          hint="Tagihan aktif (di luar void)"
+        />
+        <StatCard
+          icon={TrendingUp}
+          tone="emerald"
+          label="Terbayar"
+          value={money(billingStats.totalTerbayar)}
+          hint="Koleksi terkonfirmasi"
+        />
+        <StatCard
+          icon={Clock}
+          tone="amber"
+          label="Outstanding"
+          value={money(billingStats.outstanding)}
+          hint="Belum terbayar"
+        />
+        <StatCard
+          icon={BarChart3}
+          tone="primary"
+          label="Rasio Koleksi"
+          value={`${billingStats.collectionRate}%`}
+          progress={billingStats.collectionRate}
+        />
       </div>
       {billingStats.pendingCount > 0 && (
         <button
           type="button"
           onClick={() => setBillingSubTab('pembayaran')}
-          className="w-full mb-5 flex items-center gap-3 p-4 bg-amber-50 border border-amber-200/80 rounded-2xl text-left hover:bg-amber-100/70 transition group"
+          className="group mb-4 flex w-full items-center gap-3 rounded-xl border border-amber-200/80 bg-amber-50 p-3 text-left transition hover:bg-amber-100/70"
         >
           <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
             <AlertCircle className="w-5 h-5 text-amber-600" />
@@ -681,53 +753,31 @@ export default function BillingTab({ user, toast }) {
           <ChevronDown className="w-4 h-4 text-amber-400 -rotate-90 group-hover:translate-x-0.5 transition-transform shrink-0" />
         </button>
       )}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3 sm:gap-3">
         {['admin', 'admin_cabang'].includes(user.role) && (
-          <button
-            type="button"
+          <ActionCard
+            icon={Receipt}
+            tone="primary"
+            title="Catat Pembayaran"
+            subtitle="Input pembayaran baru dari wali"
             onClick={() => setShowPaymentModal(true)}
-            className="flex items-center gap-3 p-4 bg-white border border-slate-200 rounded-2xl hover:border-primary/30 hover:bg-primary-container/20 transition group text-left"
-          >
-            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-              <Receipt className="w-5 h-5 text-primary" />
-            </div>
-            <div>
-              <div className="font-black text-text-main text-sm group-hover:text-primary transition">
-                Catat Pembayaran
-              </div>
-              <div className="text-[10px] text-slate-400 mt-0.5">Input pembayaran baru dari wali</div>
-            </div>
-          </button>
+          />
         )}
-        <button
-          type="button"
+        <ActionCard
+          icon={FilePlus}
+          title="Generate Tagihan"
+          subtitle="Buat tagihan bulanan atau kegiatan"
           onClick={() => setBillingSubTab('tagihan')}
-          className="flex items-center gap-3 p-4 bg-white border border-slate-200 rounded-2xl hover:border-slate-300 transition group text-left"
-        >
-          <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center shrink-0">
-            <FilePlus className="w-5 h-5 text-slate-500" />
-          </div>
-          <div>
-            <div className="font-black text-text-main text-sm">Generate Tagihan</div>
-            <div className="text-[10px] text-slate-400 mt-0.5">Buat tagihan bulanan atau kegiatan</div>
-          </div>
-        </button>
-        <button
-          type="button"
+        />
+        <ActionCard
+          icon={Settings}
+          title="Kelola Tarif"
+          subtitle="Atur tarif dan diskon siswa"
           onClick={() => setBillingSubTab('tarif')}
-          className="flex items-center gap-3 p-4 bg-white border border-slate-200 rounded-2xl hover:border-slate-300 transition group text-left"
-        >
-          <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center shrink-0">
-            <Settings className="w-5 h-5 text-slate-500" />
-          </div>
-          <div>
-            <div className="font-black text-text-main text-sm">Kelola Tarif</div>
-            <div className="text-[10px] text-slate-400 mt-0.5">Atur tarif dan diskon siswa</div>
-          </div>
-        </button>
+        />
       </div>
       {tarif.length === 0 && tagihan.length === 0 && (
-        <div className="mt-4 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-700 font-semibold flex items-center gap-2">
+        <div className="mt-3 flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-xs font-semibold text-amber-700">
           <AlertCircle size={16} className="shrink-0" />
           <span>Billing belum disiapkan untuk cabang ini. Mulai dengan menambahkan tarif di tab Tarif & Diskon.</span>
         </div>
@@ -738,7 +788,7 @@ export default function BillingTab({ user, toast }) {
   const renderTagihanTab = () => (
     <>
       {/* Control Panel / Toolbar */}
-      <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm mb-6">
+      <div className="mb-4 rounded-xl border border-slate-200/80 bg-white p-3 shadow-sm sm:p-4">
         {/* Row 1: Filters */}
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div className="grid grid-cols-2 gap-3 sm:flex sm:items-end">
@@ -792,7 +842,7 @@ export default function BillingTab({ user, toast }) {
         </div>
 
         {showGenerate && (
-          <div className="mt-4 grid w-full gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 animate-slide-up sm:grid-cols-2 lg:ml-auto lg:w-fit lg:grid-cols-[13rem_12rem_auto] lg:items-end">
+          <div className="mt-3 grid w-full animate-slide-up gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:grid-cols-2 lg:ml-auto lg:w-fit lg:grid-cols-[13rem_12rem_auto] lg:items-end">
             {user.role === 'admin' && (
               <div className="flex flex-col">
                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1.5">
@@ -849,7 +899,7 @@ export default function BillingTab({ user, toast }) {
         )}
 
         {selectedBills.length > 0 && (
-          <div className="mt-4 flex items-center gap-2 border-t border-slate-100 pt-3 animate-bounce-in">
+          <div className="mt-3 flex animate-bounce-in items-center gap-2 border-t border-slate-100 pt-3">
             <ActionButton
               icon={Receipt}
               onClick={invoice}
@@ -864,65 +914,43 @@ export default function BillingTab({ user, toast }) {
 
       {/* Dynamic Mini-Dashboard for Filtered Tagihan */}
       {filteredTagihan.length > 0 && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
-          <div className="bg-white border border-slate-200/80 rounded-2xl p-4 flex flex-col shadow-sm">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="w-7 h-7 rounded-lg bg-slate-50 flex items-center justify-center border border-slate-100">
-                <Receipt className="w-3.5 h-3.5 text-slate-500" />
-              </div>
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Total Tagihan</span>
-            </div>
-            <div className="text-base sm:text-lg font-black text-text-main tabular-nums leading-tight">
-              {money(totals.totalFinal)}
-            </div>
-            <span className="text-[9px] text-slate-400 mt-1">Berdasarkan filter aktif</span>
-          </div>
-          <div className="bg-white border border-slate-200/80 rounded-2xl p-4 flex flex-col shadow-sm">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="w-7 h-7 rounded-lg bg-emerald-50 flex items-center justify-center border border-emerald-100/50">
-                <TrendingUp className="w-3.5 h-3.5 text-emerald-500" />
-              </div>
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Terbayar</span>
-            </div>
-            <div className="text-base sm:text-lg font-black text-emerald-600 tabular-nums leading-tight">
-              {money(totals.totalPaid)}
-            </div>
-            <span className="text-[9px] text-emerald-500 mt-1">Koleksi terverifikasi</span>
-          </div>
-          <div className="bg-white border border-slate-200/80 rounded-2xl p-4 flex flex-col shadow-sm">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="w-7 h-7 rounded-lg bg-amber-50 flex items-center justify-center border border-amber-100/50">
-                <Clock className="w-3.5 h-3.5 text-amber-500" />
-              </div>
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Outstanding</span>
-            </div>
-            <div className="text-base sm:text-lg font-black text-amber-650 tabular-nums leading-tight">
-              {money(totals.totalOutstanding)}
-            </div>
-            <span className="text-[9px] text-amber-500 mt-1">Belum terbayar</span>
-          </div>
-          <div className="bg-white border border-slate-200/80 rounded-2xl p-4 flex flex-col shadow-sm">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="w-7 h-7 rounded-lg bg-primary-container flex items-center justify-center border border-primary/10">
-                <BarChart3 className="w-3.5 h-3.5 text-primary" />
-              </div>
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Rasio Koleksi</span>
-            </div>
-            <div className="text-base sm:text-lg font-black text-primary tabular-nums leading-tight">
-              {totals.collectionRate}%
-            </div>
-            <div className="w-full bg-slate-100 rounded-full h-1 mt-2 overflow-hidden">
-              <div
-                className="bg-primary h-1 rounded-full transition-all duration-500"
-                style={{ width: `${totals.collectionRate}%` }}
-              />
-            </div>
-          </div>
+        <div className="mb-4 grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-4">
+          <StatCard
+            size="sm"
+            icon={Receipt}
+            label="Total Tagihan"
+            value={money(totals.totalFinal)}
+            hint="Berdasarkan filter aktif"
+          />
+          <StatCard
+            size="sm"
+            icon={TrendingUp}
+            tone="emerald"
+            label="Terbayar"
+            value={money(totals.totalPaid)}
+            hint="Koleksi terverifikasi"
+          />
+          <StatCard
+            size="sm"
+            icon={Clock}
+            tone="amber"
+            label="Outstanding"
+            value={money(totals.totalOutstanding)}
+            hint="Belum terbayar"
+          />
+          <StatCard
+            size="sm"
+            icon={BarChart3}
+            tone="primary"
+            label="Rasio Koleksi"
+            value={`${totals.collectionRate}%`}
+            progress={totals.collectionRate}
+          />
         </div>
       )}
 
-      <div className="flex items-center justify-between gap-3 mb-4">
-        <h3 className="font-black text-text-main text-base">Tagihan Siswa</h3>
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h3 className="font-black text-[13px] uppercase tracking-wide text-slate-400">Tagihan Siswa</h3>
       </div>
 
       {filteredTagihan.length === 0 ? (
@@ -933,7 +961,7 @@ export default function BillingTab({ user, toast }) {
         />
       ) : (
         <>
-          <div className="hidden md:block overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
+          <div className="hidden overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-sm md:block">
             <div className="overflow-x-auto custom-scrollbar">
               <table className="w-full min-w-[1040px] table-fixed text-sm">
                 <colgroup>
@@ -948,26 +976,26 @@ export default function BillingTab({ user, toast }) {
                 </colgroup>
                 <thead>
                   <tr className="border-b border-slate-100">
-                    <th className="bg-slate-50 px-3 py-3 text-left text-[11px] font-black uppercase tracking-wide text-slate-400"></th>
-                    <th className="bg-slate-50 px-3 py-3 text-left text-[11px] font-black uppercase tracking-wide text-slate-500">
+                    <th className="bg-slate-50 px-3 py-2.5 text-left text-[11px] font-black uppercase tracking-wide text-slate-400"></th>
+                    <th className="bg-slate-50 px-3 py-2.5 text-left text-[11px] font-black uppercase tracking-wide text-slate-500">
                       Siswa
                     </th>
-                    <th className="bg-slate-50 px-3 py-3 text-left text-[11px] font-black uppercase tracking-wide text-slate-500">
+                    <th className="bg-slate-50 px-3 py-2.5 text-left text-[11px] font-black uppercase tracking-wide text-slate-500">
                       Jenis
                     </th>
-                    <th className="bg-slate-50 px-3 py-3 text-left text-[11px] font-black uppercase tracking-wide text-slate-500">
+                    <th className="bg-slate-50 px-3 py-2.5 text-left text-[11px] font-black uppercase tracking-wide text-slate-500">
                       Periode
                     </th>
-                    <th className="bg-slate-50 px-3 py-3 text-right text-[11px] font-black uppercase tracking-wide text-slate-500">
+                    <th className="bg-slate-50 px-3 py-2.5 text-right text-[11px] font-black uppercase tracking-wide text-slate-500">
                       Final
                     </th>
-                    <th className="bg-slate-50 px-3 py-3 text-right text-[11px] font-black uppercase tracking-wide text-slate-500">
+                    <th className="bg-slate-50 px-3 py-2.5 text-right text-[11px] font-black uppercase tracking-wide text-slate-500">
                       Terbayar
                     </th>
-                    <th className="bg-slate-50 px-3 py-3 text-center text-[11px] font-black uppercase tracking-wide text-slate-500">
+                    <th className="bg-slate-50 px-3 py-2.5 text-center text-[11px] font-black uppercase tracking-wide text-slate-500">
                       Status
                     </th>
-                    <th className="sticky right-0 z-10 border-l border-slate-200/80 bg-slate-50 px-3 py-3 text-right text-[11px] font-black uppercase tracking-wide text-slate-500">
+                    <th className="sticky right-0 z-10 border-l border-slate-200/80 bg-slate-50 px-3 py-2.5 text-right text-[11px] font-black uppercase tracking-wide text-slate-500">
                       Aksi
                     </th>
                   </tr>
@@ -982,7 +1010,7 @@ export default function BillingTab({ user, toast }) {
                           selectedBills.includes(t.id) ? 'bg-primary-container/55' : 'bg-white hover:bg-slate-50/70'
                         }
                       >
-                        <td className="px-3 py-3 align-middle">
+                        <td className="px-3 py-2.5 align-middle">
                           <input
                             type="checkbox"
                             checked={selectedBills.includes(t.id)}
@@ -991,7 +1019,7 @@ export default function BillingTab({ user, toast }) {
                             className="rounded border-slate-300 text-primary focus:ring-primary disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
                           />
                         </td>
-                        <td className="px-3 py-3 align-middle">
+                        <td className="px-3 py-2.5 align-middle">
                           <div className="flex min-w-0 items-center gap-3">
                             <StudentAvatar name={t.siswa_nama} url={student?.foto} size="sm" />
                             <div className="min-w-0">
@@ -1007,22 +1035,22 @@ export default function BillingTab({ user, toast }) {
                             </div>
                           </div>
                         </td>
-                        <td className="px-3 py-3 align-middle">
+                        <td className="px-3 py-2.5 align-middle">
                           <div className="truncate font-bold text-slate-700" title={t.nama}>
                             {t.nama}
                           </div>
                         </td>
-                        <td className="px-3 py-3 align-middle font-bold text-slate-500">{t.periode || '-'}</td>
-                        <td className="px-3 py-3 text-right align-middle font-black tabular-nums text-slate-900">
+                        <td className="px-3 py-2.5 align-middle font-bold text-slate-500">{t.periode || '-'}</td>
+                        <td className="px-3 py-2.5 text-right align-middle font-black tabular-nums text-slate-900">
                           {money(t.nominal_final)}
                         </td>
-                        <td className="px-3 py-3 text-right align-middle font-black tabular-nums text-emerald-600">
+                        <td className="px-3 py-2.5 text-right align-middle font-black tabular-nums text-emerald-600">
                           {money(t.paid_amount)}
                         </td>
-                        <td className="px-3 py-3 text-center align-middle">
+                        <td className="px-3 py-2.5 text-center align-middle">
                           <BillingStatusBadge status={t.status} />
                         </td>
-                        <td className="sticky right-0 z-10 border-l border-slate-200/80 bg-inherit px-3 py-3 align-middle">
+                        <td className="sticky right-0 z-10 border-l border-slate-200/80 bg-inherit px-3 py-2.5 align-middle">
                           <div className="flex justify-end gap-1.5">
                             <IconButton
                               icon={FilePenLine}
@@ -1046,22 +1074,22 @@ export default function BillingTab({ user, toast }) {
                 </tbody>
                 <tfoot>
                   <tr className="border-t border-slate-200 bg-slate-50">
-                    <td className="px-3 py-3"></td>
-                    <td colSpan={3} className="px-3 py-3 text-xs font-black uppercase tracking-wide text-slate-500">
+                    <td className="px-3 py-2.5"></td>
+                    <td colSpan={3} className="px-3 py-2.5 text-xs font-black uppercase tracking-wide text-slate-500">
                       Total ringkasan
                     </td>
-                    <td className="px-3 py-3 text-right font-black tabular-nums text-slate-900">
+                    <td className="px-3 py-2.5 text-right font-black tabular-nums text-slate-900">
                       {money(totals.totalFinal)}
                     </td>
-                    <td className="px-3 py-3 text-right font-black tabular-nums text-emerald-600">
+                    <td className="px-3 py-2.5 text-right font-black tabular-nums text-emerald-600">
                       {money(totals.totalPaid)}
                     </td>
-                    <td className="px-3 py-3 text-center">
+                    <td className="px-3 py-2.5 text-center">
                       <span className="inline-flex items-center rounded-full bg-primary-container px-2.5 py-0.5 text-xs font-black text-primary">
                         {totals.collectionRate}% Terkoleksi
                       </span>
                     </td>
-                    <td className="sticky right-0 z-10 border-l border-slate-200/80 bg-slate-50 px-3 py-3"></td>
+                    <td className="sticky right-0 z-10 border-l border-slate-200/80 bg-slate-50 px-3 py-2.5"></td>
                   </tr>
                 </tfoot>
               </table>
@@ -1086,11 +1114,11 @@ export default function BillingTab({ user, toast }) {
               return (
                 <div
                   key={t.id}
-                  className="bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col hover:border-slate-300 transition duration-200 relative overflow-hidden"
+                  className="relative flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition duration-200 hover:border-slate-300"
                 >
                   {/* Decorative side accent color bar indicating status */}
                   <div className={`absolute top-0 left-0 w-1.5 h-full ${accentColor}`} />
-                  <div className="p-4 pl-5 flex flex-col gap-3">
+                  <div className="flex flex-col gap-2.5 p-3.5 pl-4">
                     <div className="flex items-start justify-between gap-2.5">
                       <div className="flex items-start gap-3 min-w-0">
                         <div className="flex items-center h-5 mt-0.5">
@@ -1105,7 +1133,7 @@ export default function BillingTab({ user, toast }) {
                         <div className="flex gap-2.5 items-center min-w-0">
                           <StudentAvatar name={t.siswa_nama} url={student?.foto} size="sm" />
                           <div className="min-w-0">
-                            <div className="font-black text-sm text-slate-805 truncate">{t.siswa_nama}</div>
+                            <div className="font-black text-sm text-slate-800 truncate">{t.siswa_nama}</div>
                             <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mt-0.5">
                               {t.nama}
                             </div>
@@ -1154,7 +1182,7 @@ export default function BillingTab({ user, toast }) {
                         <button
                           type="button"
                           onClick={() => voidBill(t)}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-200 text-[11px] font-black text-red-650 bg-red-50 hover:bg-red-100 transition active:scale-95"
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-200 text-[11px] font-black text-red-600 bg-red-50 hover:bg-red-100 transition active:scale-95"
                         >
                           <Ban className="w-3.5 h-3.5" /> Void
                         </button>
@@ -1166,9 +1194,9 @@ export default function BillingTab({ user, toast }) {
             })}
 
             {/* Mobile Summary Slip */}
-            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 shadow-sm space-y-3 relative overflow-hidden">
+            <div className="relative space-y-2.5 overflow-hidden rounded-xl border border-slate-200 bg-slate-50 p-3.5 shadow-sm">
               <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary to-amber-500" />
-              <div className="text-[10px] font-black text-slate-450 uppercase tracking-wider">
+              <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
                 Ringkasan Total Filtered
               </div>
               <div className="grid grid-cols-2 gap-3 text-xs">
@@ -1185,8 +1213,8 @@ export default function BillingTab({ user, toast }) {
               </div>
               <div className="flex items-center justify-between border-t border-slate-200/80 pt-2.5 mt-1">
                 <div className="flex flex-col">
-                  <span className="text-[9px] text-slate-450 font-black uppercase tracking-wide">Outstanding</span>
-                  <span className="text-xs text-amber-650 font-black tabular-nums">
+                  <span className="text-[9px] text-slate-400 font-black uppercase tracking-wide">Outstanding</span>
+                  <span className="text-xs text-amber-600 font-black tabular-nums">
                     {money(totals.totalOutstanding)}
                   </span>
                 </div>
@@ -1203,7 +1231,7 @@ export default function BillingTab({ user, toast }) {
 
   const renderPembayaranTab = () => (
     <>
-      <div className="flex flex-wrap items-center justify-between gap-4 mb-6 bg-white border border-slate-200/80 p-4 sm:p-5 rounded-2xl shadow-sm">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200/80 bg-white p-3 shadow-sm sm:p-4">
         <div>
           <h3 className="font-black text-text-main text-base">Riwayat Pembayaran</h3>
           <p className="text-xs text-slate-400 mt-1">Daftar penerimaan pembayaran SPP dan Kegiatan dari wali murid</p>
@@ -1223,7 +1251,7 @@ export default function BillingTab({ user, toast }) {
         <EmptyState icon="💳" title="Belum Ada Pembayaran" description="Belum ada riwayat pembayaran tercatat." />
       ) : (
         <>
-          <div className="hidden md:block bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-sm">
+          <div className="hidden overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-sm md:block">
             <Table headers={['Siswa', 'Nominal', 'Alokasi', 'Metode', 'Status', 'Kuitansi', 'Aksi']}>
               {pembayaran.map((p) => {
                 const student = siswa.find((x) => x.id === p.siswa_id);
@@ -1232,7 +1260,7 @@ export default function BillingTab({ user, toast }) {
                     <Td>
                       <div className="flex items-center gap-3 py-1">
                         <StudentAvatar name={p.siswa_nama} url={student?.foto} size="sm" />
-                        <span className="font-semibold text-slate-855">{p.siswa_nama}</span>
+                        <span className="font-semibold text-slate-800">{p.siswa_nama}</span>
                       </div>
                     </Td>
                     <MoneyCell className="text-slate-900 font-extrabold">{money(p.nominal)}</MoneyCell>
@@ -1332,10 +1360,10 @@ export default function BillingTab({ user, toast }) {
               return (
                 <div
                   key={p.id}
-                  className="bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col hover:border-slate-300 transition duration-200 relative overflow-hidden"
+                  className="relative flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition duration-200 hover:border-slate-300"
                 >
                   <div className={`absolute top-0 left-0 w-1.5 h-full ${accentColor}`} />
-                  <div className="p-4 pl-5 flex flex-col gap-3">
+                  <div className="flex flex-col gap-2.5 p-3.5 pl-4">
                     <div className="flex items-start justify-between gap-2.5">
                       <div className="min-w-0">
                         <span className="text-[10px] text-slate-400 font-bold block">{dateLabel}</span>
@@ -1357,7 +1385,7 @@ export default function BillingTab({ user, toast }) {
                     <div className="flex items-center gap-3">
                       <StudentAvatar name={p.siswa_nama} url={student?.foto} size="sm" />
                       <div className="min-w-0 flex-1">
-                        <div className="font-black text-sm text-slate-805 truncate">{p.siswa_nama}</div>
+                        <div className="font-black text-sm text-slate-800 truncate">{p.siswa_nama}</div>
                         <div className="flex items-center gap-1.5 mt-0.5">
                           <span className="text-[10px] font-semibold text-slate-400">Metode:</span>
                           <MethodBadge metode={p.metode} />
@@ -1370,7 +1398,7 @@ export default function BillingTab({ user, toast }) {
                         <span className="text-slate-400 font-semibold uppercase tracking-wider text-[9px] block mb-0.5">
                           Nominal
                         </span>
-                        <div className="text-base font-black text-slate-855 tabular-nums">{money(p.nominal)}</div>
+                        <div className="text-base font-black text-slate-800 tabular-nums">{money(p.nominal)}</div>
                       </div>
                       <div className="text-right">
                         <span className="text-slate-400 font-semibold uppercase tracking-wider text-[9px] block mb-0.5">
@@ -1379,7 +1407,7 @@ export default function BillingTab({ user, toast }) {
                         <div className="text-xs font-bold text-slate-700 tabular-nums">
                           {money(p.allocated_amount || 0)}
                           {Number(p.credit_amount || 0) > 0 && (
-                            <span className="block text-[10px] font-black text-amber-650">
+                            <span className="block text-[10px] font-black text-amber-600">
                               Kredit: {money(p.credit_amount)}
                             </span>
                           )}
@@ -1406,14 +1434,14 @@ export default function BillingTab({ user, toast }) {
                             <button
                               type="button"
                               onClick={() => verify(p)}
-                              className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-200 text-[11px] font-black text-emerald-650 bg-emerald-50 hover:bg-emerald-100 transition active:scale-95 flex-1 min-w-[90px]"
+                              className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-200 text-[11px] font-black text-emerald-600 bg-emerald-50 hover:bg-emerald-100 transition active:scale-95 flex-1 min-w-[90px]"
                             >
                               <CheckCircle2 className="w-3.5 h-3.5" /> Verifikasi
                             </button>
                             <button
                               type="button"
                               onClick={() => reject(p)}
-                              className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-200 text-[11px] font-black text-red-650 bg-red-50 hover:bg-red-100 transition active:scale-95 flex-1 min-w-[90px]"
+                              className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-200 text-[11px] font-black text-red-600 bg-red-50 hover:bg-red-100 transition active:scale-95 flex-1 min-w-[90px]"
                             >
                               <X className="w-3.5 h-3.5" /> Tolak
                             </button>
@@ -1432,7 +1460,7 @@ export default function BillingTab({ user, toast }) {
                           <button
                             type="button"
                             onClick={() => voidPay(p)}
-                            className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-200 text-[11px] font-black text-red-655 bg-red-50 hover:bg-red-100 transition active:scale-95 flex-1 min-w-[90px]"
+                            className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-200 text-[11px] font-black text-red-600 bg-red-50 hover:bg-red-100 transition active:scale-95 flex-1 min-w-[90px]"
                           >
                             <Ban className="w-3.5 h-3.5" /> Void
                           </button>
@@ -1452,7 +1480,7 @@ export default function BillingTab({ user, toast }) {
   const renderTarifTab = () => (
     <>
       {/* Toolbar / Configuration Selector */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 bg-white border border-slate-200/80 p-4 sm:p-5 rounded-2xl shadow-sm">
+      <div className="mb-4 flex flex-col justify-between gap-3 rounded-xl border border-slate-200/80 bg-white p-3 shadow-sm sm:flex-row sm:items-center sm:p-4">
         <div className="flex flex-col w-full sm:w-auto">
           <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Tahun Ajaran</span>
           <CustomSelect
@@ -1472,7 +1500,7 @@ export default function BillingTab({ user, toast }) {
             <button
               type="button"
               onClick={() => {
-                setTarifForm((f) => ({ ...f, cabang_id: m.cabangId || '' }));
+                setTarifForm({ ...blankTarifForm(), cabang_id: m.cabangId || '' });
                 setShowTarifModal(true);
               }}
               className="flex items-center justify-center gap-1.5 h-9 px-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-black text-slate-700 shadow-sm transition active:scale-95"
@@ -1492,16 +1520,16 @@ export default function BillingTab({ user, toast }) {
         </div>
       </div>
 
-      <div className="mb-8">
-        <h3 className="font-black text-text-main text-base mb-4">Daftar Tarif Biaya</h3>
+      <div className="mb-6">
+        <h3 className="mb-3 text-[13px] font-black uppercase tracking-wide text-slate-400">Daftar Tarif Biaya</h3>
         {tarif.length === 0 ? (
           <EmptyState icon="📋" title="Belum Ada Tarif" description="Silakan buat tarif baru terlebih dahulu." />
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {Object.entries(groupedTarif).map(([groupName, items]) => (
               <div
                 key={groupName}
-                className="bg-white border border-slate-250/70 rounded-2xl p-4 sm:p-5 shadow-sm flex flex-col justify-between hover:border-slate-350 hover:shadow-md transition-all duration-300 hover:-translate-y-0.5"
+                className="flex flex-col justify-between rounded-xl border border-slate-200/80 bg-white p-3.5 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md sm:p-4"
               >
                 <div>
                   <div className="flex items-center gap-2.5 mb-4 border-b border-slate-100 pb-3">
@@ -1509,7 +1537,7 @@ export default function BillingTab({ user, toast }) {
                       {groupName === 'Global' ? 'G' : groupName.slice(0, 2).toUpperCase()}
                     </div>
                     <div>
-                      <h4 className="font-black text-slate-805 leading-tight">
+                      <h4 className="font-black text-slate-800 leading-tight">
                         {groupName === 'Global' ? 'Tarif Global / Umum' : groupName}
                       </h4>
                       <p className="text-[9px] text-slate-400 font-black uppercase tracking-wider mt-0.5">
@@ -1517,17 +1545,17 @@ export default function BillingTab({ user, toast }) {
                       </p>
                     </div>
                   </div>
-                  <div className="space-y-3 max-h-60 overflow-y-auto pr-1.5 custom-scrollbar">
+                  <div className="max-h-56 space-y-2 overflow-y-auto pr-1 custom-scrollbar">
                     {items.map((t) => {
                       const isActive = t.aktif !== 0;
                       return (
                         <div
                           key={t.id}
-                          className={`rounded-xl border p-3 transition duration-150 ${!isActive ? 'border-dashed border-slate-300 bg-slate-50/50 opacity-75' : 'border-slate-100 bg-white hover:border-slate-200'}`}
+                          className={`rounded-lg border p-2.5 transition duration-150 ${!isActive ? 'border-dashed border-slate-300 bg-slate-50/50 opacity-75' : 'border-slate-100 bg-white hover:border-slate-200'}`}
                         >
                           <div className="flex justify-between items-start gap-2.5">
                             <div className="min-w-0">
-                              <div className="font-bold text-xs text-slate-805 truncate" title={t.nama}>
+                              <div className="font-bold text-xs text-slate-800 truncate" title={t.nama}>
                                 {t.nama}
                               </div>
                               <div className="flex items-center gap-1.5 mt-1.5">
@@ -1535,14 +1563,14 @@ export default function BillingTab({ user, toast }) {
                                   {t.jenis}
                                 </span>
                                 {!isActive && (
-                                  <span className="inline-block px-1.5 py-0.5 rounded text-[8px] font-black bg-red-50 text-red-650 uppercase tracking-wider">
+                                  <span className="inline-block px-1.5 py-0.5 rounded text-[8px] font-black bg-red-50 text-red-600 uppercase tracking-wider">
                                     Nonaktif
                                   </span>
                                 )}
                               </div>
                             </div>
                             <div className="flex flex-col items-end gap-1.5 shrink-0">
-                              <div className="text-xs font-black text-slate-855 tabular-nums">{money(t.nominal)}</div>
+                              <div className="text-xs font-black text-slate-800 tabular-nums">{money(t.nominal)}</div>
                               {user.role === 'admin' && (
                                 <IconButton
                                   icon={Pencil}
@@ -1565,8 +1593,10 @@ export default function BillingTab({ user, toast }) {
         )}
       </div>
 
-      <div className="mb-4">
-        <h3 className="font-black text-text-main text-base mb-4">Diskon & Keringanan Siswa</h3>
+      <div>
+        <h3 className="mb-3 text-[13px] font-black uppercase tracking-wide text-slate-400">
+          Diskon & Keringanan Siswa
+        </h3>
         {diskon.length === 0 ? (
           <EmptyState
             icon="%"
@@ -1574,71 +1604,87 @@ export default function BillingTab({ user, toast }) {
             description="Tambahkan keringanan siswa jika ada potongan khusus."
           />
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {diskon.map((d) => {
-              const student = siswa.find((x) => x.id === d.siswa_id);
-              const isActive = d.aktif !== 0;
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {groupedDiskon.map((group) => {
+              const student = siswa.find((x) => x.id === group.siswa_id);
+              const adaAktif = group.items.some((d) => d.aktif !== 0);
 
               return (
                 <div
-                  key={d.id}
-                  className={`relative overflow-hidden bg-white border rounded-3xl p-5 shadow-sm flex flex-col justify-between hover:shadow-md hover:border-emerald-250 transition-all duration-300 ${!isActive ? 'border-dashed border-slate-300 bg-slate-50/50 opacity-75' : 'border-slate-200/80 bg-white'}`}
+                  key={group.siswa_id}
+                  className={`relative flex flex-col overflow-hidden rounded-2xl border bg-white p-4 shadow-sm transition-all duration-300 hover:border-emerald-200 hover:shadow-md ${!adaAktif ? 'border-dashed border-slate-300 bg-slate-50/50 opacity-75' : 'border-slate-200/80 bg-white'}`}
                 >
                   {/* Visual Left Ticket Border Highlight */}
                   <div
-                    className={`absolute top-0 left-0 w-1.5 h-full ${isActive ? 'bg-emerald-500' : 'bg-slate-400'}`}
+                    className={`absolute top-0 left-0 w-1.5 h-full ${adaAktif ? 'bg-emerald-500' : 'bg-slate-400'}`}
                   />
 
                   <div className="pl-2">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <StudentAvatar name={d.siswa_nama} url={student?.foto} size="sm" />
-                        <div className="min-w-0">
-                          <h4 className="font-black text-sm text-slate-805 truncate">{d.siswa_nama}</h4>
-                          <span className="inline-block mt-1 px-1.5 py-0.5 rounded text-[8px] font-black bg-slate-100 text-slate-500 uppercase tracking-wider">
-                            Diskon {d.jenis}
-                          </span>
-                        </div>
+                    <div className="flex items-center gap-3 min-w-0">
+                      <StudentAvatar name={group.siswa_nama} url={student?.foto} size="sm" />
+                      <div className="min-w-0">
+                        <h4 className="font-black text-sm text-slate-800 truncate">{group.siswa_nama}</h4>
+                        <span className="inline-block mt-1 px-1.5 py-0.5 rounded text-[8px] font-black bg-slate-100 text-slate-500 uppercase tracking-wider">
+                          {group.items.length} diskon{group.items.length > 1 ? ' · menumpuk' : ''}
+                        </span>
                       </div>
-                      {['admin', 'admin_cabang'].includes(user.role) && (
-                        <IconButton
-                          icon={Pencil}
-                          label={`Edit diskon ${d.siswa_nama}`}
-                          onClick={() => openEditDiskon(d)}
-                          size="sm"
-                          className="hover:bg-slate-100 text-slate-500 shrink-0"
-                        />
-                      )}
                     </div>
 
                     {/* Voucher Ticket Dashed Divider */}
-                    <div className="border-t border-dashed border-slate-200 my-4" />
+                    <div className="my-3 border-t border-dashed border-slate-200" />
 
-                    <div className="rounded-2xl bg-emerald-50/70 border border-emerald-100/50 p-3.5 flex items-center justify-between hover:bg-emerald-100/50 transition-colors mb-3">
-                      <div>
-                        <span className="text-[9px] font-black text-emerald-600/80 uppercase tracking-wider block mb-0.5">
-                          Nilai Potongan
-                        </span>
-                        <span className="text-base sm:text-lg font-black text-emerald-700 tabular-nums">
-                          {d.tipe === 'persen' ? `${d.nilai}%` : money(d.nilai)}
-                        </span>
-                      </div>
-                      {isActive ? (
-                        <span className="px-2 py-0.5 rounded-lg bg-emerald-100 text-emerald-700 text-[8px] font-black uppercase tracking-wider">
-                          Kupon Aktif
-                        </span>
-                      ) : (
-                        <span className="px-2 py-0.5 rounded-lg bg-red-100 text-red-700 text-[8px] font-black uppercase tracking-wider">
-                          Nonaktif
-                        </span>
-                      )}
+                    <div className="space-y-2">
+                      {group.items.map((d) => {
+                        const isActive = d.aktif !== 0;
+                        return (
+                          <div
+                            key={d.id}
+                            className="rounded-xl border border-emerald-100/50 bg-emerald-50/70 p-3 transition-colors hover:bg-emerald-100/50"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0 flex-1">
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                  <span className="px-1.5 py-0.5 rounded text-[8px] font-black bg-slate-100 text-slate-500 uppercase tracking-wider">
+                                    Diskon {d.jenis}
+                                  </span>
+                                  {isActive ? (
+                                    <span className="px-2 py-0.5 rounded-lg bg-emerald-100 text-emerald-700 text-[8px] font-black uppercase tracking-wider">
+                                      Kupon Aktif
+                                    </span>
+                                  ) : (
+                                    <span className="px-2 py-0.5 rounded-lg bg-red-100 text-red-700 text-[8px] font-black uppercase tracking-wider">
+                                      Nonaktif
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="mt-1.5 flex items-baseline gap-2">
+                                  <span className="text-[9px] font-black text-emerald-600/80 uppercase tracking-wider">
+                                    Nilai Potongan
+                                  </span>
+                                  <span className="text-base sm:text-lg font-black text-emerald-700 tabular-nums">
+                                    {d.tipe === 'persen' ? `${d.nilai}%` : money(d.nilai)}
+                                  </span>
+                                </div>
+                                {d.catatan && (
+                                  <p className="mt-2 rounded-lg border border-emerald-100/60 bg-white/60 p-2 text-xs font-medium italic text-slate-500">
+                                    "{d.catatan}"
+                                  </p>
+                                )}
+                              </div>
+                              {['admin', 'admin_cabang'].includes(user.role) && (
+                                <IconButton
+                                  icon={Pencil}
+                                  label={`Edit diskon ${d.siswa_nama} ${d.jenis}`}
+                                  onClick={() => openEditDiskon(d)}
+                                  size="sm"
+                                  className="shrink-0 text-slate-500 hover:bg-white/70"
+                                />
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
-
-                    {d.catatan && (
-                      <p className="text-xs text-slate-500 bg-slate-50/50 p-2.5 rounded-xl border border-slate-100 mt-2 font-medium italic">
-                        "{d.catatan}"
-                      </p>
-                    )}
                   </div>
                 </div>
               );
@@ -1651,7 +1697,7 @@ export default function BillingTab({ user, toast }) {
 
   const renderInvoiceTab = () => (
     <>
-      <div className="flex flex-col gap-1 mb-6 bg-white border border-slate-200/80 p-4 sm:p-5 rounded-2xl shadow-sm">
+      <div className="mb-4 flex flex-col gap-1 rounded-xl border border-slate-200/80 bg-white p-3 shadow-sm sm:p-4">
         <h3 className="font-black text-text-main text-base">Invoice Tagihan</h3>
         <p className="text-xs text-slate-400 mt-1">Daftar invoice resmi yang diterbitkan untuk wali murid</p>
       </div>
@@ -1659,7 +1705,7 @@ export default function BillingTab({ user, toast }) {
         <EmptyState icon="📄" title="Belum Ada Invoice" description="Belum ada invoice tagihan yang dibuat." />
       ) : (
         <>
-          <div className="hidden md:block bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-sm">
+          <div className="hidden overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-sm md:block">
             <Table headers={['Nomor', 'Siswa', 'Total', 'Status', '']}>
               {invoices.map((i) => {
                 const student = siswa.find((x) => x.id === i.siswa_id);
@@ -1673,7 +1719,7 @@ export default function BillingTab({ user, toast }) {
                     <Td>
                       <div className="flex items-center gap-3 py-1">
                         <StudentAvatar name={i.siswa_nama} url={student?.foto} size="sm" />
-                        <span className="font-semibold text-slate-855">{i.siswa_nama}</span>
+                        <span className="font-semibold text-slate-800">{i.siswa_nama}</span>
                       </div>
                     </Td>
                     <MoneyCell className="text-slate-900 font-extrabold">{money(i.total)}</MoneyCell>
@@ -1724,10 +1770,10 @@ export default function BillingTab({ user, toast }) {
               return (
                 <div
                   key={i.id}
-                  className="bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col hover:border-slate-300 transition duration-200 relative overflow-hidden"
+                  className="relative flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition duration-200 hover:border-slate-300"
                 >
                   <div className={`absolute top-0 left-0 w-1.5 h-full ${accentColor}`} />
-                  <div className="p-4 pl-5 flex flex-col gap-3">
+                  <div className="flex flex-col gap-2.5 p-3.5 pl-4">
                     <div className="flex items-start justify-between gap-2.5">
                       <div className="min-w-0">
                         <span className="text-[10px] text-slate-400 font-bold block">Invoice No</span>
@@ -1747,10 +1793,10 @@ export default function BillingTab({ user, toast }) {
                     <div className="flex items-center gap-3">
                       <StudentAvatar name={i.siswa_nama} url={student?.foto} size="sm" />
                       <div className="min-w-0 flex-1">
-                        <div className="font-black text-sm text-slate-855 truncate">{i.siswa_nama}</div>
+                        <div className="font-black text-sm text-slate-800 truncate">{i.siswa_nama}</div>
                         <div className="text-[10px] font-semibold text-slate-400 mt-0.5">
                           Total Tagihan:{' '}
-                          <span className="font-extrabold text-slate-805 tabular-nums">{money(i.total)}</span>
+                          <span className="font-extrabold text-slate-800 tabular-nums">{money(i.total)}</span>
                         </div>
                       </div>
                     </div>
@@ -1771,7 +1817,7 @@ export default function BillingTab({ user, toast }) {
                           <button
                             type="button"
                             onClick={() => sendWhatsAppInvoice(i)}
-                            className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border border-emerald-250 text-xs font-black text-emerald-700 bg-emerald-50 hover:bg-emerald-100 active:scale-95 transition flex-1"
+                            className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border border-emerald-200 text-xs font-black text-emerald-700 bg-emerald-50 hover:bg-emerald-100 active:scale-95 transition flex-1"
                           >
                             <Smartphone className="w-3.5 h-3.5 text-emerald-600" /> Kirim WA
                           </button>
@@ -1794,10 +1840,10 @@ export default function BillingTab({ user, toast }) {
         <Modal
           title={`Preview Generate ${preview.kind === 'bulanan' ? 'Bulanan' : 'Kegiatan'}`}
           onClose={() => setPreview(null)}
-          maxWidth="max-w-3xl"
+          maxWidth="max-w-4xl"
         >
-          <div className="space-y-4">
-            <div className="text-sm text-slate-600">
+          <div className="space-y-3.5">
+            <div className="text-xs text-slate-600 sm:text-sm">
               {preview.kind === 'bulanan'
                 ? `Periode: ${preview.period} | Tahun ajaran: ${preview.tahun_ajaran}`
                 : `Tahun ajaran: ${preview.tahun_ajaran}`}
@@ -1815,33 +1861,39 @@ export default function BillingTab({ user, toast }) {
             {newItems.length > 0 && (
               <>
                 <div className="font-black text-text-main">Tagihan baru ({newItems.length})</div>
-                <div className="overflow-x-auto max-h-64">
-                  <table className="w-full text-sm">
+                <div className="max-h-72 overflow-x-auto">
+                  <table className="w-full min-w-[46rem] text-sm">
                     <thead>
                       <tr>
                         <th className="text-left py-2 px-3 bg-slate-50 text-slate-500 font-black">Siswa</th>
                         <th className="text-left py-2 px-3 bg-slate-50 text-slate-500 font-black">Jenis</th>
                         <th className="text-left py-2 px-3 bg-slate-50 text-slate-500 font-black">Jenjang</th>
                         <th className="text-left py-2 px-3 bg-slate-50 text-slate-500 font-black">Paket</th>
-                        <th className="text-right py-2 px-3 bg-slate-50 text-slate-500 font-black">Awal</th>
-                        <th className="text-right py-2 px-3 bg-slate-50 text-slate-500 font-black">Diskon</th>
-                        <th className="text-right py-2 px-3 bg-slate-50 text-slate-500 font-black">Final</th>
+                        <th className="bg-slate-50 px-3 py-2 text-right font-black text-slate-500 whitespace-nowrap">
+                          Awal
+                        </th>
+                        <th className="bg-slate-50 px-3 py-2 text-right font-black text-slate-500 whitespace-nowrap">
+                          Diskon
+                        </th>
+                        <th className="bg-slate-50 px-3 py-2 text-right font-black text-slate-500 whitespace-nowrap">
+                          Final
+                        </th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {newItems.map((p, i) => (
                         <tr key={i}>
-                          <td className="py-2 px-3 text-slate-700">{p.siswa_nama}</td>
-                          <td className="py-2 px-3 text-slate-700">{p.nama}</td>
-                          <td className="py-2 px-3 text-slate-700">{p.jenjang_nama}</td>
-                          <td className="py-2 px-3 text-slate-700">{p.paket}</td>
-                          <td className="py-2 px-3 text-right tabular-nums font-semibold text-slate-700">
+                          <td className="px-3 py-2 text-slate-700 whitespace-nowrap">{p.siswa_nama}</td>
+                          <td className="px-3 py-2 text-slate-700 whitespace-nowrap">{p.nama}</td>
+                          <td className="px-3 py-2 text-slate-700 whitespace-nowrap">{p.jenjang_nama}</td>
+                          <td className="px-3 py-2 text-slate-700 whitespace-nowrap">{p.paket}</td>
+                          <td className="px-3 py-2 text-right font-semibold tabular-nums text-slate-700 whitespace-nowrap">
                             {money(p.nominal_awal)}
                           </td>
-                          <td className="py-2 px-3 text-right tabular-nums font-semibold text-slate-700">
+                          <td className="px-3 py-2 text-right font-semibold tabular-nums text-slate-700 whitespace-nowrap">
                             {money(p.diskon_amount)}
                           </td>
-                          <td className="py-2 px-3 text-right tabular-nums font-black text-slate-900">
+                          <td className="px-3 py-2 text-right font-black tabular-nums text-slate-900 whitespace-nowrap">
                             {money(p.nominal_final)}
                           </td>
                         </tr>
@@ -1874,9 +1926,9 @@ export default function BillingTab({ user, toast }) {
       )}
 
       {showTarifModal && (
-        <Modal title="Tambah Tarif Baru" onClose={() => setShowTarifModal(false)}>
-          <div className="space-y-4">
-            <div className="grid sm:grid-cols-2 gap-4">
+        <Modal title="Tambah Tarif Baru" onClose={requestCloseTarif}>
+          <div className="space-y-3.5">
+            <div className="grid sm:grid-cols-2 gap-3.5">
               {user.role === 'admin' && (
                 <div className="sm:col-span-2">
                   <label className="label font-bold text-slate-700 dark:text-slate-300">
@@ -1969,8 +2021,8 @@ export default function BillingTab({ user, toast }) {
                 </div>
               </div>
             </div>
-            <div className="flex justify-end gap-2 pt-4 border-t border-slate-100 dark:border-slate-800 mt-4">
-              <ActionButton icon={X} onClick={() => setShowTarifModal(false)} variant="secondary">
+            <div className="mt-3 flex justify-end gap-2 border-t border-slate-100 pt-3 dark:border-slate-800">
+              <ActionButton icon={X} onClick={requestCloseTarif} variant="secondary">
                 Batal
               </ActionButton>
               <ActionButton icon={submitting ? undefined : Save} disabled={submitting} onClick={addTarif}>
@@ -1989,15 +2041,9 @@ export default function BillingTab({ user, toast }) {
       )}
 
       {showDiskonModal && (
-        <Modal
-          title="Tambah Diskon / Keringanan Siswa"
-          onClose={() => {
-            setShowDiskonModal(false);
-            setLocalCabangIdDiskon('');
-          }}
-        >
-          <div className="space-y-4">
-            <div className="grid sm:grid-cols-2 gap-4">
+        <Modal title="Tambah Diskon / Keringanan Siswa" onClose={requestCloseDiskon}>
+          <div className="space-y-3.5">
+            <div className="grid sm:grid-cols-2 gap-3.5">
               {user.role === 'admin' && !m.cabangId && (
                 <div className="sm:col-span-2">
                   <label className="label font-bold text-slate-700 dark:text-slate-300">Filter Cabang Siswa</label>
@@ -2100,15 +2146,8 @@ export default function BillingTab({ user, toast }) {
                 />
               </div>
             </div>
-            <div className="flex justify-end gap-2 pt-4 border-t border-slate-100 dark:border-slate-800 mt-4">
-              <ActionButton
-                icon={X}
-                onClick={() => {
-                  setShowDiskonModal(false);
-                  setLocalCabangIdDiskon('');
-                }}
-                variant="secondary"
-              >
+            <div className="mt-3 flex justify-end gap-2 border-t border-slate-100 pt-3 dark:border-slate-800">
+              <ActionButton icon={X} onClick={requestCloseDiskon} variant="secondary">
                 Batal
               </ActionButton>
               <ActionButton icon={submitting ? undefined : Save} disabled={submitting} onClick={addDiskon}>
@@ -2128,8 +2167,8 @@ export default function BillingTab({ user, toast }) {
 
       {editingTarif && (
         <Modal title="Edit Tarif" onClose={() => setEditingTarif(null)}>
-          <div className="space-y-4">
-            <div className="grid sm:grid-cols-2 gap-4">
+          <div className="space-y-3.5">
+            <div className="grid sm:grid-cols-2 gap-3.5">
               <div className="sm:col-span-2">
                 <label className="label font-bold text-slate-700 dark:text-slate-300">Nama Tarif</label>
                 <Input
@@ -2164,8 +2203,8 @@ export default function BillingTab({ user, toast }) {
             <div className="rounded-xl bg-slate-50 border border-slate-100 px-3 py-2 text-xs text-slate-500">
               {editingTarif.jenjang_nama || 'Jenjang'} · {String(editingTarif.jenis || '').toUpperCase()} ·{' '}
               {editingTarif.tahun_ajaran}
-            </div>
-            <div className="flex justify-end gap-2 pt-4 border-t border-slate-100 dark:border-slate-800">
+            </div>{' '}
+            <div className="flex justify-end gap-2 border-t border-slate-100 pt-3 dark:border-slate-800">
               <ActionButton icon={X} onClick={() => setEditingTarif(null)} variant="secondary">
                 Batal
               </ActionButton>
@@ -2186,15 +2225,15 @@ export default function BillingTab({ user, toast }) {
 
       {editingDiskon && (
         <Modal title="Edit Diskon / Keringanan" onClose={() => setEditingDiskon(null)}>
-          <div className="space-y-4">
+          <div className="space-y-3.5">
             <div className="rounded-xl bg-slate-50 border border-slate-100 px-3 py-2">
-              <div className="text-[10px] font-black text-slate-400 uppercase text-slate-550">Siswa</div>
+              <div className="text-[10px] font-black text-slate-400 uppercase text-slate-500">Siswa</div>
               <div className="font-black text-slate-800">{editingDiskon.siswa_nama}</div>
               <div className="text-xs text-slate-500">
                 {String(editingDiskon.jenis || '').toUpperCase()} · {editingDiskon.tahun_ajaran}
               </div>
             </div>
-            <div className="grid sm:grid-cols-2 gap-4">
+            <div className="grid sm:grid-cols-2 gap-3.5">
               <div>
                 <label className="label font-bold text-slate-700 dark:text-slate-300">Tipe Diskon</label>
                 <CustomSelect
@@ -2243,8 +2282,8 @@ export default function BillingTab({ user, toast }) {
                   onChange={(checked) => setEditingDiskon((d) => ({ ...d, aktif: checked ? 1 : 0 }))}
                 />
               </div>
-            </div>
-            <div className="flex justify-end gap-2 pt-4 border-t border-slate-100 dark:border-slate-800">
+            </div>{' '}
+            <div className="flex justify-end gap-2 border-t border-slate-100 pt-3 dark:border-slate-800">
               <ActionButton icon={X} onClick={() => setEditingDiskon(null)} variant="secondary">
                 Batal
               </ActionButton>
@@ -2264,17 +2303,9 @@ export default function BillingTab({ user, toast }) {
       )}
 
       {showPaymentModal && (
-        <Modal
-          title="Catat Pembayaran Siswa"
-          onClose={() => {
-            setShowPaymentModal(false);
-            setAlokasiPreview(null);
-            setLocalCabangIdPayment('');
-          }}
-          maxWidth="max-w-4xl"
-        >
-          <div className="grid md:grid-cols-12 gap-6">
-            <div className="md:col-span-5 space-y-4">
+        <Modal title="Catat Pembayaran Siswa" onClose={requestClosePayment} maxWidth="max-w-4xl">
+          <div className="grid gap-4 md:grid-cols-12 md:gap-5">
+            <div className="space-y-3 md:col-span-5">
               {user.role === 'admin' && !m.cabangId && (
                 <div>
                   <label className="label font-bold text-slate-700 dark:text-slate-300">Filter Cabang Siswa</label>
@@ -2376,20 +2407,20 @@ export default function BillingTab({ user, toast }) {
               </div>
             </div>
 
-            <div className="md:col-span-7 bg-slate-50/50 dark:bg-slate-800/20 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 flex flex-col justify-between">
+            <div className="flex flex-col justify-between rounded-2xl border border-slate-100 bg-slate-50/50 p-3.5 md:col-span-7 dark:border-slate-800">
               <div>
-                <h4 className="font-black text-text-main mb-3 flex items-center gap-1.5 dark:text-slate-200">
+                <h4 className="mb-2.5 flex items-center gap-1.5 text-sm font-black text-text-main dark:text-slate-200">
                   <Receipt size={16} />
                   Pratinjau Alokasi Pembayaran (FIFO)
                 </h4>
 
                 {!payForm.siswa_id || !payForm.nominal || Number(payForm.nominal) <= 0 ? (
-                  <div className="h-48 flex flex-col items-center justify-center text-slate-400 text-sm">
+                  <div className="flex flex-col items-center justify-center px-2 py-9 text-center text-sm text-slate-400">
                     <p>Masukkan siswa dan nominal pembayaran</p>
-                    <p className="text-xs mt-1">untuk melihat simulasi alokasi FIFO tagihan</p>
+                    <p className="mt-1 text-xs">untuk melihat simulasi alokasi FIFO tagihan</p>
                   </div>
                 ) : alokasiPreview ? (
-                  <div className="space-y-4">
+                  <div className="space-y-3.5">
                     {alokasiPreview.allocations && alokasiPreview.allocations.length > 0 ? (
                       <div className="overflow-x-auto border border-slate-100 dark:border-slate-800 rounded-xl">
                         <table className="w-full text-xs">
@@ -2399,7 +2430,9 @@ export default function BillingTab({ user, toast }) {
                               <th className="text-left py-2 px-3">Periode</th>
                               <th className="text-right py-2 px-3">Total</th>
                               <th className="text-right py-2 px-3">Sisa</th>
-                              <th className="text-right py-2 px-3 text-emerald-600 dark:text-emerald-400">Dialokasi</th>
+                              <th className="px-3 py-2 text-right text-emerald-600 whitespace-nowrap dark:text-emerald-400">
+                                Dialokasi
+                              </th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -2407,11 +2440,13 @@ export default function BillingTab({ user, toast }) {
                               <tr key={i} className="text-slate-700 dark:text-slate-300">
                                 <td className="py-2 px-3 font-semibold">{a.nama}</td>
                                 <td className="py-2 px-3">{a.periode || '-'}</td>
-                                <td className="py-2 px-3 text-right tabular-nums font-semibold">
+                                <td className="px-3 py-2 text-right font-semibold tabular-nums whitespace-nowrap">
                                   {money(a.nominal_final)}
                                 </td>
-                                <td className="py-2 px-3 text-right tabular-nums font-semibold">{money(a.unpaid)}</td>
-                                <td className="py-2 px-3 text-right tabular-nums font-black text-emerald-600 dark:text-emerald-400">
+                                <td className="px-3 py-2 text-right font-semibold tabular-nums whitespace-nowrap">
+                                  {money(a.unpaid)}
+                                </td>
+                                <td className="px-3 py-2 text-right font-black tabular-nums text-emerald-600 whitespace-nowrap dark:text-emerald-400">
                                   {money(a.allocated)}
                                 </td>
                               </tr>
@@ -2420,7 +2455,7 @@ export default function BillingTab({ user, toast }) {
                         </table>
                       </div>
                     ) : (
-                      <div className="h-32 flex items-center justify-center text-slate-400 text-xs text-center">
+                      <div className="flex items-center justify-center px-2 py-8 text-center text-xs text-slate-400">
                         Tidak ada tagihan aktif (open/sebagian) untuk siswa ini.
                       </div>
                     )}
@@ -2434,22 +2469,14 @@ export default function BillingTab({ user, toast }) {
                     )}
                   </div>
                 ) : (
-                  <div className="h-48 flex items-center justify-center text-slate-400 text-sm">
+                  <div className="flex items-center justify-center py-9 text-sm text-slate-400">
                     Memuat simulasi alokasi…
                   </div>
                 )}
               </div>
 
-              <div className="flex justify-end gap-2 pt-4 border-t border-slate-100 dark:border-slate-800 mt-4">
-                <ActionButton
-                  icon={X}
-                  onClick={() => {
-                    setShowPaymentModal(false);
-                    setAlokasiPreview(null);
-                    setLocalCabangIdPayment('');
-                  }}
-                  variant="secondary"
-                >
+              <div className="mt-3 flex justify-end gap-2 border-t border-slate-100 pt-3 dark:border-slate-800">
+                <ActionButton icon={X} onClick={requestClosePayment} variant="secondary">
                   Batal
                 </ActionButton>
                 <ActionButton
@@ -2474,7 +2501,7 @@ export default function BillingTab({ user, toast }) {
 
       {alokasiEdit && (
         <Modal title="Koreksi Alokasi Pembayaran" onClose={() => setAlokasiEdit(null)} maxWidth="max-w-3xl">
-          <div className="space-y-6">
+          <div className="space-y-4">
             <div className="bg-slate-50 dark:bg-slate-800/40 rounded-2xl p-4 border border-slate-100 dark:border-slate-800 grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">
@@ -2525,15 +2552,15 @@ export default function BillingTab({ user, toast }) {
                     const current = b._alloc !== undefined ? b._alloc : 0;
                     return (
                       <tr key={b.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/10">
-                        <td className="py-3 px-4 font-semibold text-slate-700 dark:text-slate-300">{b.nama}</td>
-                        <td className="py-3 px-4 text-slate-500 dark:text-slate-400">{b.periode || '-'}</td>
-                        <td className="py-3 px-4 text-right font-semibold tabular-nums text-slate-700 dark:text-slate-300">
+                        <td className="py-2.5 px-4 font-semibold text-slate-700 dark:text-slate-300">{b.nama}</td>
+                        <td className="py-2.5 px-4 text-slate-500 dark:text-slate-400">{b.periode || '-'}</td>
+                        <td className="px-4 py-2.5 text-right font-semibold tabular-nums text-slate-700 whitespace-nowrap dark:text-slate-300">
                           {money(b.nominal_final)}
                         </td>
-                        <td className="py-3 px-4 text-center">
+                        <td className="py-2.5 px-4 text-center">
                           <BillingStatusBadge status={b.status} />
                         </td>
-                        <td className="py-3 px-4 text-right">
+                        <td className="py-2.5 px-4 text-right">
                           <div className="relative flex items-center w-full">
                             <span className="absolute left-2.5 text-xs text-slate-400 font-bold">Rp</span>
                             <input
@@ -2557,8 +2584,7 @@ export default function BillingTab({ user, toast }) {
                 </tbody>
               </table>
             </div>
-
-            <div className="flex justify-end gap-2 pt-4 border-t border-slate-100 dark:border-slate-800">
+            <div className="flex justify-end gap-2 border-t border-slate-100 pt-3 dark:border-slate-800">
               <ActionButton icon={X} onClick={() => setAlokasiEdit(null)} variant="secondary">
                 Batal
               </ActionButton>
@@ -2576,61 +2602,43 @@ export default function BillingTab({ user, toast }) {
         </Modal>
       )}
 
-      {confirmAction && (
-        <Modal title={confirmAction.title} onClose={() => setConfirmAction(null)}>
-          <div className="space-y-4">
-            {confirmAction.fields.map((f) => (
-              <div key={f.key}>
-                <div className="label">{f.label}</div>
-                <input
-                  value={f.value}
-                  onChange={(e) =>
-                    setConfirmAction((ca) => ({
-                      ...ca,
-                      fields: ca.fields.map((x) => (x.key === f.key ? { ...x, value: e.target.value } : x))
-                    }))
-                  }
-                  className="input w-full"
-                />
-              </div>
-            ))}
-            <div className="flex gap-2">
-              <ActionButton
-                icon={CheckCircle2}
-                onClick={() =>
-                  confirmAction.onSubmit(Object.fromEntries(confirmAction.fields.map((f) => [f.key, f.value])))
-                }
-              >
-                Konfirmasi
-              </ActionButton>
-              <ActionButton icon={X} onClick={() => setConfirmAction(null)} variant="secondary">
-                Batal
-              </ActionButton>
-            </div>
-          </div>
-        </Modal>
-      )}
+      {confirmAction && <ConfirmModal action={confirmAction} onClose={() => setConfirmAction(null)} />}
     </>
   );
 
+  const billingTabs = [
+    { key: 'ringkasan', label: 'Ringkasan', icon: BarChart3 },
+    { key: 'tagihan', label: 'Tagihan', icon: Receipt },
+    { key: 'pembayaran', label: 'Pembayaran', icon: CreditCard, badge: billingStats.pendingCount || 0 },
+    { key: 'tarif', label: 'Tarif & Diskon', icon: Settings },
+    { key: 'invoice', label: 'Invoice', icon: FileText }
+  ];
+  const tabRefs = useRef({});
+  const [tabPill, setTabPill] = useState({ left: 0, width: 0 });
+  useLayoutEffect(() => {
+    const el = tabRefs.current[billingSubTab];
+    if (!el) return;
+    const next = { left: el.offsetLeft, width: el.offsetWidth };
+    setTabPill((prev) => (prev.left === next.left && prev.width === next.width ? prev : next));
+  }, [billingSubTab, billingStats.pendingCount]);
+
   return (
     <Panel title="Billing" right={<CabangFilter user={user} {...m} />}>
-      <div className="flex gap-1 p-1 bg-slate-100/80 rounded-xl mb-5 overflow-x-auto custom-scrollbar">
-        {[
-          { key: 'ringkasan', label: 'Ringkasan', icon: BarChart3 },
-          { key: 'tagihan', label: 'Tagihan', icon: Receipt },
-          { key: 'pembayaran', label: 'Pembayaran', icon: CreditCard, badge: billingStats.pendingCount || 0 },
-          { key: 'tarif', label: 'Tarif & Diskon', icon: Settings },
-          { key: 'invoice', label: 'Invoice', icon: FileText }
-        ].map((tab) => (
+      <div className="relative mb-4 flex gap-1 overflow-x-auto scrollbar-none rounded-xl bg-slate-100/70 p-1">
+        <div
+          className="pointer-events-none absolute top-1 bottom-1 z-0 rounded-lg bg-white shadow-sm ring-1 ring-slate-900/5 transition-[left,width] duration-300 ease-out"
+          style={{ left: tabPill.left, width: tabPill.width }}
+        />
+        {billingTabs.map((tab) => (
           <button
             key={tab.key}
+            ref={(el) => {
+              tabRefs.current[tab.key] = el;
+            }}
             onClick={() => setBillingSubTab(tab.key)}
             type="button"
-            className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-lg text-xs font-black whitespace-nowrap transition-all ${
-              billingSubTab === tab.key
-                ? 'bg-white text-text-main shadow-sm'
-                : 'text-slate-400 hover:text-slate-600 hover:bg-white/50'
+            className={`relative z-10 flex items-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-[11px] font-black transition-colors sm:px-3 sm:text-xs ${
+              billingSubTab === tab.key ? 'text-text-main' : 'text-slate-400 hover:text-slate-600'
             }`}
           >
             <tab.icon className="w-3.5 h-3.5" />
@@ -2654,45 +2662,5 @@ export default function BillingTab({ user, toast }) {
       {/* ═══ MODALS & DIALOGS ═══ */}
       {renderModals()}
     </Panel>
-  );
-}
-
-export function GuruAvatarStack({ gurus, onSelect }) {
-  const visible = gurus.slice(0, 3);
-  const extra = Math.max(0, gurus.length - visible.length);
-  if (!gurus.length) return <div className="text-xs italic text-slate-400">Belum ada guru</div>;
-  return (
-    <div className="flex items-center">
-      <div className="flex -space-x-2">
-        {visible.map((g) => {
-          const title = `${g.display_name} - ${g.role === 'utama' ? 'Utama' : 'Bantu'}`;
-          return (
-            <button
-              key={g.id}
-              type="button"
-              title={title}
-              onClick={() => onSelect(g)}
-              className={`relative rounded-lg ring-2 ring-white transition hover:z-10 hover:-translate-y-0.5 ${g.role === 'utama' ? 'ring-amber-200' : ''}`}
-            >
-              <StudentAvatar name={g.display_name} url={g.foto} size="sm" />
-              {g.role === 'utama' && (
-                <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-primary" />
-              )}
-            </button>
-          );
-        })}
-        {extra > 0 && (
-          <div
-            title={gurus
-              .slice(3)
-              .map((g) => `${g.display_name} (${g.role})`)
-              .join(', ')}
-            className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-200 text-xs font-black text-slate-600 ring-2 ring-white"
-          >
-            +{extra}
-          </div>
-        )}
-      </div>
-    </div>
   );
 }

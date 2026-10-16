@@ -272,30 +272,38 @@ const seed = db.transaction(() => {
   siswaRows
     .filter((s) => s.status === 'aktif')
     .forEach((s, idx) => {
-      ['2026-08', '2026-09'].forEach((periode) => {
-        const tarifPilihan = tarifRows.filter(
-          (t) =>
-            t.cabang === s.cabang &&
-            t.jenjang === s.jenjang &&
-            (t.jenis === 'spp' || t.jenis === 'care' || t.jenis === 'kegiatan')
-        );
-        tarifPilihan.forEach((t) => {
-          const isKegiatan = t.jenis === 'kegiatan';
-          // Diskon untuk sebagian siswa, supaya layar billing punya variasi.
-          let diskon = 0;
-          if (idx % 7 === 0 && !isKegiatan) {
-            diskon = t.jenis === 'spp' ? Math.round(t.nominal * 0.1) : 50000;
-            insDiskon.run(
-              s.id,
-              s.cabang,
-              TAHUN,
+      const tarifPilihan = tarifRows.filter(
+        (t) =>
+          t.cabang === s.cabang &&
+          t.jenjang === s.jenjang &&
+          (t.jenis === 'spp' || t.jenis === 'care' || t.jenis === 'kegiatan')
+      );
+
+      // Diskon berlaku per tahun ajaran — diskon_siswa tidak punya kolom
+      // periode. Karena itu barisnya dimasukkan SEKALI per siswa, di luar loop
+      // periode di bawah. Sebelumnya insert ini ada di dalam loop periode,
+      // sehingga tiap siswa mendapat dua baris kembar; discountTotal()
+      // menjumlahkan seluruh baris siswa+jenis, jadi tagihan yang dibuat ulang
+      // akan memotong diskon dua kali.
+      const diskonPerJenis = new Map();
+      if (idx % 7 === 0) {
+        tarifPilihan
+          .filter((t) => t.jenis !== 'kegiatan')
+          .forEach((t) => {
+            const tipe = t.jenis === 'spp' ? 'persen' : 'nominal';
+            const nilai = t.jenis === 'spp' ? 10 : 50000;
+            insDiskon.run(s.id, s.cabang, TAHUN, t.jenis, tipe, nilai, 'Beasiswa prestasi', NOW);
+            diskonPerJenis.set(
               t.jenis,
-              t.jenis === 'spp' ? 'persen' : 'nominal',
-              t.jenis === 'spp' ? 10 : 50000,
-              'Beasiswa prestasi',
-              NOW
+              tipe === 'persen' ? Math.round((t.nominal * nilai) / 100) : nilai
             );
-          }
+          });
+      }
+
+      ['2026-08', '2026-09'].forEach((periode) => {
+        tarifPilihan.forEach((t) => {
+          // Diskon untuk sebagian siswa, supaya layar billing punya variasi.
+          const diskon = diskonPerJenis.get(t.jenis) || 0;
           const final = Math.max(0, t.nominal - diskon);
           // Bulan lalu sebagian besar lunas; bulan ini campuran.
           const status =
