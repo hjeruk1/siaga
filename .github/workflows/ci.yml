@@ -26,5 +26,7 @@ jobs:
         run: npm run format:check
       - name: Run test suite
         run: node scripts/run-tests.js main
+      - name: Run frontend unit tests
+        run: node scripts/run-frontend-tests.js
       - name: Build frontend
         run: npm run build --prefix frontend
