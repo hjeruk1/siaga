@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { api } from '../api';
-import { Eye, EyeOff, Sun, Moon } from 'lucide-react';
+import { Eye, EyeOff, Sun, Moon, Sparkle, ShieldCheck, Building2, Users } from 'lucide-react';
 
 export default function LoginView({ onLogin, theme, setTheme }) {
   const [tab, setTab] = useState('staff');
@@ -8,6 +8,7 @@ export default function LoginView({ onLogin, theme, setTheme }) {
   const [err, setErr] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
   async function submit(e) {
     e.preventDefault();
     setErr('');
@@ -20,208 +21,262 @@ export default function LoginView({ onLogin, theme, setTheme }) {
       );
       api.setToken(d.token);
       onLogin(d.user);
-    } catch (e) {
-      setErr(e.message);
+    } catch (e2) {
+      setErr(e2.message);
     } finally {
       setLoading(false);
     }
   }
   const canSubmit = tab === 'wali' ? form.no_wa.trim() && form.password : form.username.trim() && form.password;
   const branchStats = ['Godean', 'Kentungan', 'Nitikan', 'Balong', 'Solo'];
+
   return (
-    <div className="min-h-[100dvh] bg-slate-50 grid lg:grid-cols-[minmax(0,1fr)_460px]">
-      <section className="hidden lg:flex min-h-[100dvh] bg-slate-950 text-white p-10 xl:p-12 flex-col justify-between relative overflow-hidden">
-        <div className="absolute inset-y-0 right-0 w-1/2 bg-[radial-gradient(circle_at_top_right,rgba(245,158,11,.22),transparent_34%),linear-gradient(180deg,rgba(255,255,255,.05),transparent_42%)] pointer-events-none" />
-        <div className="relative flex items-center gap-5">
-          <div className="rounded-2xl bg-white p-3 shadow-[0_24px_80px_rgba(15,23,42,.35)]">
-            <img
-              src="/tp_logo.png"
-              alt="Taruna Prima Logo"
-              width="224"
-              height="64"
-              className="w-56 h-auto object-contain"
-            />
+    <div className="relative min-h-[100dvh] overflow-hidden bg-slate-50 dark:bg-slate-950">
+      <style>{`
+        @keyframes siaga-aurora { 0%,100% { transform: translate3d(0,0,0) scale(1); } 50% { transform: translate3d(2%, -3%, 0) scale(1.08); } }
+        @keyframes siaga-float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+        .siaga-aurora { animation: siaga-aurora 14s ease-in-out infinite; }
+        .siaga-float { animation: siaga-float 6s ease-in-out infinite; }
+        @media (prefers-reduced-motion: reduce) { .siaga-aurora, .siaga-float { animation: none; } }
+      `}</style>
+
+      <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
+        <div className="siaga-aurora absolute -top-40 -left-20 h-[560px] w-[560px] rounded-full bg-amber-400/20 blur-3xl dark:bg-amber-500/15" />
+        <div
+          className="siaga-float absolute top-[-10%] right-[-12%] h-[480px] w-[480px] rounded-full bg-indigo-400/15 blur-3xl dark:bg-indigo-500/10"
+          style={{ animationDelay: '1.5s' }}
+        />
+        <div className="absolute bottom-[-18%] left-[20%] h-[420px] w-[420px] rounded-full bg-sky-400/10 blur-3xl dark:bg-sky-500/8" />
+        <div className="absolute inset-0" style={{ backgroundImage: 'linear-gradient(to right,rgba(148,163,184,0.07) 1px,transparent 1px),linear-gradient(to bottom,rgba(148,163,184,0.07) 1px,transparent 1px)', backgroundSize: '44px 44px' }} />
+      </div>
+
+      <div className="relative mx-auto grid min-h-[100dvh] w-full max-w-7xl grid-cols-1 items-center gap-8 px-4 py-8 sm:px-6 sm:py-10 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,440px)] lg:gap-12 lg:px-10 xl:gap-16">
+        <section className="hidden lg:flex flex-col justify-center">
+          <div className="mb-10 flex items-center gap-4">
+            <div className="rounded-2xl bg-white p-3 shadow-[0_24px_80px_rgba(15,23,42,0.35)] dark:shadow-[0_24px_80px_rgba(0,0,0,0.45)]">
+              <img src="/tp_logo.png" alt="Taruna Prima Logo" width="224" height="64" className="w-52 xl:w-60 h-auto object-contain" />
+            </div>
+            <div className="border-l border-slate-300 dark:border-white/15 pl-5">
+              <div className="text-2xl font-black tracking-wide leading-none text-slate-900 dark:text-white">SIAGA</div>
+              <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-300 uppercase font-bold tracking-[0.18em]">Sistem Informasi</div>
+            </div>
           </div>
-          <div className="border-l border-white/15 pl-5">
-            <div className="text-2xl font-black tracking-wide leading-none">SIAGA</div>
-            <div className="text-xs text-slate-400 mt-1 uppercase font-bold tracking-[0.18em]">Sistem Informasi</div>
-          </div>
-        </div>
-        <div className="relative max-w-2xl">
-          <div className="inline-flex items-center rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-black tracking-[0.16em] text-primary uppercase">
+
+          <div className="mb-6 inline-flex items-center gap-2 self-start rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-black tracking-[0.16em] text-primary uppercase backdrop-blur-md">
+            <Sparkle className="size-3.5" />
             Satu server, lima cabang
           </div>
-          <h1 className="mt-5 text-5xl xl:text-6xl font-black leading-[1.02] tracking-[-0.03em]">
-            Operasional sekolah yang rapi dari gerbang sampai laporan wali.
+
+          <h1 className="text-4xl xl:text-6xl font-black leading-[1.02] tracking-[-0.03em] text-slate-900 dark:text-white">
+            Operasional sekolah yang{' '}
+            <span className="bg-gradient-to-r from-amber-500 via-amber-400 to-orange-500 dark:from-amber-300 dark:via-amber-200 dark:to-orange-300 bg-clip-text text-transparent">
+              rapi
+            </span>{' '}
+            dari gerbang sampai laporan wali.
           </h1>
-          <p className="mt-5 max-w-xl text-base leading-relaxed text-slate-300">
-            Absensi, penitipan, billing, catatan guru, dan akses wali murid dikelola dalam satu alur kerja yang
-            konsisten untuk seluruh cabang Taruna Prima.
+          <p className="mt-5 max-w-xl text-base leading-relaxed text-slate-600 dark:text-slate-300">
+            Absensi, penitipan, billing, catatan guru, dan akses wali murid dikelola dalam satu alur kerja yang konsisten untuk seluruh cabang Taruna Prima.
           </p>
+
           <div className="mt-9 grid grid-cols-5 gap-2">
             {branchStats.map((c, i) => (
               <div
                 key={c}
-                className={`rounded-xl border border-white/10 bg-white/[0.06] p-3 ${i === 0 ? 'col-span-2' : ''}`}
+                className={`group rounded-xl border border-slate-200 bg-white/70 dark:border-white/10 dark:bg-white/5 p-3 transition-all duration-300 hover:bg-white hover:border-slate-300 dark:hover:bg-white/[0.09] dark:hover:border-white/20`}
               >
                 <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">Cabang</div>
-                <div className="mt-1 font-black text-white">{c}</div>
+                <div className="mt-1 font-black text-slate-900 dark:text-white">{c}</div>
               </div>
             ))}
           </div>
-        </div>
-        <div className="relative grid grid-cols-3 gap-3 text-sm text-slate-300">
-          <div className="border-t border-white/10 pt-3">
-            <span className="block text-lg font-black text-white">7</span>Peran pengguna
-          </div>
-          <div className="border-t border-white/10 pt-3">
-            <span className="block text-lg font-black text-white">5</span>Cabang aktif
-          </div>
-          <div className="border-t border-white/10 pt-3">
-            <span className="block text-lg font-black text-white">1</span>Portal terpadu
-          </div>
-        </div>
-      </section>
-      <main className="min-h-[100dvh] flex items-center justify-center p-4 sm:p-6">
-        <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-md p-6 sm:p-7 relative overflow-hidden shadow-[0_24px_80px_rgba(15,23,42,.08)]">
-          {/* Decorative mascot */}
-          <img
-            src="/runa-rima.png"
-            alt=""
-            width="112"
-            height="112"
-            className="absolute -right-5 -top-5 w-28 opacity-90 pointer-events-none select-none"
-          />
-          <div className="mb-6 flex flex-col gap-4 relative z-10">
-            <div className="flex items-center justify-between gap-3">
-              <img
-                src="/tp_logo.png"
-                alt="Taruna Prima Logo"
-                width="176"
-                height="50"
-                className="w-44 h-auto object-contain"
-              />
-              <button
-                type="button"
-                onClick={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
-                className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800 p-2 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 flex-shrink-0"
-                aria-label={theme === 'dark' ? 'Mode Terang' : 'Mode Gelap'}
-              >
-                {theme === 'dark' ? <Sun className="size-4" /> : <Moon className="size-4" />}
-              </button>
+
+          <div className="mt-10 grid grid-cols-3 gap-4 text-sm text-slate-600 dark:text-slate-300">
+            <div className="border-t border-slate-300 dark:border-white/10 pt-3">
+              <span className="block text-xl font-black text-slate-900 dark:text-white">7</span>
+              <span className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">Peran pengguna</span>
             </div>
-            <div className="border-t border-slate-100 dark:border-slate-800 pt-4">
+            <div className="border-t border-slate-300 dark:border-white/10 pt-3">
+              <span className="block text-xl font-black text-slate-900 dark:text-white">5</span>
+              <span className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">Cabang aktif</span>
+            </div>
+            <div className="border-t border-slate-300 dark:border-white/10 pt-3">
+              <span className="block text-xl font-black text-slate-900 dark:text-white">1</span>
+              <span className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">Portal terpadu</span>
+            </div>
+          </div>
+        </section>
+
+        <section className="flex items-center justify-center lg:hidden">
+          <div className="flex items-center gap-3">
+            <div className="rounded-xl bg-white p-2 shadow-[0_8px_32px_rgba(15,23,42,0.25)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.45)]">
+              <img src="/tp_logo.png" alt="Taruna Prima Logo" width="152" height="44" className="h-10 w-auto object-contain" />
+            </div>
+            <div className="border-l border-slate-300/60 dark:border-slate-700 pl-3">
+              <div className="text-xl font-black leading-none text-slate-900 dark:text-white">SIAGA</div>
+              <div className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-[0.18em]">Taruna Prima</div>
+            </div>
+          </div>
+        </section>
+
+        <main className="relative flex items-center justify-center">
+          <div className="pointer-events-none absolute inset-x-10 top-10 bottom-20 rounded-3xl bg-gradient-to-br from-amber-200/30 to-indigo-200/20 blur-2xl dark:from-amber-500/10 dark:to-indigo-500/8" aria-hidden="true" />
+          <div className="relative w-full max-w-md rounded-[22px] border border-white/60 bg-white/90 backdrop-blur-xl p-6 sm:p-7 shadow-[0_24px_80px_rgba(15,23,42,0.12)] dark:border-slate-800 dark:bg-slate-900/80 dark:shadow-[0_24px_80px_rgba(0,0,0,0.45)]">
+            <div className="mb-6 flex flex-col gap-4">
               <div className="flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-2xl font-black text-text-main leading-none tracking-[-0.02em]">Masuk SIAGA</div>
-                  <div className="mt-1 text-sm text-slate-500">Portal akses sekolah Taruna Prima</div>
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-container">
+                    <ShieldCheck className="size-5 text-primary" />
+                  </div>
+                  <div>
+                    <div className="text-xl font-black text-text-main dark:text-slate-100 leading-none tracking-[-0.02em]">Masuk SIAGA</div>
+                    <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">Portal akses sekolah Taruna Prima</div>
+                  </div>
                 </div>
-                <span className="rounded-full bg-primary-container px-2.5 py-1 text-[11px] font-black uppercase tracking-wide text-primary">
-                  Aman
-                </span>
-              </div>
-            </div>
-          </div>
-          <div
-            className="grid grid-cols-2 gap-1 bg-slate-100 rounded-xl p-1 mb-5"
-            role="tablist"
-            aria-label="Tipe akses"
-          >
-            {[
-              ['staff', 'Staff'],
-              ['wali', 'Wali Murid']
-            ].map(([id, label]) => (
-              <button
-                key={id}
-                type="button"
-                role="tab"
-                aria-selected={tab === id}
-                onClick={() => setTab(id)}
-                className={`py-2 text-sm font-bold rounded-lg transition-all duration-200 ${tab === id ? 'bg-white text-primary border border-slate-200 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          <form onSubmit={submit} className="space-y-4">
-            {tab === 'staff' ? (
-              <Field
-                label="Username"
-                value={form.username}
-                onChange={(v) => setForm((f) => ({ ...f, username: v }))}
-                autoComplete="username"
-                spellCheck={false}
-                autoFocus
-              />
-            ) : (
-              <Field
-                label="Nomor WhatsApp"
-                value={form.no_wa}
-                onChange={(v) => setForm((f) => ({ ...f, no_wa: v }))}
-                autoComplete="username"
-                spellCheck={false}
-                autoFocus
-              />
-            )}
-            <Field
-              label="Password"
-              type={showPassword ? 'text' : 'password'}
-              value={form.password}
-              onChange={(v) => setForm((f) => ({ ...f, password: v }))}
-              autoComplete="current-password"
-              trailing={
                 <button
                   type="button"
-                  onClick={() => setShowPassword((v) => !v)}
-                  className="rounded-lg p-1.5 text-slate-400 transition-colors duration-200 hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
-                  aria-label={showPassword ? 'Sembunyikan password' : 'Lihat password'}
+                  onClick={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
+                  className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-800/80 p-2.5 text-slate-600 dark:text-slate-300 transition-all duration-200 hover:scale-105 hover:bg-white dark:hover:bg-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 flex-shrink-0"
+                  aria-label={theme === 'dark' ? 'Mode Terang' : 'Mode Gelap'}
                 >
-                  {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                  {theme === 'dark' ? <Sun className="size-4" /> : <Moon className="size-4" />}
                 </button>
-              }
-            />
-            {err && (
-              <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-3 py-2" role="alert">
-                {err}
               </div>
+              <div className="inline-flex items-center gap-2 self-start rounded-full bg-primary-container/70 dark:bg-primary/15 dark:bg-primary/15 px-2.5 py-1 text-[11px] font-black uppercase tracking-wide text-primary dark:bg-primary/15">
+                <ShieldCheck className="size-3.5" />
+                Aman
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-1 rounded-xl bg-slate-100/80 dark:bg-slate-800/60 p-1 mb-5 dark:bg-slate-800/60" role="tablist" aria-label="Tipe akses">
+              {[
+                ['staff', 'Staff', Building2],
+                ['wali', 'Wali Murid', Users],
+              ].map(([id, label, Icon]) => (
+                <button
+                  key={id}
+                  type="button"
+                  role="tab"
+                  aria-selected={tab === id}
+                  onClick={() => setTab(id)}
+                  className={`relative flex items-center justify-center gap-2 py-2 text-sm font-bold rounded-lg transition-all duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 ${
+                    tab === id
+                      ? 'bg-white text-primary shadow-sm dark:bg-slate-700 dark:text-amber-300'
+                      : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                  }`}
+                >
+                  <Icon className="size-4" />
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            <form onSubmit={submit} className="space-y-4">
+              {tab === 'staff' ? (
+                <Field
+                  label="Username"
+                  name="username"
+                  id="siaga-username"
+                  value={form.username}
+                  onChange={(v) => setForm((f) => ({ ...f, username: v }))}
+                  autoComplete="username"
+                  spellCheck={false}
+                  autoFocus
+                />
+              ) : (
+                <Field
+                  label="Nomor WhatsApp"
+                  name="no_wa"
+                  id="siaga-no-wa"
+                  value={form.no_wa}
+                  onChange={(v) => setForm((f) => ({ ...f, no_wa: v }))}
+                  autoComplete="username"
+                  spellCheck={false}
+                  autoFocus
+                />
+              )}
+              <Field
+                label="Password"
+                name="password"
+                id="siaga-password"
+                type={showPassword ? 'text' : 'password'}
+                value={form.password}
+                onChange={(v) => setForm((f) => ({ ...f, password: v }))}
+                autoComplete="current-password"
+                trailing={
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    className="rounded-lg p-1.5 text-slate-400 transition-colors duration-200 hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 dark:hover:bg-slate-700 dark:hover:text-slate-200"
+                    aria-label={showPassword ? 'Sembunyikan password' : 'Lihat password'}
+                  >
+                    {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                  </button>
+                }
+              />
+              {err && (
+                <div
+                  className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-400/30 dark:bg-red-500/10 dark:text-red-300"
+                  role="alert"
+                >
+                  {err}
+                </div>
+              )}
+              <button
+                disabled={loading || !canSubmit}
+                className="relative w-full h-12 overflow-hidden rounded-2xl bg-gradient-to-br from-amber-500 to-amber-700 px-4 text-white font-bold shadow-[0_12px_32px_rgba(245,158,11,0.35)] transition-all duration-300 hover:shadow-[0_16px_40px_rgba(245,158,11,0.45)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none disabled:hover:translate-y-0"
+              >
+                <span className="relative z-10">{loading ? 'Masuk…' : 'Masuk'}</span>
+                <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full hover:translate-x-full transition-transform duration-700" aria-hidden="true" />
+              </button>
+            </form>
+
+            <div className="mt-6 grid grid-cols-3 gap-2 text-center">
+              {[
+                ['Siswa', '200+'],
+                ['Cabang', '5'],
+                ['Terintegrasi', 'AI'],
+              ].map(([label, value]) => (
+                <div key={label} className="rounded-xl border border-slate-100 bg-slate-50/60 p-2.5 dark:border-slate-800 dark:bg-slate-800/40">
+                  <div className="text-base font-black text-text-main dark:text-slate-100">{value}</div>
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{label}</div>
+                </div>
+              ))}
+            </div>
+
+            {import.meta.env.DEV && tab === 'staff' && (
+              <button
+                onClick={() => setForm({ username: 'admin', no_wa: '', password: 'admin123' })}
+                className="mt-5 w-full text-xs font-bold text-primary hover:text-primary-hover transition-colors duration-200"
+              >
+                Isi akun dev admin
+              </button>
             )}
-            <button
-              disabled={loading || !canSubmit}
-              className="w-full h-11 px-4 bg-primary text-white font-bold rounded-xl hover:bg-primary-hover active:bg-primary-active active:scale-[0.98] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loading ? 'Masuk...' : 'Masuk'}
-            </button>
-          </form>
-          {import.meta.env.DEV && tab === 'staff' && (
-            <button
-              onClick={() => setForm({ username: 'admin', no_wa: '', password: 'admin123' })}
-              className="mt-4 text-xs font-bold text-primary hover:text-primary-hover transition-colors duration-200"
-            >
-              Isi akun dev admin
-            </button>
-          )}
-        </div>
-      </main>
+          </div>
+        </main>
+      </div>
     </div>
   );
 }
 
-function Field({ label, value, onChange, type = 'text', autoFocus = false, autoComplete, spellCheck, trailing }) {
+function Field({ label, value, onChange, type = 'text', autoFocus = false, autoComplete, spellCheck, trailing, name, id }) {
+  const fieldId = id || `siaga-${String(label).toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
   return (
-    <label className="block">
+    <label htmlFor={fieldId} className="block">
       <span className="text-xs font-black uppercase tracking-wide text-slate-500">{label}</span>
-      <span className="mt-1.5 flex items-center rounded-xl border border-slate-200 bg-white px-3 transition-all duration-200 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20">
+      <div className="mt-1.5 group flex items-center rounded-xl border border-slate-200 bg-white px-3 shadow-sm transition-all duration-200 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 focus-within:shadow-md dark:border-slate-700 dark:bg-slate-800/60 dark:focus-within:border-primary">
         <input
+          id={fieldId}
+          name={name || `siaga_${String(label).toLowerCase().replace(/[^a-z0-9]+/g, '_')}`}
           type={type}
           value={value}
           autoFocus={autoFocus}
           onChange={(e) => onChange(e.target.value)}
           autoComplete={autoComplete}
           spellCheck={spellCheck}
-          className="min-w-0 flex-1 border-0 bg-transparent py-2.5 text-sm outline-none"
+          className="min-w-0 flex-1 border-0 bg-transparent py-3 text-sm font-medium text-slate-900 outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500 dark:text-white"
         />
         {trailing}
-      </span>
+      </div>
     </label>
   );
 }

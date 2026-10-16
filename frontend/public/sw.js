@@ -13,7 +13,6 @@ const STATIC_ASSETS = [
   '/favicon-96x96.png',
   '/apple-touch-icon.png',
   '/tp_logo.png',
-  '/runa-rima.png',
   '/site.webmanifest'
 ];
 
