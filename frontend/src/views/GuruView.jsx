@@ -634,7 +634,13 @@ export default function GuruView({ user, toast, tab }) {
                       className={`text-left border rounded-2xl p-3 cursor-pointer flex gap-3 items-center transition-all active:scale-[0.98] ${active ? 'bg-primary-container border-primary/40' : 'bg-white border-slate-200 hover:border-primary/30'}`}
                     >
                       {r.foto ? (
-                        <img src={r.foto} className="w-14 h-14 rounded-xl object-cover flex-shrink-0" alt={r.nama} />
+                        <img
+                          src={r.foto}
+                          className="w-14 h-14 rounded-xl object-cover flex-shrink-0"
+                          alt={r.nama}
+                          loading="lazy"
+                          decoding="async"
+                        />
                       ) : (
                         <div className="w-14 h-14 rounded-xl bg-slate-200 flex items-center justify-center text-slate-400 text-2xl flex-shrink-0">
                           👤

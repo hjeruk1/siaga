@@ -1,4 +1,10 @@
-const CACHE_NAME = 'siaga-cache-v2';
+// Placeholder ini diganti saat build (lihat frontend/build.mjs) dengan commit
+// hash atau timestamp. Tanpa itu nama cache berupa angka tetap, dan handler
+// `activate` di bawah hanya menghapus cache yang bernama BERBEDA — sehingga
+// cache build lama tidak pernah dibersihkan. Karena nama berkas di /assets/
+// sudah ber-hash, setiap build menambah berkas baru sementara yang lama
+// tersimpan selamanya di browser pengguna.
+const CACHE_NAME = 'siaga-cache-__SIAGA_BUILD__';
 const STATIC_ASSETS = [
   '/',
   '/index.html',

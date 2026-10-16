@@ -21,7 +21,15 @@ function StudentAvatar({ name, url, size = 'md' }) {
   const textClass = size === 'xl' ? 'text-2xl' : size === 'lg' ? 'text-lg' : 'text-xs';
 
   if (url) {
-    return <img src={url} className={`${boxClass} object-cover border border-slate-200/60 shadow-sm`} alt={name} />;
+    return (
+      <img
+        src={url}
+        className={`${boxClass} object-cover border border-slate-200/60 shadow-sm`}
+        alt={name}
+        loading="lazy"
+        decoding="async"
+      />
+    );
   }
 
   const parts = name.trim().split(/\s+/);

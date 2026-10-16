@@ -583,7 +583,13 @@ export function Editor({ row, detail, setDetail, onClose, user, toast }) {
               <div className="p-4 sm:p-5">
                 <div className="flex items-start gap-4">
                   {row.foto ? (
-                    <img src={row.foto} className="h-16 w-16 rounded-2xl object-cover sm:h-20 sm:w-20" alt={row.nama} />
+                    <img
+                      src={row.foto}
+                      className="h-16 w-16 rounded-2xl object-cover sm:h-20 sm:w-20"
+                      alt={row.nama}
+                      loading="lazy"
+                      decoding="async"
+                    />
                   ) : (
                     <div className="grid h-16 w-16 place-items-center rounded-2xl bg-slate-100 text-xl font-black text-slate-400 sm:h-20 sm:w-20">
                       {String(row.nama || '?').slice(0, 1)}
@@ -1004,7 +1010,13 @@ export function Editor({ row, detail, setDetail, onClose, user, toast }) {
                       key={a.id}
                       className="group relative overflow-hidden rounded-xl border border-slate-200 bg-slate-50"
                     >
-                      <img src={a.url} className="aspect-square w-full object-cover" alt="foto daily record" />
+                      <img
+                        src={a.url}
+                        className="aspect-square w-full object-cover"
+                        alt="foto daily record"
+                        loading="lazy"
+                        decoding="async"
+                      />
                       <button
                         onClick={() => deletePhoto(a.id)}
                         aria-label="Hapus foto"

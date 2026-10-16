@@ -132,7 +132,13 @@ export function AbsensiCard({ row, selected, onSelect, onCheckin, onKet, onPulan
     >
       <div className="relative">
         {row.foto ? (
-          <img src={row.foto} className="w-full aspect-[4/3] object-cover" alt={row.nama} />
+          <img
+            src={row.foto}
+            className="w-full aspect-[4/3] object-cover"
+            alt={row.nama}
+            loading="lazy"
+            decoding="async"
+          />
         ) : (
           <div className="w-full aspect-[4/3] bg-slate-200 flex items-center justify-center text-slate-400 text-5xl">
             👤

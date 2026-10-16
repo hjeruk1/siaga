@@ -453,7 +453,13 @@ function MonitoringPanel({
                       className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-red-50 border border-red-200"
                     >
                       {s.foto ? (
-                        <img src={s.foto} alt={s.nama} className="w-9 h-9 rounded-full object-cover flex-shrink-0" />
+                        <img
+                          src={s.foto}
+                          alt={s.nama}
+                          className="w-9 h-9 rounded-full object-cover flex-shrink-0"
+                          loading="lazy"
+                          decoding="async"
+                        />
                       ) : (
                         <div className="w-9 h-9 rounded-full bg-red-100 text-red-600 grid place-items-center font-black flex-shrink-0 text-sm">
                           {s.nama?.[0] || 'S'}
@@ -486,7 +492,13 @@ function MonitoringPanel({
                       className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-amber-50 border border-amber-200"
                     >
                       {s.foto ? (
-                        <img src={s.foto} alt={s.nama} className="w-9 h-9 rounded-full object-cover flex-shrink-0" />
+                        <img
+                          src={s.foto}
+                          alt={s.nama}
+                          className="w-9 h-9 rounded-full object-cover flex-shrink-0"
+                          loading="lazy"
+                          decoding="async"
+                        />
                       ) : (
                         <div className="w-9 h-9 rounded-full bg-amber-100 text-amber-600 grid place-items-center font-black flex-shrink-0 text-sm">
                           {s.nama?.[0] || 'S'}
@@ -626,7 +638,13 @@ function RombelCard({ item, siswa }) {
                 className={`flex items-center gap-2 px-3 py-2 rounded-xl border ${red ? 'bg-red-50 border-red-200' : 'bg-slate-50 border-slate-100'}`}
               >
                 {s.foto ? (
-                  <img src={s.foto} alt={s.nama} className="w-9 h-9 rounded-full object-cover flex-shrink-0" />
+                  <img
+                    src={s.foto}
+                    alt={s.nama}
+                    className="w-9 h-9 rounded-full object-cover flex-shrink-0"
+                    loading="lazy"
+                    decoding="async"
+                  />
                 ) : (
                   <div className="w-9 h-9 rounded-full bg-primary-container text-primary-active grid place-items-center font-black flex-shrink-0">
                     {s.nama?.[0] || 'S'}
