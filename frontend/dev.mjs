@@ -1,11 +1,12 @@
 import { createServer } from 'vite';
 import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
 import { fileURLToPath } from 'node:url';
 
 const server = await createServer({
   root: fileURLToPath(new URL('.', import.meta.url)),
   configFile: false,
-  plugins: [react()],
+  plugins: [react(), tailwindcss()],
   server: {
     port: 5173,
     host: '127.0.0.1',

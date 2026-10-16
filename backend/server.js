@@ -12,14 +12,16 @@ const allowedOrigins = (process.env.FRONTEND_URL || '')
   .map(origin => origin.trim())
   .filter(Boolean);
 if (process.env.NODE_ENV === 'production' && allowedOrigins.length) {
-  app.use(cors({
-    origin(origin, callback) {
-      if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
-      return callback(new Error('Origin tidak diizinkan'));
-    }
-  }));
+  // CORS hanya untuk API. Aset statis tidak perlu CORS: browser mengirim Origin
+  // pada modul/CSS ber-atribut crossorigin, dan allowlist sempit membuat request
+  // aset gagal 500 saat origin deployment tidak cocok.
+  app.use('/api', (req, res, next) => {
+    const origin = req.headers.origin;
+    if (!origin || allowedOrigins.includes(origin)) return next();
+    return res.status(403).json({ error: 'Origin tidak diizinkan' });
+  });
 } else if (process.env.NODE_ENV !== 'production') {
-  app.use(cors({ origin: '*' }));
+  app.use('/api', cors({ origin: '*' }));
 }
 app.use((_req, res, next) => {
   res.setHeader('X-Request-Id', _req.headers['x-request-id'] || crypto.randomUUID());

@@ -1,5 +1,31 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;0,9..40,900;1,9..40,400&display=swap');
-@tailwind base;@tailwind components;@tailwind utilities;
+@import "tailwindcss";
+@source "./**/*.{js,jsx}";
+@source "../index.html";
+/* Token desain kini hidup di blok @theme ini (sumber tunggal, bukan tailwind.config.js). */
+@custom-variant dark (&:where(.dark, .dark *));
+@theme {
+  --font-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  --color-primary: #f59e0b;
+  --color-primary-hover: #d97706;
+  --color-primary-active: #b45309;
+  --color-primary-container: #fffbeb;
+  --color-text-main: #0f172a;
+  --color-surface-disabled: #f8fafc;
+  --color-border-subtle: #64748b;
+  --color-scrollbar-thumb: #d1d5db;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 20px;
+  --breakpoint-xs: 475px;
+  --spacing-sm: 4px;
+  /* Nilai berikut mempertahankan tampilan default Tailwind v3. */
+  --default-ring-width: 3px;
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --blur-sm: 4px;
+}
 * {
   -webkit-tap-highlight-color: transparent;
 }

@@ -19,3 +19,5 @@ modul-ajar/
 backend/gcs-key.json
 backend/*-key.json
 *.key.json
+.workbuddy-ai/
+.eslintcache

@@ -11,7 +11,8 @@ const files = suite === 'workflow'
       'scripts/test.js',
       'scripts/daily-record-v2.test.js',
       'scripts/adminview-stabilization.test.js',
-      'scripts/export-absensi.test.js'
+      'scripts/export-absensi.test.js',
+      'scripts/billing-money.test.js'
     ];
 const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'siaga-test-'));
 const dbPath = path.join(tempDir, 'siaga.db');
@@ -73,7 +74,22 @@ async function waitForServer() {
     console.error(error.stack || error);
   } finally {
     stopServer();
-    fs.rmSync(tempDir, { recursive: true, force: true });
+    // Windows: better-sqlite3 can hold the DB handle briefly after the child
+    // process dies, so a single rmSync loses the race with EBUSY.
+    let cleaned = false;
+    for (let attempt = 1; attempt <= 6 && !cleaned; attempt++) {
+      try {
+        fs.rmSync(tempDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+        cleaned = true;
+      } catch (error) {
+        if (attempt === 6) {
+          console.error(`ERROR: gagal menghapus direktori test ${tempDir}: ${error.message}`);
+          if (exitCode === 0) exitCode = 1;
+        } else {
+          Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 300);
+        }
+      }
+    }
   }
   process.exit(exitCode);
 })();

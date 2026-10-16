@@ -1,12 +1,17 @@
 const assert = require('node:assert/strict');
-const { readFileSync } = require('node:fs');
+const { readFileSync, readdirSync } = require('node:fs');
 const { test } = require('node:test');
 
-const adminView = readFileSync('frontend/src/views/AdminView.jsx', 'utf8');
+// AdminView is split into per-tab modules; read them all for source-level checks.
+const adminDir = 'frontend/src/views/admin';
+const adminView = readdirSync(adminDir)
+  .filter(f => f.endsWith('.jsx'))
+  .map(f => readFileSync(`${adminDir}/${f}`, 'utf8'))
+  .join('\n');
 const appView = readFileSync('frontend/src/App.jsx', 'utf8');
 
 test('AdminView uses WIB-safe date defaults', () => {
-  assert.match(adminView, /import\{todayWIB\}from'\.\.\/utils\/date';/);
+  assert.match(adminView, /import\{todayWIB\}from'(?:\.\.\/)+utils\/date';/);
   assert.doesNotMatch(adminView, /new Date\(\)\.toISOString\(\)\.slice\(0,10\)/);
 });
 
