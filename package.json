@@ -12,6 +12,7 @@
     "test": "node scripts/run-tests.js main",
     "test:workflow": "node scripts/run-tests.js workflow",
     "db:backup": "node scripts/backup.js",
+    "db:migrate": "node backend/migrate.js",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",

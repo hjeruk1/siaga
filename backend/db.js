@@ -313,6 +313,11 @@ CREATE TABLE IF NOT EXISTS laporan_harian (
   catatan TEXT,
   published_at TEXT,
   last_published_change_at TEXT,
+  focus_theme_id INTEGER REFERENCES focus_theme(id),
+  observation_domain TEXT,
+  observation_note TEXT,
+  parent_note TEXT,
+  structured_observation_json TEXT NOT NULL DEFAULT '{}',
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   UNIQUE(siswa_id,tanggal)
@@ -505,138 +510,6 @@ CREATE TABLE IF NOT EXISTS sequence_counter (
   value INTEGER NOT NULL DEFAULT 0
 );
 `);
-
-try {
-  db.prepare('ALTER TABLE siswa ADD COLUMN catatan_sekolah_luar TEXT').run();
-} catch {}
-try {
-  db.prepare('ALTER TABLE pengguna ADD COLUMN auth_version INTEGER NOT NULL DEFAULT 0').run();
-} catch {}
-try {
-  db.prepare(
-    'ALTER TABLE penjemputan_log ADD COLUMN absensi_id INTEGER REFERENCES absensi(id) ON DELETE CASCADE'
-  ).run();
-} catch {}
-try {
-  db.prepare('ALTER TABLE penjemputan_log ADD COLUMN siswa_id INTEGER REFERENCES siswa(id)').run();
-} catch {}
-try {
-  db.prepare('ALTER TABLE penjemputan_log ADD COLUMN penjemput_id INTEGER REFERENCES penjemput(id)').run();
-} catch {}
-try {
-  db.prepare('ALTER TABLE penjemputan_log ADD COLUMN guru_id INTEGER REFERENCES pengguna(id)').run();
-} catch {}
-try {
-  db.prepare('ALTER TABLE penjemputan_log ADD COLUMN cabang_id INTEGER REFERENCES cabang(id)').run();
-} catch {}
-try {
-  db.prepare('ALTER TABLE penjemputan_log ADD COLUMN tanggal TEXT').run();
-} catch {}
-try {
-  db.prepare('ALTER TABLE penjemputan_log ADD COLUMN jam_scan TEXT').run();
-} catch {}
-try {
-  db.prepare('ALTER TABLE penjemputan_log ADD COLUMN jam_pulang TEXT').run();
-} catch {}
-try {
-  db.prepare('ALTER TABLE penjemputan_log ADD COLUMN durasi_menit INTEGER').run();
-} catch {}
-try {
-  db.prepare("ALTER TABLE penjemputan_log ADD COLUMN sumber TEXT NOT NULL DEFAULT 'manual'").run();
-} catch {}
-try {
-  db.prepare('ALTER TABLE penjemputan_log ADD COLUMN catatan TEXT').run();
-} catch {}
-try {
-  db.prepare('ALTER TABLE penjemputan_log ADD COLUMN created_at TEXT').run();
-} catch {}
-try {
-  db.prepare('CREATE INDEX IF NOT EXISTS idx_penjemputan_log_tanggal ON penjemputan_log(tanggal,cabang_id)').run();
-} catch {}
-try {
-  db.prepare('ALTER TABLE qr_reissue_log ADD COLUMN siswa_id INTEGER REFERENCES siswa(id)').run();
-} catch {}
-try {
-  db.prepare('ALTER TABLE qr_reissue_log ADD COLUMN penjemput_id INTEGER REFERENCES penjemput(id)').run();
-} catch {}
-try {
-  db.prepare('ALTER TABLE qr_reissue_log ADD COLUMN admin_id INTEGER REFERENCES pengguna(id)').run();
-} catch {}
-try {
-  db.prepare('ALTER TABLE qr_reissue_log ADD COLUMN cabang_id INTEGER REFERENCES cabang(id)').run();
-} catch {}
-try {
-  db.prepare('ALTER TABLE qr_reissue_log ADD COLUMN old_qr_code TEXT').run();
-} catch {}
-try {
-  db.prepare('ALTER TABLE qr_reissue_log ADD COLUMN new_qr_code TEXT').run();
-} catch {}
-try {
-  db.prepare('ALTER TABLE qr_reissue_log ADD COLUMN reason TEXT').run();
-} catch {}
-try {
-  db.prepare('ALTER TABLE qr_reissue_log ADD COLUMN created_at TEXT').run();
-} catch {}
-try {
-  db.prepare('ALTER TABLE nfc_scan_log ADD COLUMN pengguna_id INTEGER REFERENCES pengguna(id)').run();
-} catch {}
-try {
-  db.prepare('ALTER TABLE nfc_scan_log ADD COLUMN cabang_id INTEGER REFERENCES cabang(id)').run();
-} catch {}
-try {
-  db.prepare('ALTER TABLE nfc_scan_log ADD COLUMN siswa_id INTEGER REFERENCES siswa(id)').run();
-} catch {}
-try {
-  db.prepare('ALTER TABLE nfc_scan_log ADD COLUMN action TEXT').run();
-} catch {}
-try {
-  db.prepare('ALTER TABLE nfc_scan_log ADD COLUMN status TEXT').run();
-} catch {}
-try {
-  db.prepare('ALTER TABLE nfc_scan_log ADD COLUMN reason TEXT').run();
-} catch {}
-try {
-  db.prepare('ALTER TABLE nfc_scan_log ADD COLUMN token_masked TEXT').run();
-} catch {}
-try {
-  db.prepare('ALTER TABLE nfc_scan_log ADD COLUMN tab TEXT').run();
-} catch {}
-try {
-  db.prepare('ALTER TABLE nfc_scan_log ADD COLUMN tanggal TEXT').run();
-} catch {}
-try {
-  db.prepare('ALTER TABLE nfc_scan_log ADD COLUMN jam TEXT').run();
-} catch {}
-try {
-  db.prepare('ALTER TABLE nfc_scan_log ADD COLUMN created_at TEXT').run();
-} catch {}
-try {
-  db.prepare('UPDATE nfc_scan_log SET pengguna_id=COALESCE(pengguna_id,guru_id) WHERE guru_id IS NOT NULL').run();
-} catch {}
-try {
-  db.prepare('CREATE INDEX IF NOT EXISTS idx_nfc_scan_log_tanggal ON nfc_scan_log(tanggal,cabang_id,status)').run();
-} catch {}
-try {
-  db.prepare('ALTER TABLE laporan_harian ADD COLUMN focus_theme_id INTEGER REFERENCES focus_theme(id)').run();
-} catch {}
-try {
-  db.prepare('ALTER TABLE laporan_harian ADD COLUMN observation_domain TEXT').run();
-} catch {}
-try {
-  db.prepare('ALTER TABLE laporan_harian ADD COLUMN observation_note TEXT').run();
-} catch {}
-try {
-  db.prepare('ALTER TABLE laporan_harian ADD COLUMN parent_note TEXT').run();
-} catch {}
-try {
-  db.prepare("ALTER TABLE laporan_harian ADD COLUMN structured_observation_json TEXT NOT NULL DEFAULT '{}'").run();
-} catch {}
-try {
-  db.prepare('CREATE INDEX IF NOT EXISTS idx_laporan_focus_theme ON laporan_harian(focus_theme_id)').run();
-} catch {}
-try {
-  db.prepare('ALTER TABLE focus_theme ADD COLUMN menu_makanan TEXT').run();
-} catch {}
 
 db.prepare("INSERT OR IGNORE INTO organisasi(id,nama,updated_at) VALUES(1,'Taruna Prima',?)").run(
   new Date().toISOString()

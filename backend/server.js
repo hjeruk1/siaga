@@ -9,6 +9,19 @@ const path = require('path');
 const crypto = require('crypto');
 const pinoHttp = require('pino-http');
 const logger = require('./utils/logger');
+const { runMigrations } = require('./migrate');
+
+// Terapkan migrasi skema sebelum route dimuat. Bila migrasi gagal, proses
+// dihentikan: menjalankan server dengan skema setengah jadi lebih berbahaya
+// daripada tidak jalan sama sekali. Set MIGRATE_ON_START=0 untuk melewatinya.
+if (process.env.MIGRATE_ON_START !== '0') {
+  try {
+    runMigrations();
+  } catch (error) {
+    logger.error({ err: error }, 'migrasi database gagal, server dihentikan');
+    process.exit(1);
+  }
+}
 
 const app = express();
 app.disable('x-powered-by');
