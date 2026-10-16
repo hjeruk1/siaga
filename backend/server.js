@@ -8,6 +8,7 @@ const cors = require('cors');
 const path = require('path');
 const crypto = require('crypto');
 const pinoHttp = require('pino-http');
+const compression = require('compression');
 const logger = require('./utils/logger');
 const { runMigrations, pendingMigrations } = require('./migrate');
 const db = require('./db');
@@ -62,6 +63,25 @@ app.use((req, res, next) => {
   }
   next();
 });
+// Kompresi respons. Hanya menguntungkan teks (JSON, CSV); gambar dan PDF
+// diabaikan oleh filter default karena sudah terkompresi sendiri.
+//
+// Stream SSE dikecualikan secara eksplisit: mengompresi stream berarti menunggu
+// buffer penuh, dan itu mematikan aliran real-time absensi.
+//
+// PENTING: gunakan originalUrl, bukan url. Filter ini dievaluasi saat header
+// respons ditulis, yang terjadi DI DALAM handler route. Pada titik itu Express
+// sudah memangkas url menjadi '/stream' (sisa baseUrl-nya ada di req.baseUrl),
+// sehingga pengecekan '/api/absensi/stream' tidak akan pernah cocok dan stream
+// ikut terkompresi.
+app.use(
+  compression({
+    filter: (req, res) => {
+      if ((req.originalUrl || req.url).startsWith('/api/absensi/stream')) return false;
+      return compression.filter(req, res);
+    }
+  })
+);
 app.use(
   pinoHttp({
     logger,

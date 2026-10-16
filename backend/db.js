@@ -7,6 +7,13 @@ db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 db.pragma('busy_timeout = 5000');
 db.pragma('synchronous = NORMAL');
+// Nilai negatif berarti KB. Default SQLite hanya 2 MB, terlalu kecil untuk
+// menahan index dan halaman yang sering diakses sekaligus.
+db.pragma('cache_size = -32000');
+// mmap mengurangi syscall saat membaca. Aman karena file database ada di disk lokal.
+db.pragma('mmap_size = 268435456');
+// Pengurutan sementara (ORDER BY / GROUP BY) di memori, bukan di disk.
+db.pragma('temp_store = MEMORY');
 
 db.exec(`
 CREATE TABLE IF NOT EXISTS organisasi (
