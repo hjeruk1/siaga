@@ -31,6 +31,12 @@ function open() {
   return new Database(dbPath, { readonly: true });
 }
 
+// Jumlah migrasi dihitung dari berkas, bukan ditulis sebagai angka tetap —
+// supaya menambah migrasi baru tidak memecahkan test ini.
+function migrationFileCount() {
+  return fs.readdirSync(path.join(root, 'backend/migrations')).filter((f) => /^\d+_.+\.js$/.test(f)).length;
+}
+
 describe('Database migrations', () => {
   before(() => {
     tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'siaga-migrate-test-'));
@@ -62,8 +68,8 @@ describe('Database migrations', () => {
     const db = open();
     const applied = db.prepare('SELECT name FROM schema_migration ORDER BY name').all();
     db.close();
-    assert.equal(applied.length, 1);
-    assert.match(applied[0].name, /^\d+_/);
+    assert.equal(applied.length, migrationFileCount(), 'setiap berkas migrasi harus tercatat');
+    for (const row of applied) assert.match(row.name, /^\d+_/);
   });
 
   it('menghasilkan skema lengkap pada database baru', () => {
@@ -82,13 +88,14 @@ describe('Database migrations', () => {
   });
 
   it('idempoten: migrasi kedua tidak menerapkan apa pun', () => {
+    const expected = migrationFileCount();
     const res = runNode(['backend/migrate.js']);
     assert.equal(res.status, 0, res.stderr);
 
     const db = open();
     const count = db.prepare('SELECT COUNT(*) c FROM schema_migration').get().c;
     db.close();
-    assert.equal(count, 1, 'migrasi tidak boleh tercatat dua kali');
+    assert.equal(count, expected, 'migrasi tidak boleh tercatat dua kali');
   });
 
   it('memperbaiki database lama yang kehilangan kolom', () => {
