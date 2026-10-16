@@ -1,0 +1,14 @@
+[Unit]
+Description=Jalankan perawatan database SIAGA setiap bulan
+
+[Timer]
+# Tanggal 1 setiap bulan pukul 04:00 — cukup jeda setelah backup harian 02:30.
+OnCalendar=*-*-01 04:00:00
+# Menghindari lonjakan I/O tepat pada detik yang sama dengan tugas terjadwal lain.
+RandomizedDelaySec=30min
+# Bila VPS mati saat jadwal terlewat, jalankan segera setelah hidup.
+Persistent=true
+Unit=siaga-maintenance.service
+
+[Install]
+WantedBy=timers.target

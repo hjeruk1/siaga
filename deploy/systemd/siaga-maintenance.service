@@ -1,0 +1,20 @@
+[Unit]
+Description=SIAGA perawatan database (retensi + ANALYZE)
+Documentation=file:/opt/siaga/app/docs/siaga-improvement-plan.md
+# Jalan setelah backup harian supaya selalu ada cadangan sebelum baris dipotong.
+After=siaga-backup.service
+
+[Service]
+Type=oneshot
+User=siaga
+Group=siaga
+WorkingDirectory=/opt/siaga/app
+EnvironmentFile=/etc/siaga/siaga.env
+ExecStart=/usr/bin/node scripts/maintenance.js
+
+# Pemotongan pada tabel besar bisa memakan waktu; beri ruang lega tetapi jangan
+# biarkan menggantung tanpa batas.
+TimeoutStartSec=30min
+
+StandardOutput=journal
+StandardError=journal

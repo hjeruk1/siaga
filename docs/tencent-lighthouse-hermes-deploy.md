@@ -270,6 +270,58 @@ sudo systemctl start siaga
 curl -s http://127.0.0.1:3999/api/health/ready
 ```
 
+## Perawatan Database
+
+Tiga tabel tumbuh tanpa batas bila tidak dipangkas: `audit_log` (bertambah setiap
+kali ada mutasi data), `nfc_scan_log`, dan `penjemputan_log`.
+
+`scripts/maintenance.js` memotong baris lama lalu menjalankan `ANALYZE` agar
+statistik query planner tetap segar.
+
+Pasang timer bulanan:
+
+```bash
+sudo cp /opt/siaga/app/deploy/systemd/siaga-maintenance.service /etc/systemd/system/
+sudo cp /opt/siaga/app/deploy/systemd/siaga-maintenance.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now siaga-maintenance.timer
+```
+
+Selalu lihat dulu apa yang akan dihapus sebelum menjadwalkannya:
+
+```bash
+sudo -iu siaga
+cd /opt/siaga/app
+npm run db:maintenance:dry
+```
+
+Verifikasi:
+
+```bash
+systemctl list-timers siaga-maintenance.timer --no-pager
+sudo systemctl start siaga-maintenance.service
+sudo journalctl -u siaga-maintenance -n 50 --no-pager
+```
+
+Batas retensi (hari) diatur lewat `/etc/siaga/siaga.env`:
+
+```text
+RETENTION_AUDIT_LOG_DAYS=730
+RETENTION_NFC_SCAN_LOG_DAYS=180
+RETENTION_PENJEMPUTAN_LOG_DAYS=0
+```
+
+`penjemputan_log` **dinonaktifkan secara default** karena berisi riwayat
+penjemputan siswa — itu data bisnis, bukan log teknis, dan sekolah bisa
+memerlukannya untuk audit. Naikkan angkanya hanya bila Anda memang yakin.
+
+`MAINTENANCE_VACUUM=1` menjalankan `VACUUM`, yang menulis ulang SELURUH file
+database dan butuh ruang kosong sekitar seukuran database. Pada VPS 2 GB, cek
+ruang tersisa lebih dulu (`df -h`) sebelum mengaktifkannya.
+
+Timer dijadwalkan tanggal 1 setiap bulan pukul 04:00, setelah backup harian
+02:30, sehingga selalu ada cadangan sebelum baris dipotong.
+
 ## Health Check
 
 - `GET /api/health` — liveness. Cepat, tanpa akses database.
