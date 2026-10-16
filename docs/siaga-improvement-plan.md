@@ -2,7 +2,44 @@
 
 > Disusun: 16 Oktober 2026
 > Basis: audit tech stack + audit layer framework
-> Status: Fase 0 & 1 dieksekusi; Fase 2–6 menunggu konfirmasi cakupan
+> Branch kerja: `chore/tech-stack-improvements` (`main` tidak disentuh)
+
+---
+
+## 0. Status Eksekusi
+
+**Selesai dan terverifikasi.** Semua dijalankan di branch kerja, satu fase satu commit.
+
+| Fase | Isi | Status |
+|------|-----|--------|
+| 0 | Amankan WIP + verifikasi CI | Selesai |
+| 1 | Flakiness test, konsolidasi config Vite, ESLint + Prettier | Selesai |
+| — | Prettier massal (commit terpisah) | Selesai |
+| 2.1 | Express 4 → 5, hapus `async-route.js` | Selesai |
+| 2.2 | Validasi Zod (5 endpoint kritikal) | Selesai |
+| 2.3 | Structured logging (pino) | Selesai |
+| 2.4 | Error tracking opsional (Sentry) | Selesai |
+| 3.1 | Migration runner (ganti 43 blok ALTER ad-hoc) | Selesai |
+| 3.2 | Otomasi backup (systemd timer) | Selesai |
+| 3.3 | Readiness check | Selesai |
+| 4.1 | React 18 → 19 + pemisahan vendor chunk | Selesai |
+| 5.1 | Pecah GuruView (2895→1341), SiswaTab (1943→1009) | Sebagian |
+| 5.2 | Rename `admin/shared.jsx` → `AdminShared.jsx` | Selesai |
+| 6.1 | Test unit frontend (37 test) | Selesai |
+
+**Belum dikerjakan** — lihat §12 untuk alasan dan rencananya:
+
+| Item | Catatan |
+|------|---------|
+| 5.1 lanjutan | `BillingTab.jsx` (2698 baris) — seluruhnya satu komponen 2611 baris, tidak ada fungsi murni untuk diekstrak. Butuh refactor bertahap, bukan pemindahan mekanis. |
+| 5.3 | Konsolidasi design token (`DESIGN.md` → `tailwind.theme.json` → `index.css`) |
+| 4.2 | TanStack Query — menyentuh ~160 endpoint di seluruh view |
+| 4.3 | React Router — mengubah routing custom di `App.jsx` |
+| 6.2 | E2E Playwright (login, check-in, pembayaran) |
+| Lain | `useMaster` terduplikasi di `KegiatanMingguanTab.jsx` dan `admin/AdminShared.jsx` |
+
+**Angka akhir:** 128 test lulus (80 backend + 11 workflow + 37 frontend),
+lint 0 error, build hijau, `npm audit` 0 vulnerabilities (root + frontend).
 
 ---
 
@@ -154,8 +191,61 @@ sudah ada di `AdminView.jsx` (shell kecil + lazy-load tab) — tinggal diterapka
 
 Sebuah fase dianggap selesai bila:
 
-- [ ] `npm test` lulus (63+ test, tidak flaky)
-- [ ] `npm run build --prefix frontend` hijau
-- [ ] Perubahan ter-commit di branch dengan pesan jelas
-- [ ] Tidak ada perubahan perilaku yang tidak disengaja
-- [ ] Perubahan didokumentasikan bila menyentuh operasional (deploy/backup)
+- [x] `npm run test:all` lulus (128 test, tidak flaky)
+- [x] `npm run build --prefix frontend` hijau
+- [x] `npm run lint` 0 error
+- [x] `npm run format:check` bersih
+- [x] `npm run smoke:prod` lulus
+- [x] Perubahan ter-commit di branch dengan pesan jelas
+- [x] Tidak ada perubahan perilaku yang tidak disengaja
+- [x] Perubahan didokumentasikan bila menyentuh operasional (deploy/backup)
+
+---
+
+## 12. Sisa Pekerjaan — Rencana Konkret
+
+### 5.1 lanjutan — `BillingTab.jsx` (2698 baris)
+
+Berbeda dari GuruView dan SiswaTab, file ini **tidak punya fungsi murni maupun
+komponen terpisah** untuk dipindahkan. Seluruh 2611 baris berada dalam satu
+komponen. Pemindahan mekanis tidak bisa dilakukan tanpa membaca dan memahami
+alur state-nya lebih dulu.
+
+Pendekatan yang disarankan (bertahap, satu commit per langkah):
+
+1. Petakan state dan turunannya — daftar `useState`/`useMemo` dan siapa memakai apa.
+2. Identifikasi blok render yang mandiri (mis. modal konfirmasi, tabel tagihan,
+   form pembayaran) dan ubah menjadi komponen anak yang menerima props.
+3. Pindahkan helper murni yang muncul ke `admin/billing/helpers.js` — lalu tulis
+   test seperti yang sudah dilakukan untuk `guru/helpers.js`.
+4. Verifikasi build + lint setiap langkah. Perhatikan: lint akan menangkap
+   variabel tak terdefinisi yang lolos dari build (lihat catatan di commit
+   `4bc369c`).
+
+### 4.3 React Router
+
+Mengubah URL aplikasi. Butuh verifikasi di browser, bukan hanya build:
+
+- Petakan view per role yang sekarang ditangani `navFor(user)` di `App.jsx`.
+- Tentukan struktur rute (`/admin/siswa`, `/guru/absensi`, dst.) dan rute default
+  per role.
+- Perhatikan `must_change_password`: rute wajib ganti password harus tidak bisa
+  dilewati lewat URL langsung.
+- Uji manual: deep-link, tombol back, refresh di tengah alur, dan perpindahan role.
+
+### 4.2 TanStack Query
+
+Menyentuh hampir seluruh view. Kerjakan setelah 4.3 agar pola rute sudah stabil.
+Mulai dari satu tab (mis. `LaporanTab`) sebagai percontohan, ukur berapa banyak
+boilerplate loading/error yang hilang, baru sebarkan.
+
+### 6.2 E2E Playwright
+
+Alur kritikal yang layak ditutup lebih dulu:
+1. Login staff + wajib ganti password.
+2. Check-in absensi dan set keterangan.
+3. Buat pembayaran tunai → verifikasi alokasi FIFO ke tagihan.
+4. Scan QR penjemput → pulangkan siswa.
+
+Ketiganya sudah punya cakupan API (lihat `scripts/*.test.js`); E2E menambahkan
+lapisan UI yang saat ini sama sekali belum teruji.
