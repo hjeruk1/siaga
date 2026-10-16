@@ -3,6 +3,8 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const crypto = require('crypto');
+const pinoHttp = require('pino-http');
+const logger = require('./utils/logger');
 
 const app = express();
 app.disable('x-powered-by');
@@ -23,8 +25,10 @@ if (process.env.NODE_ENV === 'production' && allowedOrigins.length) {
 } else if (process.env.NODE_ENV !== 'production') {
   app.use('/api', cors({ origin: '*' }));
 }
-app.use((_req, res, next) => {
-  res.setHeader('X-Request-Id', _req.headers['x-request-id'] || crypto.randomUUID());
+app.use((req, res, next) => {
+  // Satu id per request, dipakai untuk header respons sekaligus korelasi log.
+  req.id = req.headers['x-request-id'] || crypto.randomUUID();
+  res.setHeader('X-Request-Id', req.id);
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
@@ -40,6 +44,33 @@ app.use((_req, res, next) => {
   }
   next();
 });
+app.use(
+  pinoHttp({
+    logger,
+    genReqId: (req) => req.id || crypto.randomUUID(),
+    // Default pino-http menulis seluruh header req/res. Header respons di sini
+    // memuat CSP panjang (~500 byte) sehingga log membengkak tanpa manfaat.
+    // Simpan hanya field yang berguna untuk investigasi.
+    serializers: {
+      req: (req) => ({
+        id: req.id,
+        method: req.method,
+        url: req.url,
+        remoteAddress: req.remoteAddress
+      }),
+      res: (res) => ({ statusCode: res.statusCode })
+    },
+    // Health check dan stream SSE tidak perlu memenuhi log akses.
+    autoLogging: {
+      ignore: (req) => req.url.startsWith('/api/health') || req.url.startsWith('/api/absensi/stream')
+    },
+    customLogLevel: (_req, res, err) => {
+      if (err || res.statusCode >= 500) return 'error';
+      if (res.statusCode >= 400) return 'warn';
+      return 'info';
+    }
+  })
+);
 app.use(express.json({ limit: '2mb' }));
 
 const requestBuckets = new Map();
@@ -103,7 +134,7 @@ if (process.env.NODE_ENV === 'production') {
   });
 }
 
-app.use((err, _req, res, _next) => {
+app.use((err, req, res, _next) => {
   if (err?.code === 'LIMIT_FILE_SIZE') {
     return res.status(413).json({ error: 'Ukuran file melebihi batas yang diizinkan' });
   }
@@ -116,20 +147,20 @@ app.use((err, _req, res, _next) => {
   if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
     return res.status(400).json({ error: 'JSON tidak valid' });
   }
-  console.error(err.stack || err);
+  logger.error({ err, requestId: req.id }, 'unhandled request error');
   res.status(500).json({ error: 'Internal server error' });
 });
 
 const port = process.env.PORT || 3001;
 const server = app.listen(port, '0.0.0.0', () => {
-  console.log(`\nSIAGA Backend -> http://localhost:${port} [${process.env.NODE_ENV || 'development'}]\n`);
+  logger.info(`SIAGA Backend listening on http://localhost:${port} [${process.env.NODE_ENV || 'development'}]`);
 });
 server.requestTimeout = 30_000;
 server.headersTimeout = 35_000;
 server.keepAliveTimeout = 5_000;
 
 function shutdown(signal) {
-  console.log(`${signal} diterima, menutup server...`);
+  logger.info({ signal }, 'menutup server');
   server.close(() => process.exit(0));
   setTimeout(() => process.exit(1), 10_000).unref();
 }
