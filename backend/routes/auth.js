@@ -5,6 +5,8 @@ const jwt = require('jsonwebtoken');
 const db = require('../db');
 const auth = require('../middleware/auth');
 const { SECRET, loadUser, MEDIA_COOKIE } = require('../middleware/auth');
+const { validateBody } = require('../middleware/validate');
+const { loginSchema, changePasswordSchema } = require('../schemas');
 const { nowUtc, audit } = require('../utils/workflow');
 
 const DUMMY_HASH = '$2a$10$CwTycUXWue0Thq9StjUM0uJ8oD4P0MYu96TbKavvLWS.5o60tK4Ga';
@@ -85,7 +87,7 @@ function setMediaCookie(res, token, maxAgeSeconds = 12 * 60 * 60) {
   res.setHeader('Set-Cookie', parts.join('; '));
 }
 
-router.post('/login', (req, res) => {
+router.post('/login', validateBody(loginSchema), (req, res) => {
   const { tipe = 'staff', username, no_wa, password } = req.body || {};
   const loginType = tipe === 'wali' ? 'wali' : 'staff';
   const identity = loginType === 'wali' ? String(no_wa || '').trim() : String(username || '').trim();
@@ -122,7 +124,7 @@ router.get('/me', auth(), (req, res) => {
   res.json(publicUser(req.user));
 });
 
-router.post('/change-password', auth(), (req, res) => {
+router.post('/change-password', auth(), validateBody(changePasswordSchema), (req, res) => {
   const { old_password, new_password } = req.body || {};
   if (!validPassword(new_password))
     return res.status(400).json({ error: 'Password baru minimal 10 karakter serta mengandung huruf dan angka' });

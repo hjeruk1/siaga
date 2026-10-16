@@ -3,6 +3,8 @@ const path = require('path');
 const router = require('express').Router();
 const db = require('../db');
 const auth = require('../middleware/auth');
+const { validateBody } = require('../middleware/validate');
+const { pembayaranSchema } = require('../schemas');
 const {
   nowUtc,
   todayWIB,
@@ -638,7 +640,7 @@ router.get('/pembayaran', auth(['admin', 'admin_cabang', 'kepsek']), (req, res) 
   );
 });
 
-router.post('/pembayaran', auth(['admin', 'admin_cabang']), (req, res) => {
+router.post('/pembayaran', auth(['admin', 'admin_cabang']), validateBody(pembayaranSchema), (req, res) => {
   const d = req.body || {};
   const cabangId = req.user.role === 'admin' ? d.cabang_id : req.user.cabang_id;
   if (!requireActiveCabang(req, res, cabangId)) return;

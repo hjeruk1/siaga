@@ -1,6 +1,8 @@
 const router = require('express').Router();
 const db = require('../db');
 const auth = require('../middleware/auth');
+const { validateBody } = require('../middleware/validate');
+const { absensiCheckinSchema, absensiKeteranganSchema } = require('../schemas');
 const {
   nowUtc,
   todayWIB,
@@ -193,7 +195,7 @@ router.get('/today', auth(), (req, res) => {
   res.json({ rows, is_school_day: schoolDay, tanggal });
 });
 
-router.post('/checkin', auth(['guru', 'admin', 'admin_cabang']), (req, res) => {
+router.post('/checkin', auth(['guru', 'admin', 'admin_cabang']), validateBody(absensiCheckinSchema), (req, res) => {
   const tanggal = req.body?.tanggal || todayWIB();
   const siswaId = req.body?.siswa_id;
   const access = canAccessSiswa(req.user, siswaId, { tanggal });
@@ -227,43 +229,48 @@ router.post('/checkin', auth(['guru', 'admin', 'admin_cabang']), (req, res) => {
   res.json({ success: true, status, jam_masuk: jam });
 });
 
-router.post('/keterangan', auth(['guru', 'admin', 'admin_cabang']), (req, res) => {
-  const tanggal = req.body?.tanggal || todayWIB();
-  const { siswa_id, status, catatan } = req.body || {};
-  if (!['Izin', 'Sakit', 'Absen'].includes(status)) return res.status(400).json({ error: 'Status tidak valid' });
-  const access = canAccessSiswa(req.user, siswa_id, { tanggal });
-  if (access === false) return res.status(403).json({ error: 'Akses siswa ditolak' });
-  if (!access) return res.status(404).json({ error: 'Siswa tidak ditemukan' });
-  if (access.siswa.status !== 'aktif')
-    return res.status(400).json({ error: 'Siswa nonaktif tidak bisa diubah status absensinya' });
-  if (!requireActiveCabang(req, res, access.enrollment.cabang_id)) return;
-  if (isDayClosed(tanggal, access.enrollment.cabang_id))
-    return res.status(400).json({ error: 'Hari sudah ditutup, tidak bisa ubah keterangan' });
-  const item = ensureAbsensi(siswa_id, tanggal);
-  if (!canSetKeterangan(item.row.status))
-    return res.status(400).json({ error: `Status ${item.row.status} tidak boleh ditimpa oleh keterangan` });
-  db.prepare('UPDATE absensi SET status=?,catatan=?,manual=1,updated_at=? WHERE id=?').run(
-    status,
-    catatan || null,
-    nowUtc(),
-    item.row.id
-  );
-  audit(req.user, 'set_keterangan', 'absensi', item.row.id, {
-    cabang_id: item.enrollment.cabang_id,
-    after: { status, catatan }
-  });
-  notifyKepsek(
-    item.enrollment.cabang_id,
-    'absensi_keterangan',
-    `${access.siswa.nama} ${status}`,
-    catatan || `Status absensi diubah menjadi ${status}.`,
-    'absensi',
-    item.row.id,
-    req.user.id
-  );
-  broadcastAbsensi(item.enrollment.cabang_id);
-  res.json({ success: true });
-});
+router.post(
+  '/keterangan',
+  auth(['guru', 'admin', 'admin_cabang']),
+  validateBody(absensiKeteranganSchema),
+  (req, res) => {
+    const tanggal = req.body?.tanggal || todayWIB();
+    const { siswa_id, status, catatan } = req.body || {};
+    if (!['Izin', 'Sakit', 'Absen'].includes(status)) return res.status(400).json({ error: 'Status tidak valid' });
+    const access = canAccessSiswa(req.user, siswa_id, { tanggal });
+    if (access === false) return res.status(403).json({ error: 'Akses siswa ditolak' });
+    if (!access) return res.status(404).json({ error: 'Siswa tidak ditemukan' });
+    if (access.siswa.status !== 'aktif')
+      return res.status(400).json({ error: 'Siswa nonaktif tidak bisa diubah status absensinya' });
+    if (!requireActiveCabang(req, res, access.enrollment.cabang_id)) return;
+    if (isDayClosed(tanggal, access.enrollment.cabang_id))
+      return res.status(400).json({ error: 'Hari sudah ditutup, tidak bisa ubah keterangan' });
+    const item = ensureAbsensi(siswa_id, tanggal);
+    if (!canSetKeterangan(item.row.status))
+      return res.status(400).json({ error: `Status ${item.row.status} tidak boleh ditimpa oleh keterangan` });
+    db.prepare('UPDATE absensi SET status=?,catatan=?,manual=1,updated_at=? WHERE id=?').run(
+      status,
+      catatan || null,
+      nowUtc(),
+      item.row.id
+    );
+    audit(req.user, 'set_keterangan', 'absensi', item.row.id, {
+      cabang_id: item.enrollment.cabang_id,
+      after: { status, catatan }
+    });
+    notifyKepsek(
+      item.enrollment.cabang_id,
+      'absensi_keterangan',
+      `${access.siswa.nama} ${status}`,
+      catatan || `Status absensi diubah menjadi ${status}.`,
+      'absensi',
+      item.row.id,
+      req.user.id
+    );
+    broadcastAbsensi(item.enrollment.cabang_id);
+    res.json({ success: true });
+  }
+);
 
 router.post('/nfc-scan', auth(['guru', 'admin', 'admin_cabang']), (req, res) => {
   const tanggal = req.body?.tanggal || todayWIB();

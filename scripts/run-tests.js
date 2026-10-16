@@ -13,7 +13,8 @@ const files =
         'scripts/daily-record-v2.test.js',
         'scripts/adminview-stabilization.test.js',
         'scripts/export-absensi.test.js',
-        'scripts/billing-money.test.js'
+        'scripts/billing-money.test.js',
+        'scripts/validation.test.js'
       ];
 const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'siaga-test-'));
 const dbPath = path.join(tempDir, 'siaga.db');
