@@ -25,7 +25,16 @@ import {
   Users,
   X
 } from 'lucide-react';
-import { useMaster, StudentMetricGroup, SiswaCard, SiswaTable, SiswaDrawer, Panel, FotoUpload, money } from './shared';
+import {
+  useMaster,
+  StudentMetricGroup,
+  SiswaCard,
+  SiswaTable,
+  SiswaDrawer,
+  Panel,
+  FotoUpload,
+  money
+} from './AdminShared';
 
 export default function SiswaTab({ user, toast }) {
   const m = useMaster(user);

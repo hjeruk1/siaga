@@ -18,7 +18,7 @@ import {
   Users,
   X
 } from 'lucide-react';
-import { useMaster, StudentAvatar, StatusBadge, StaffCard, Panel, Table, Td, FotoUpload } from './shared';
+import { useMaster, StudentAvatar, StatusBadge, StaffCard, Panel, Table, Td, FotoUpload } from './AdminShared';
 
 export default function StaffTab({ user, toast }) {
   const m = useMaster(user);

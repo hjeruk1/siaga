@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../../api';
 import { ActionButton, ConfirmActionModal, IconButton, Modal, CustomSelect } from '../../components/Shared';
 import { Pencil, Plus, Power, PowerOff, Save, X } from 'lucide-react';
-import { BranchMetricRow, Panel, Input } from './shared';
+import { BranchMetricRow, Panel, Input } from './AdminShared';
 
 export default function CabangTab({ user, toast }) {
   const empty = { nama: '', kode: '', alamat: '', kontak: '', aktif: 1 };

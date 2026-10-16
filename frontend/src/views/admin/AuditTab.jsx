@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { api } from '../../api';
 import { CustomSelect } from '../../components/Shared';
 import { Search, X } from 'lucide-react';
-import { useMaster, Panel, Table, Td, fmtTime } from './shared';
+import { useMaster, Panel, Table, Td, fmtTime } from './AdminShared';
 
 export default function AuditTab({ user, toast }) {
   const m = useMaster(user);

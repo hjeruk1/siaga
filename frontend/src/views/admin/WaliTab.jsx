@@ -23,7 +23,7 @@ import {
   Users,
   X
 } from 'lucide-react';
-import { useMaster, WaliStatusBadge, WaliCard, Panel, Input, Table, Td } from './shared';
+import { useMaster, WaliStatusBadge, WaliCard, Panel, Input, Table, Td } from './AdminShared';
 
 export default function WaliTab({ user, toast }) {
   const m = useMaster(user);

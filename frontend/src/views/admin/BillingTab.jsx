@@ -44,7 +44,7 @@ import {
   BillingStatusBadge,
   MethodBadge,
   MoneyCell
-} from './shared';
+} from './AdminShared';
 
 export default function BillingTab({ user, toast }) {
   const m = useMaster(user);

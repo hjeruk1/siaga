@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../../api';
 import { ActionButton, ConfirmActionModal, IconButton, Modal, CustomSelect } from '../../components/Shared';
 import { AlertCircle, CalendarPlus, ChevronDown, Trash2, X } from 'lucide-react';
-import { useMaster, Panel, Input } from './shared';
+import { useMaster, Panel, Input } from './AdminShared';
 
 export default function KalenderTab({ user, toast }) {
   const m = useMaster(user);

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { api } from '../../api';
 import { ActionButton, ConfirmActionModal, IconButton, Modal, CustomSelect } from '../../components/Shared';
 import { Pencil, Plus, RefreshCw, Save, Search, Settings, Trash2, UserMinus, UserPlus, Users, X } from 'lucide-react';
-import { useMaster, StudentAvatar, Panel, Input } from './shared';
+import { useMaster, StudentAvatar, Panel, Input } from './AdminShared';
 import { GuruAvatarStack } from './BillingTab';
 
 export default function RombelTab({ user, toast }) {

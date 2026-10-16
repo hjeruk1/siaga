@@ -16,7 +16,7 @@ import {
   Wallet,
   X
 } from 'lucide-react';
-import { useMaster, CabangFilter, Panel, Input } from './shared';
+import { useMaster, CabangFilter, Panel, Input } from './AdminShared';
 
 export default function ConfigTab({ user, toast }) {
   const m = useMaster(user, { autoDefaultCabang: true });

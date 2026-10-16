@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../../api';
 import { ActionButton, IconButton, Modal, CustomSelect, CustomDatePicker, EmptyState } from '../../components/Shared';
 import { FilePenLine, RefreshCw, Save, X } from 'lucide-react';
-import { useMaster, CabangFilter, Panel, fmtTime } from './shared';
+import { useMaster, CabangFilter, Panel, fmtTime } from './AdminShared';
 
 export default function LaporanTab({ user, toast }) {
   const m = useMaster(user);
