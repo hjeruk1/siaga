@@ -158,7 +158,9 @@ export function SiswaCard({ siswa, active, open }) {
         <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] font-bold text-slate-600">
           <span className="px-2 py-0.5 rounded bg-slate-50 border border-slate-100">{siswa.jenjang_nama}</span>
           <span className="px-2 py-0.5 rounded bg-slate-50 border border-slate-100">{siswa.rombel_nama}</span>
-          <span className="px-2 py-0.5 rounded bg-slate-50 border border-slate-100 uppercase">{siswa.paket}</span>
+          <span className="px-2 py-0.5 rounded bg-slate-50 border border-slate-100 uppercase">
+            {paketLabel(siswa.paket)}
+          </span>
         </div>
       </div>
       <div className="self-center pl-1 text-slate-400" aria-hidden="true">
@@ -284,8 +286,8 @@ export function SiswaTable({ list, selected, open }) {
                 <td className="py-2 px-3 text-slate-600 truncate" title={s.rombel_nama}>
                   {s.rombel_nama}
                 </td>
-                <td className="py-2 px-3 text-slate-600 truncate" title={s.paket}>
-                  {s.paket}
+                <td className="py-2 px-3 text-slate-600 truncate" title={paketLabel(s.paket)}>
+                  {paketLabel(s.paket)}
                 </td>
                 <td className={`py-2 px-3 sticky right-0 z-10 ${rowBg} border-l border-slate-200/80`}>
                   <IconButton icon={Settings} label={`Kelola ${s.nama}`} onClick={() => open(s)} size="sm" />
@@ -560,6 +562,13 @@ export function FotoUpload({ url, onUpload, onDelete, size = 'md' }) {
 export function money(v) {
   return 'Rp ' + Number(v || 0).toLocaleString('id-ID');
 }
+// Enum paket mentah ('full_day') tidak layak tampil di UI. Dipakai oleh tabel siswa,
+// kartu siswa mobile, dan badge paket di panel detail supaya ketiganya seragam.
+export const PAKET_LABELS = { reguler: 'Reguler', full_day: 'Full Day', care: 'Care' };
+export function paketLabel(paket) {
+  const key = String(paket || '').toLowerCase();
+  return PAKET_LABELS[key] || paket || '';
+}
 export function fmtTime(v) {
   try {
     return new Intl.DateTimeFormat('id-ID', {
@@ -700,10 +709,17 @@ export function MethodBadge({ metode }) {
   );
 }
 
+// Sel khusus kolom uang pada tabel.
+//
+// Sengaja TIDAK rata kanan: `Table` merender semua judul kolom rata kiri, jadi
+// sel yang rata kanan membuat satu-satunya kolom uang menempel ke tepi kanan dan
+// tidak sejajar dengan judulnya — sementara sel lain di tabel yang sama
+// (termasuk kolom uang lain seperti "Alokasi") rata kiri. Kelas di sini hanya
+// membedakannya dari `Td` lewat bobot huruf dan angka tabular.
 export function MoneyCell({ children, className = '' }) {
   return (
     <td
-      className={`py-2 px-3 text-right font-semibold tabular-nums text-slate-700 dark:text-slate-300 whitespace-nowrap ${className}`}
+      className={`py-2 px-3 font-semibold tabular-nums text-slate-700 dark:text-slate-300 whitespace-nowrap ${className}`}
     >
       {children}
     </td>

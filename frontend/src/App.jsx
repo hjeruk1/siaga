@@ -450,7 +450,11 @@ export default function App() {
               <div className="flex items-center gap-4 min-w-0">
                 <img src="/tp_logo.png" alt="Taruna Prima Logo" className="h-10 w-auto object-contain flex-shrink-0" />
                 <div className="hidden xs:block border-l border-slate-200 h-8 self-center" />
-                <div className="min-w-0 leading-tight">
+                {/* Brand text is collapsed below xs: the 140px logo plus the three action
+                    buttons leave no room, which used to crush "SIAGA" to 1px wide and
+                    overlap the icons next to it. The divider and view title above fold
+                    the same way. From xs up there is room for the full wordmark. */}
+                <div className="hidden xs:block min-w-0 leading-tight">
                   <span className="font-black text-text-main text-sm sm:text-base block leading-none">SIAGA</span>
                   <span className="mt-1 text-[10px] font-bold text-slate-400 block truncate max-w-[100px] sm:max-w-[180px]">
                     {user.cabang_nama || 'Taruna Prima'}

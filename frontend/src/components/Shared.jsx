@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, Children } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback, Children } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Pencil,
@@ -132,7 +132,7 @@ export function ActionButton({
     </button>
   );
 }
-export function Modal({ title, onClose, children, maxWidth = 'max-w-md' }) {
+export function Modal({ title, onClose, children, maxWidth = 'max-w-md', footer }) {
   const panelRef = useRef(null);
   const onCloseRef = useRef(onClose);
   useEffect(() => {
@@ -182,11 +182,15 @@ export function Modal({ title, onClose, children, maxWidth = 'max-w-md' }) {
         className={`bg-white border border-slate-200 rounded-2xl w-full ${maxWidth} max-h-[92dvh] overflow-hidden animate-bounce-in flex flex-col shadow-2xl shadow-slate-950/25 focus:outline-none`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 bg-slate-50/70 flex-shrink-0">
-          <h3 className="font-black text-lg text-text-main truncate pr-3 tracking-[-0.01em]">{title}</h3>
+        <div className="flex flex-shrink-0 items-center justify-between border-b border-slate-100 bg-slate-50/70 px-4 py-3">
+          <h3 className="truncate pr-3 text-base font-black tracking-[-0.01em] text-text-main">{title}</h3>
           <IconButton icon={X} label="Tutup" onClick={onClose} variant="plain" />
         </div>
-        <div className="p-5 overflow-y-auto custom-scrollbar">{children}</div>
+        <div className="overflow-y-auto p-4 custom-scrollbar">{children}</div>
+        {/* Footer opsional di luar area scroll. Dipakai modal panjang yang aksinya harus
+            selalu terjangkau: `sticky bottom-0` di dalam container ber-padding tidak bisa
+            rata ke bawah (tertinggal setinggi padding-bottom container). */}
+        {footer && <div className="flex-none border-t border-slate-100 bg-slate-50/70 px-4 py-3">{footer}</div>}
       </div>
     </div>
   );
@@ -1055,12 +1059,17 @@ export function SearchableSelect({
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
+  const [coords, setCoords] = useState(null);
   const containerRef = useRef(null);
+  const buttonRef = useRef(null);
+  const panelRef = useRef(null);
   const searchInputRef = useRef(null);
 
   useEffect(() => {
     function handleClickOutside(event) {
-      if (containerRef.current && !containerRef.current.contains(event.target)) {
+      const inTrigger = containerRef.current && containerRef.current.contains(event.target);
+      const inPanel = panelRef.current && panelRef.current.contains(event.target);
+      if (!inTrigger && !inPanel) {
         setIsOpen(false);
         setSearch('');
       }
@@ -1074,6 +1083,46 @@ export function SearchableSelect({
       searchInputRef.current.focus();
     }
   }, [isOpen]);
+
+  // Daftar opsi dirender lewat portal ke <body> dengan position:fixed supaya
+  // tidak terpotong oleh `overflow-hidden` milik Modal. Posisinya dihitung dari
+  // rect tombol trigger, dan otomatis membuka ke atas bila ruang bawah sempit.
+  const updatePosition = useCallback(() => {
+    const el = buttonRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const gap = 4;
+    const margin = 8;
+    // Tinggi tetap bagian atas panel (kolom pencarian + border) yang harus ikut
+    // dihitung supaya total panel tidak melewati tepi viewport saat membuka ke atas.
+    const headerH = 40;
+    const spaceBelow = window.innerHeight - rect.bottom - gap - margin;
+    const spaceAbove = rect.top - gap - margin;
+    const placeAbove = spaceBelow < 240 && spaceAbove > spaceBelow;
+    const budget = Math.round(placeAbove ? spaceAbove : spaceBelow) - headerH;
+    setCoords({
+      left: rect.left,
+      width: rect.width,
+      placeAbove,
+      maxHeight: Math.max(96, Math.min(280, budget)),
+      edge: placeAbove ? rect.top - gap : rect.bottom + gap
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setCoords(null);
+      return;
+    }
+    updatePosition();
+    const refresh = () => updatePosition();
+    window.addEventListener('scroll', refresh, true);
+    window.addEventListener('resize', refresh);
+    return () => {
+      window.removeEventListener('scroll', refresh, true);
+      window.removeEventListener('resize', refresh);
+    };
+  }, [isOpen, updatePosition]);
 
   const options = useMemo(() => {
     return Children.toArray(children)
@@ -1104,6 +1153,39 @@ export function SearchableSelect({
     }
   };
 
+  // Panel dirender lewat portal di luar dialog, sehingga Tab tidak lagi
+  // menjangkau opsinya lewat urutan DOM. Ditangani di sini agar navigasi
+  // keyboard tetap jalan: Tab/Escape menutup panel, panah naik-turun pindah
+  // opsi, Enter memilih opsi yang sedang fokus.
+  const handlePanelKeyDown = (event) => {
+    if (event.key === 'Escape' || event.key === 'Tab') {
+      event.preventDefault();
+      event.stopPropagation();
+      setIsOpen(false);
+      setSearch('');
+      buttonRef.current?.focus();
+      return;
+    }
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      const opts = [...(panelRef.current?.querySelectorAll('[role="option"]') || [])];
+      if (!opts.length) return;
+      const idx = opts.indexOf(document.activeElement);
+      const next =
+        event.key === 'ArrowDown' ? opts[idx + 1] || opts[0] : idx <= 0 ? opts[opts.length - 1] : opts[idx - 1];
+      next.focus();
+      return;
+    }
+    if (event.key === 'Enter') {
+      const active = document.activeElement;
+      const index = active?.dataset?.index;
+      if (active?.getAttribute('role') === 'option' && index !== undefined) {
+        event.preventDefault();
+        handleSelect(filteredOptions[Number(index)]?.value);
+      }
+    }
+  };
+
   const isWFull = className.includes('w-full');
   const isW40 = className.includes('w-40');
   const otherClasses = className.replace('input', '').trim();
@@ -1114,16 +1196,23 @@ export function SearchableSelect({
       className={`relative inline-block text-left ${isWFull ? 'w-full' : isW40 ? 'w-40' : ''} ${otherClasses}`}
     >
       <button
+        ref={buttonRef}
         type="button"
         disabled={disabled}
         onClick={() => {
-          setIsOpen(!isOpen);
-          if (isOpen) setSearch('');
+          if (isOpen) {
+            setIsOpen(false);
+            setSearch('');
+          } else {
+            updatePosition();
+            setIsOpen(true);
+          }
         }}
         onKeyDown={(event) => {
           if (event.key === 'Escape') setIsOpen(false);
           if (event.key === 'ArrowDown') {
             event.preventDefault();
+            updatePosition();
             setIsOpen(true);
           }
         }}
@@ -1137,43 +1226,60 @@ export function SearchableSelect({
         <ChevronDown className="w-4 h-4 text-slate-400 flex-shrink-0" />
       </button>
 
-      {isOpen && !disabled && (
-        <div className="absolute left-0 right-0 mt-1 z-50 bg-white border border-slate-200 rounded-lg overflow-hidden">
-          <input
-            ref={searchInputRef}
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder={searchPlaceholder}
-            aria-label={searchPlaceholder}
-            aria-controls={listboxId}
-            className="w-full px-3 py-2 text-sm border-b border-slate-100 focus:outline-none focus:ring-0 bg-transparent placeholder-slate-400"
-          />
-          <div id={listboxId} role="listbox" className="overflow-y-auto max-h-60">
-            {filteredOptions.length === 0 ? (
-              <div className="px-3 py-4 text-sm text-slate-400 text-center">Tidak ditemukan</div>
-            ) : (
-              filteredOptions.map((opt) => (
-                <button
-                  key={String(opt.value)}
-                  type="button"
-                  disabled={opt.disabled}
-                  onClick={() => handleSelect(opt.value)}
-                  role="option"
-                  aria-selected={String(opt.value) === String(value)}
-                  className={`w-full text-left px-3 py-2 text-sm transition-colors hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed ${
-                    String(opt.value) === String(value)
-                      ? 'bg-primary-container font-semibold text-primary'
-                      : 'text-text-main'
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              ))
-            )}
-          </div>
-        </div>
-      )}
+      {isOpen &&
+        !disabled &&
+        coords &&
+        createPortal(
+          <div
+            ref={panelRef}
+            onKeyDown={handlePanelKeyDown}
+            style={{
+              position: 'fixed',
+              left: coords.left,
+              width: coords.width,
+              top: coords.placeAbove ? undefined : coords.edge,
+              bottom: coords.placeAbove ? window.innerHeight - coords.edge : undefined,
+              zIndex: 60
+            }}
+            className="bg-white border border-slate-200 rounded-lg overflow-hidden shadow-lg shadow-slate-950/10"
+          >
+            <input
+              ref={searchInputRef}
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={searchPlaceholder}
+              aria-label={searchPlaceholder}
+              aria-controls={listboxId}
+              className="w-full px-3 py-2 text-sm border-b border-slate-100 focus:outline-none focus:ring-0 bg-transparent placeholder-slate-400"
+            />
+            <div id={listboxId} role="listbox" style={{ maxHeight: coords.maxHeight }} className="overflow-y-auto">
+              {filteredOptions.length === 0 ? (
+                <div className="px-3 py-4 text-sm text-slate-400 text-center">Tidak ditemukan</div>
+              ) : (
+                filteredOptions.map((opt, index) => (
+                  <button
+                    key={String(opt.value)}
+                    type="button"
+                    data-index={index}
+                    disabled={opt.disabled}
+                    onClick={() => handleSelect(opt.value)}
+                    role="option"
+                    aria-selected={String(opt.value) === String(value)}
+                    className={`w-full text-left px-3 py-2 text-sm transition-colors hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed ${
+                      String(opt.value) === String(value)
+                        ? 'bg-primary-container font-semibold text-primary'
+                        : 'text-text-main'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))
+              )}
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 }

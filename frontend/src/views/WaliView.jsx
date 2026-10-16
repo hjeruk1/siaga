@@ -469,7 +469,7 @@ export default function WaliView({ toast }) {
               <>
                 {/* Summary Cards */}
                 <div className="grid grid-cols-2 gap-3 sm:gap-4">
-                  <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 flex flex-col hover:border-slate-350 transition duration-200 shadow-sm">
+                  <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 flex flex-col hover:border-slate-300 transition duration-200 shadow-sm">
                     <div className="flex items-center gap-2 mb-3">
                       <div className="w-8 h-8 rounded-xl bg-amber-50 flex items-center justify-center shrink-0">
                         <Receipt className="w-4 h-4 text-amber-500" />
@@ -485,7 +485,7 @@ export default function WaliView({ toast }) {
                       {billingInfo.tagihan.length} tagihan belum lunas
                     </div>
                   </div>
-                  <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 flex flex-col hover:border-slate-350 transition duration-200 shadow-sm">
+                  <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 flex flex-col hover:border-slate-300 transition duration-200 shadow-sm">
                     <div className="flex items-center gap-2 mb-3">
                       <div className="w-8 h-8 rounded-xl bg-emerald-50 flex items-center justify-center shrink-0">
                         <CreditCard className="w-4 h-4 text-emerald-500" />
@@ -632,7 +632,7 @@ export default function WaliView({ toast }) {
                                   );
                                 }}
                                 variant="ghost"
-                                className="px-2.5 h-8 text-[11px] font-semibold border border-slate-200 bg-white hover:bg-slate-50 rounded-lg text-slate-650"
+                                className="px-2.5 h-8 text-[11px] font-semibold border border-slate-200 bg-white hover:bg-slate-50 rounded-lg text-slate-600"
                               >
                                 Kuitansi
                               </ActionButton>

@@ -23,7 +23,7 @@ import {
   Users,
   X
 } from 'lucide-react';
-import { FotoUpload, money } from '../AdminShared';
+import { FotoUpload, money, paketLabel } from '../AdminShared';
 import { downloadQrCard } from './downloadQrCard';
 
 export function SiswaDetailPanel({ user, m, detail, setDetail, toast, refresh, close }) {
@@ -436,7 +436,7 @@ export function SiswaDetailPanel({ user, m, detail, setDetail, toast, refresh, c
             {detail.enrollment?.paket && (
               <div className="mt-2 flex flex-wrap gap-2">
                 <span className="px-2 py-0.5 rounded bg-slate-100 border border-slate-200/60 text-[10px] sm:text-[11px] font-black uppercase text-slate-600">
-                  Paket: {detail.enrollment?.paket}
+                  Paket: {paketLabel(detail.enrollment?.paket)}
                 </span>
                 {detail.enrollment?.tanggal_mulai && (
                   <span className="px-2 py-0.5 rounded bg-slate-100 border border-slate-200/60 text-[10px] sm:text-[11px] font-black uppercase text-slate-600">

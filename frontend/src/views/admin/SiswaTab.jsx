@@ -784,9 +784,11 @@ export default function SiswaTab({ user, toast }) {
               {['naik', 'tinggal', 'lulus', 'skip', 'error'].map((k) => (
                 <div
                   key={k}
-                  className="flex flex-col items-center rounded-lg bg-slate-50 border border-slate-100 px-1.5 py-1 text-center"
+                  className="flex flex-col items-center rounded-lg bg-slate-50 border border-slate-100 px-1 sm:px-1.5 py-1 text-center"
                 >
-                  <div className="text-[9px] sm:text-[10px] font-black uppercase tracking-wide text-slate-400 truncate w-full text-center">
+                  {/* padding & tracking dikecilkan di mobile: "TINGGAL" 2,5px lebih lebar
+                      dari kolom 5-grid dan dulu terpotong jadi "TINGG…". */}
+                  <div className="text-[9px] sm:text-[10px] font-black uppercase tracking-normal sm:tracking-wide text-slate-400 truncate w-full text-center">
                     {k}
                   </div>
                   <div className="text-base font-black text-text-main leading-tight">{kenaikanSummary()[k] || 0}</div>

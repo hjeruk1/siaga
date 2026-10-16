@@ -20,7 +20,10 @@
   --radius-xl: 16px;
   --radius-2xl: 20px;
   --breakpoint-xs: 475px;
-  --spacing-sm: 4px;
+  /* Catatan: jangan definisikan `--spacing-sm`. Kunci `sm` di namespace spacing
+     membuat `max-w-sm` ter-resolve ke 4px alih-alih 24rem milik kontainer,
+     sehingga semua `EmptyState` runtuh jadi satu kata per baris. */
+  --container-sm: 24rem;
   /* Nilai berikut mempertahankan tampilan default Tailwind v3. */
   --default-ring-width: 3px;
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
