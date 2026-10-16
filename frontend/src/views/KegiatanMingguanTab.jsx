@@ -3,6 +3,7 @@ import { api } from '../api';
 import { ActionButton, IconButton, CustomSelect, CustomDatePicker, Modal } from '../components/Shared';
 import { todayWIB } from '../utils/date';
 import { RefreshCw, Upload, FilePlus, Pencil, X, Save } from 'lucide-react';
+import { normalizeActivities } from './guru/helpers';
 
 function useMaster(user, { autoDefaultCabang = false } = {}) {
   const [cabang, setCabang] = useState([]);
@@ -98,32 +99,6 @@ function Textarea({ label, value, onChange, placeholder }) {
     </div>
   );
 }
-
-const normalizeActivities = (v) => {
-  const result = {};
-  const DAYS = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
-
-  let parsed = {};
-  if (v && typeof v === 'object') {
-    parsed = v;
-  } else if (v && typeof v === 'string') {
-    try {
-      parsed = JSON.parse(v || '{}');
-    } catch {}
-  }
-
-  DAYS.forEach((day) => {
-    const dayData = parsed[day] || {};
-    result[day] = {
-      opening: Array.isArray(dayData.opening) ? dayData.opening.filter(Boolean) : [],
-      focus_theme: Array.isArray(dayData.focus_theme) ? dayData.focus_theme.filter(Boolean) : [],
-      break: Array.isArray(dayData.break) ? dayData.break.filter(Boolean) : [],
-      closing: Array.isArray(dayData.closing) ? dayData.closing.filter(Boolean) : []
-    };
-  });
-
-  return result;
-};
 
 export default function KegiatanMingguanTab({ user, toast }) {
   const m = useMaster(user, { autoDefaultCabang: false });
