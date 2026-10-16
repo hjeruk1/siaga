@@ -125,7 +125,8 @@ router.get('/today', auth(), (req, res) => {
            ft.id AS focus_theme_id,ft.title AS focus_theme_title,
            ft.activity_summary AS focus_theme_activity_summary,ft.suggested_domains AS focus_theme_domains,
            ft.menu_makanan AS focus_theme_menu_makanan,
-           l.mood,l.makan,l.tidur,l.aktivitas,l.catatan,l.observation_domain,l.observation_note,l.parent_note
+           l.mood,l.makan,l.tidur,l.aktivitas,l.catatan,l.observation_domain,l.observation_note,l.parent_note,
+           oc.daily_record_due_time AS due_time
     FROM siswa s
     ${scope.join}
     JOIN cabang c ON c.id=se_scope.cabang_id
@@ -133,6 +134,7 @@ router.get('/today', auth(), (req, res) => {
     JOIN rombel r ON r.id=se_scope.rombel_id
     LEFT JOIN laporan_harian l ON l.siswa_id=s.id AND l.tanggal=?
     LEFT JOIN focus_theme ft ON ft.rombel_id=se_scope.rombel_id AND ft.tanggal=?
+    LEFT JOIN operasional_config oc ON oc.cabang_id=se_scope.cabang_id AND oc.jenjang_id=se_scope.jenjang_id AND oc.paket=se_scope.paket
     WHERE ${scope.where} AND s.status='aktif'
     ORDER BY c.nama,r.nama,s.nama
   `
@@ -142,10 +144,10 @@ router.get('/today', auth(), (req, res) => {
   const schoolDay = cabangId ? isSchoolDay(tanggal, cabangId) : null;
   const now = nowTimeWIB();
   const rowsWithLate = rows.map((r) => {
-    const cfg = db
-      .prepare('SELECT daily_record_due_time FROM operasional_config WHERE cabang_id=? AND jenjang_id=? AND paket=?')
-      .get(r.cabang_id, r.jenjang_id, r.paket);
-    const dueTime = cfg?.daily_record_due_time || '18:00';
+    // due_time sudah ikut di query utama lewat LEFT JOIN operasional_config.
+    // Sebelumnya ada satu query per siswa di sini, padahal nilainya hanya berbeda
+    // per kombinasi cabang x jenjang x paket — belasan, bukan ratusan.
+    const dueTime = r.due_time || '18:00';
     const isLate =
       !r.laporan_status || r.laporan_status === 'draft'
         ? now > dueTime
