@@ -38,8 +38,59 @@
 | 6.2 | E2E Playwright (login, check-in, pembayaran) |
 | Lain | `useMaster` terduplikasi di `KegiatanMingguanTab.jsx` dan `admin/AdminShared.jsx` |
 
-**Angka akhir:** 128 test lulus (80 backend + 11 workflow + 37 frontend),
+**Angka akhir:** 144 test lulus (96 backend + 11 workflow + 37 frontend),
 lint 0 error, build hijau, `npm audit` 0 vulnerabilities (root + frontend).
+Backend masih 3 moderate dari rantai `mammoth → argparse → sprintf-js`
+(advisory mencakup semua versi sprintf-js; kode terdampak adalah CLI argparse
+yang tidak dipakai saat mammoth sebagai library).
+
+---
+
+## 0b. Batch Optimasi Performa & Operasional
+
+Dikerjakan setelah audit optimasi. Semua diukur, bukan diperkirakan.
+
+| Item | Sebelum | Sesudah |
+|------|---------|---------|
+| `audit-log` (ORDER BY created_at) | 20,3 ms | **0,2 ms** (110x) |
+| `daily-record/today` | N query | **2 query** (tetap) |
+| `generate-bulanan/preview` | ~1+3N query | **7 query** (tetap) |
+| `/api/master/rombel` di kabel | 5737 B | **468 B** (hemat 92%) |
+
+**Index** (`migrations/002_add_hot_query_indexes.js`, 7 index) — dipilih setelah
+menelusuri pola query nyata. `pembayaran_alokasi` sebelumnya hanya punya primary
+key padahal dipakai sebagai subquery korelatif **per baris** hasil.
+
+**N+1** — `daily-record` (config per siswa → LEFT JOIN) dan 4 endpoint
+`generate-*` (enrollment + diskon per siswa → batch query, statement disiapkan
+di luar loop). `enrollmentAt`, `enrollmentOverlap`, dan `discounts` dihapus
+karena tak lagi terpakai.
+
+**Retensi** (`scripts/maintenance.js`) — `audit_log` 730 hari, `nfc_scan_log`
+180 hari, `penjemputan_log` **default nonaktif** karena data bisnis. Ada
+`--dry-run`, dan `VACUUM` opt-in.
+
+**Infra ke repo** — `deploy/nginx/siaga.conf`, `deploy/nginx/proxy_params.conf`,
+`deploy/systemd/siaga.service`. Sebelum ini hanya ada di server.
+
+**Frontend** — `loading="lazy"` pada 9 gambar di daftar/grid; nama cache service
+worker kini per-build (sebelumnya cache build lama menumpuk selamanya).
+
+### Bug yang ditemukan saat mengerjakan
+
+1. **Middleware `compression` mematikan stream SSE.** Filter memakai `req.url`,
+   tetapi filter dievaluasi di dalam handler route — di titik itu Express sudah
+   memangkas `req.url` menjadi `/stream`. Pengecekan `/api/absensi/stream`
+   tidak pernah cocok, stream ikut terkompresi, dan buffering mematikan absensi
+   real-time tanpa pesan error. Perbaikan: `req.originalUrl`.
+
+2. **Saran debounce pencarian saya sendiri salah.** Semua `searchQuery` memfilter
+   data yang sudah dimuat di dalam `useMemo` — tidak ada panggilan jaringan per
+   ketikan. Debounce hanya akan menunda umpan balik, jadi tidak dikerjakan.
+
+3. **Dugaan index saya juga sebagian salah.** `absensi(siswa_id,tanggal)` sudah
+   ada lewat `UNIQUE(siswa_id,tanggal)`, dan tidak ada query yang memfilter
+   absensi hanya per cabang — jadi index yang saya duga perlu ternyata tidak perlu.
 
 ---
 
