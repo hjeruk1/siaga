@@ -100,7 +100,9 @@ function ringkasHarian(attMap, siswaId, schoolDays = []) {
   }
   r.hari = schoolDays.length;
   r.hadir = r.Hadir + r.Terlambat + r.Pulang;
-  r.persen = r.hari ? Math.round((r.hadir / r.hari) * 100) : 0;
+  // Pembulatan 1 desimal disamakan dengan aplikasi (rekapHelpers round1) supaya
+  // angka di layar wali sama persis dengan angka di PDF yang mereka terima.
+  r.persen = r.hari ? Math.round(((r.hadir / r.hari) * 100) * 10) / 10 : 0;
   return r;
 }
 
