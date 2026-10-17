@@ -125,17 +125,7 @@ export default function WaliTab({ user, toast }) {
           setForm({ display_name: '', no_wa: '', siswa_id: '', relasi: '' });
           setOpenForm(true);
         }}
-        className="w-full sm:hidden"
-      >
-        Tambah Wali
-      </ActionButton>
-      <ActionButton
-        icon={Plus}
-        onClick={() => {
-          setForm({ display_name: '', no_wa: '', siswa_id: '', relasi: '' });
-          setOpenForm(true);
-        }}
-        className="hidden sm:inline-flex"
+        className="w-full sm:w-auto"
       >
         Tambah Wali
       </ActionButton>
@@ -153,7 +143,7 @@ export default function WaliTab({ user, toast }) {
                 </span>
                 <input
                   type="text"
-                  placeholder="Cari wali, nomor WA, siswa, atau cabang…"
+                  placeholder="Cari wali…"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   autoComplete="off"

@@ -8,9 +8,10 @@ import LaporanTab from './admin/LaporanTab';
 import ConfigTab from './admin/ConfigTab';
 import KalenderTab from './admin/KalenderTab';
 import AuditTab from './admin/AuditTab';
+import RekapAbsensiBulanan from './shared/RekapAbsensiBulanan';
 
 export default function AdminView({ user, toast, tab }) {
-  const tabs = ['cabang', 'siswa', 'staff', 'wali', 'rombel', 'billing', 'laporan', 'config', 'kalender', 'audit'];
+  const tabs = ['cabang', 'siswa', 'staff', 'wali', 'rombel', 'billing', 'laporan', 'rekap', 'config', 'kalender', 'audit'];
   const activeTab = tabs.includes(tab) ? tab : 'siswa';
   return (
     <div className="w-full p-3 sm:p-4 lg:p-6 2xl:p-8 space-y-4">
@@ -21,6 +22,7 @@ export default function AdminView({ user, toast, tab }) {
       {activeTab === 'rombel' && <RombelTab user={user} toast={toast} />}
       {activeTab === 'billing' && <BillingTab user={user} toast={toast} />}
       {activeTab === 'laporan' && <LaporanTab user={user} toast={toast} />}
+      {activeTab === 'rekap' && <RekapAbsensiBulanan user={user} toast={toast} />}
       {activeTab === 'config' && <ConfigTab user={user} toast={toast} />}
       {activeTab === 'kalender' && <KalenderTab user={user} toast={toast} />}
       {activeTab === 'audit' && <AuditTab user={user} toast={toast} />}

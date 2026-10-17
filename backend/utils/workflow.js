@@ -194,6 +194,41 @@ function nextSequence(key) {
   return row.value + 1;
 }
 
+function holidayDatesInMonth(tahun, bulan, cabangId = null) {
+  const prefix = `${tahun}-${String(bulan).padStart(2, '0')}-%`;
+  const rows = db
+    .prepare(
+      `SELECT tanggal FROM kalender_event
+       WHERE tanggal LIKE ? AND tipe='libur'
+         AND (scope='yayasan' OR (scope='cabang' AND (? IS NULL OR cabang_id=?)))`
+    )
+    .all(prefix, cabangId, cabangId);
+  return [...new Set(rows.map((r) => r.tanggal))].sort();
+}
+
+// Sama seperti holidayDatesInMonth, tetapi membawa nama kegiatan libur. Dipakai
+// laporan/tampilan wali supaya "hari ini libur" bisa menyebut sebabnya
+// (mis. "Libur: Maulid Nabi"). Beberapa event pada tanggal sama digabung.
+function holidayEventsInMonth(tahun, bulan, cabangId = null) {
+  const prefix = `${tahun}-${String(bulan).padStart(2, '0')}-%`;
+  const rows = db
+    .prepare(
+      `SELECT tanggal, nama FROM kalender_event
+       WHERE tanggal LIKE ? AND tipe='libur'
+         AND (scope='yayasan' OR (scope='cabang' AND (? IS NULL OR cabang_id=?)))
+       ORDER BY tanggal, id`
+    )
+    .all(prefix, cabangId, cabangId);
+  const map = new Map();
+  for (const r of rows) {
+    const judul = String(r.nama || '').trim() || 'Libur';
+    const prev = map.get(r.tanggal);
+    if (!prev) map.set(r.tanggal, { tanggal: r.tanggal, judul });
+    else if (!prev.judul.split('; ').includes(judul)) prev.judul = `${prev.judul}; ${judul}`;
+  }
+  return [...map.values()].sort((a, b) => a.tanggal.localeCompare(b.tanggal));
+}
+
 function isSchoolDay(tanggal, cabangId) {
   const cabangEvent = db
     .prepare("SELECT * FROM kalender_event WHERE scope='cabang' AND cabang_id=? AND tanggal=?")
@@ -203,6 +238,86 @@ function isSchoolDay(tanggal, cabangId) {
   if (yayasanEvent) return yayasanEvent.tipe === 'masuk';
   const day = new Date(tanggal + 'T00:00:00').getDay();
   return day !== 0 && day !== 6;
+}
+
+function notifyKepsek(cabangId, tipe, title, body, entityType, entityId, skipId) {
+  const recipients = db
+    .prepare(
+      `SELECT p.id FROM pengguna p
+    JOIN staff_profile sp ON sp.pengguna_id=p.id
+    WHERE p.role='kepsek' AND p.status='aktif' AND sp.cabang_id=?`
+    )
+    .all(cabangId);
+  for (const r of recipients) {
+    if (skipId && Number(r.id) === Number(skipId)) continue;
+    notify(r.id, tipe, title, body, entityType, entityId, cabangId);
+  }
+}
+
+// --- Waktu & tanggal ---
+// Semua jam disimpan sebagai "HH:MM" zero-padded. Bandingkan sebagai menit,
+// bukan sebagai teks: teks hanya benar selama kedua sisi terformat rapi.
+const JAM_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+function isValidJam(jam) {
+  return JAM_RE.test(String(jam || ''));
+}
+
+function jamMenit(jam) {
+  if (!isValidJam(jam)) return null;
+  const [h, m] = String(jam).split(':').map(Number);
+  return h * 60 + m;
+}
+
+function minutesBetween(start, end) {
+  const s = jamMenit(start),
+    e = jamMenit(end);
+  if (s === null || e === null) return null;
+  return e - s;
+}
+
+// Absensi dan kunci hari tidak boleh bergerak maju melewati hari WIB.
+// Backdate tetap diizinkan untuk koreksi.
+function isFutureTanggal(tanggal) {
+  return Boolean(tanggal) && String(tanggal) > todayWIB();
+}
+
+function rejectFutureTanggal(req, res, tanggal) {
+  if (isFutureTanggal(tanggal)) {
+    res
+      .status(400)
+      .json({ error: 'Tanggal tidak boleh melewati hari ini', tanggal, today: todayWIB() });
+    return false;
+  }
+  return true;
+}
+
+function pickupActorId(actorId) {
+  if (!actorId) return null;
+  return db
+    .prepare("SELECT 1 FROM pengguna WHERE id=? AND role IN ('guru','admin','admin_cabang','gerbang')")
+    .get(actorId)
+    ? actorId
+    : null;
+}
+
+function insertPickupLog(absen, actorId, cabangId, jamPulang, sumber) {
+  db.prepare(
+    `INSERT INTO penjemputan_log(absensi_id,siswa_id,penjemput_id,guru_id,cabang_id,tanggal,jam_scan,jam_pulang,durasi_menit,sumber,created_at)
+    VALUES(?,?,?,?,?,?,?,?,?,?,?)`
+  ).run(
+    absen.id,
+    absen.siswa_id,
+    absen.penjemput_id || null,
+    pickupActorId(actorId),
+    cabangId,
+    absen.tanggal,
+    absen.jam_tunggu || null,
+    jamPulang,
+    minutesBetween(absen.jam_tunggu, jamPulang),
+    sumber,
+    nowUtc()
+  );
 }
 
 function isDayClosed(tanggal, cabangId) {
@@ -227,6 +342,16 @@ module.exports = {
   audit,
   notify,
   nextSequence,
+  holidayDatesInMonth,
+  holidayEventsInMonth,
   isSchoolDay,
-  isDayClosed
+  isDayClosed,
+  isValidJam,
+  jamMenit,
+  minutesBetween,
+  isFutureTanggal,
+  rejectFutureTanggal,
+  pickupActorId,
+  insertPickupLog,
+  notifyKepsek
 };

@@ -18,8 +18,28 @@ import {
   Eye,
   EyeOff,
   Sun,
-  Moon
+  Moon,
+  Car,
+  UserPlus,
+  Clock,
+  FileText,
+  Receipt
 } from 'lucide-react';
+
+// Notifikasi absensi/jemput punya makna operasional berbeda: beri label dan
+// warna supaya petugas bisa memindai daftar tanpa membaca satu per satu.
+const NOTIF_META = {
+  pickup_waiting: { icon: Car, label: 'Penjemput tiba', cls: 'bg-amber-100 text-amber-700' },
+  pickup_manual: { icon: UserPlus, label: 'Serah terima manual', cls: 'bg-red-100 text-red-700' },
+  early_release: { icon: Clock, label: 'Izin pulang awal', cls: 'bg-indigo-100 text-indigo-700' },
+  absensi_keterangan: { icon: FileText, label: 'Keterangan absensi', cls: 'bg-sky-100 text-sky-700' },
+  kenaikan_siswa: { icon: GraduationCap, label: 'Kenaikan siswa', cls: 'bg-violet-100 text-violet-700' }
+};
+function notifMeta(tipe) {
+  if (NOTIF_META[tipe]) return NOTIF_META[tipe];
+  if (String(tipe || '').startsWith('billing')) return { icon: Receipt, label: 'Billing', cls: 'bg-emerald-100 text-emerald-700' };
+  return { icon: Bell, label: null, cls: 'bg-slate-100 text-slate-500' };
+}
 
 const AdminView = lazy(() => import('./views/AdminView'));
 const GuruView = lazy(() => import('./views/GuruView'));
@@ -44,6 +64,7 @@ const submenuMap = {
     { id: 'rombel', label: 'Rombel' },
     { id: 'billing', label: 'Billing' },
     { id: 'laporan', label: 'Laporan' },
+    { id: 'rekap', label: 'Rekap Absensi' },
     { id: 'config', label: 'Konfigurasi' },
     { id: 'kalender', label: 'Kalender' },
     { id: 'audit', label: 'Audit Log' }
@@ -51,6 +72,7 @@ const submenuMap = {
   kepsek: [
     { id: 'monitoring', label: 'Monitoring' },
     { id: 'laporan', label: 'Laporan Harian' },
+    { id: 'rekap', label: 'Rekap Absensi' },
     { id: 'keuangan', label: 'Keuangan' },
     { id: 'notifikasi', label: 'Notifikasi' }
   ],
@@ -430,7 +452,7 @@ export default function App() {
       <div className="flex-1 min-w-0 flex flex-col min-h-[100dvh]">
         {/* Sticky Header */}
         <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-slate-200/70 transition-all duration-300">
-          <div className="w-full px-4 sm:px-5 py-3 flex items-center justify-between gap-3">
+          <div className="w-full px-3 sm:px-4 py-2 flex items-center justify-between gap-2">
             <div className="flex items-center gap-3 min-w-0">
               {/* Hamburger button for mobile, collapse button for desktop */}
               <IconButton
@@ -448,8 +470,8 @@ export default function App() {
 
               {/* Logo and Brand (SIAGA - Taruna Prima) always outside in header */}
               <div className="flex items-center gap-4 min-w-0">
-                <img src="/tp_logo.png" alt="Taruna Prima Logo" className="h-10 w-auto object-contain flex-shrink-0" />
-                <div className="hidden xs:block border-l border-slate-200 h-8 self-center" />
+                <img src="/tp_logo.png" alt="Taruna Prima Logo" className="h-8 w-auto object-contain flex-shrink-0" />
+                <div className="hidden xs:block border-l border-slate-200 h-6 self-center" />
                 {/* Brand text is collapsed below xs: the 140px logo plus the three action
                     buttons leave no room, which used to crush "SIAGA" to 1px wide and
                     overlap the icons next to it. The divider and view title above fold
@@ -491,10 +513,10 @@ export default function App() {
                   </span>
                 )}
                 {showNotif && (
-                  <div className="absolute right-0 mt-2 w-80 max-w-[calc(100vw-2rem)] bg-white border border-slate-200 rounded-2xl p-3 z-50 animate-bounce-in shadow-2xl shadow-slate-900/12">
-                    <div className="flex items-center justify-between gap-3 mb-3">
+                  <div className="absolute right-0 mt-2 w-80 max-w-[calc(100vw-2rem)] bg-white border border-slate-200 rounded-xl p-2.5 z-50 animate-bounce-in shadow-xl shadow-slate-900/12">
+                    <div className="flex items-center justify-between gap-3 mb-2">
                       <div>
-                        <div className="font-black text-text-main leading-none">Notifikasi</div>
+                        <div className="font-black text-text-main leading-none text-[15px]">Notifikasi</div>
                         <div className="mt-1 text-[11px] font-bold text-slate-400">{unreadCount} belum dibaca</div>
                       </div>
                       <ActionButton
@@ -506,19 +528,31 @@ export default function App() {
                         Tandai
                       </ActionButton>
                     </div>
-                    <div className="max-h-96 overflow-y-auto space-y-2 custom-scrollbar">
-                      {notif.map((n) => (
+                    <div className="max-h-96 overflow-y-auto space-y-1.5 custom-scrollbar">
+                      {notif.map((n) => {
+                        const meta = notifMeta(n.tipe);
+                        const NotifIcon = meta.icon;
+                        return (
                         <div
                           key={n.id}
-                          className={`rounded-xl border p-3 transition-colors duration-200 ${n.read_at ? 'bg-white border-slate-100' : 'bg-primary-container border-primary/20'}`}
+                          className={`rounded-lg border p-2 transition-colors duration-200 ${n.read_at ? 'bg-white border-slate-100' : 'bg-primary-container border-primary/20'}`}
                         >
-                          <div className="text-sm font-black text-text-main">{n.title}</div>
-                          <div className="text-xs text-slate-500 mt-1 leading-relaxed">{n.body || n.tipe}</div>
-                          <div className="text-[11px] font-bold text-slate-400 mt-2">{fmtTime(n.created_at)}</div>
+                          {meta.label && (
+                            <span
+                              className={`mb-1.5 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-black ${meta.cls}`}
+                            >
+                              <NotifIcon className="size-3" />
+                              {meta.label}
+                            </span>
+                          )}
+                          <div className="text-[13px] font-black text-text-main">{n.title}</div>
+                          <div className="text-[11px] text-slate-500 mt-0.5 leading-snug">{n.body || n.tipe}</div>
+                          <div className="text-[10px] font-bold text-slate-400 mt-1">{fmtTime(n.created_at)}</div>
                         </div>
-                      ))}
+                        );
+                      })}
                       {notif.length === 0 && (
-                        <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 text-sm font-bold text-slate-400 p-6 text-center">
+                        <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 text-[13px] font-bold text-slate-400 p-4 text-center">
                           Belum ada notifikasi.
                         </div>
                       )}
@@ -547,7 +581,7 @@ export default function App() {
           >
             {view === 'admin' && <AdminView user={user} toast={toast} tab={activeTab} />}
             {view === 'guru' && <GuruView user={user} toast={toast} tab={activeTab} />}
-            {view === 'kepsek' && <KepsekView user={user} toast={toast} tab={activeTab} />}
+            {view === 'kepsek' && <KepsekView user={user} toast={toast} tab={activeTab} syncNotif={setNotif} />}
             {view === 'gerbang' && <GerbangView user={user} toast={toast} />}
             {view === 'wali' && <WaliView user={user} toast={toast} />}
           </Suspense>

@@ -175,57 +175,83 @@ export function StaffCard({ staff, onEdit, onReset, onStatusToggle, onDelete, ca
     <div className="bg-white border border-slate-200 hover:border-slate-300 rounded-xl p-3.5 flex gap-3 items-start transition shadow-sm">
       <StudentAvatar name={staff.display_name} url={staff.foto} size="lg" />
       <div className="min-w-0 flex-1">
-        <div className="flex items-start justify-between gap-2">
-          <div className="font-bold text-text-main text-sm truncate leading-tight" title={staff.display_name}>
-            {staff.display_name}
-          </div>
-          <StatusBadge status={staff.status} />
+        {/* Nama dapat lebar penuh; badge status pindah ke baris meta
+            supaya nama panjang tidak rebutan tempat dengan badge. */}
+        <div className="font-black text-text-main text-sm truncate leading-tight" title={staff.display_name}>
+          {staff.display_name}
         </div>
 
-        <div className="text-xs text-slate-500 mt-2 space-y-1">
-          <div>
-            <span className="font-medium text-slate-400">Username:</span>{' '}
-            <span className="font-mono text-slate-700 font-bold">{staff.username}</span>
-          </div>
-          <div>
-            <span className="font-medium text-slate-400">Role:</span>{' '}
-            <span className="capitalize font-medium text-slate-600">{staff.role.replace('_', ' ')}</span>
-          </div>
-          <div>
-            <span className="font-medium text-slate-400">Cabang:</span>{' '}
-            <span className="font-medium text-slate-600">{staff.cabang_nama || 'Pusat'}</span>
-          </div>
+        {/* Dua grup nowrap: status+identitas, lalu lokasi. Wrap hanya terjadi
+            di antara grup, jadi pemisah tidak pernah menggantung di awal/akhir baris. */}
+        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] leading-snug text-slate-500">
+          <span className="inline-flex min-w-0 max-w-full items-center gap-1.5">
+            <StatusBadge status={staff.status} />
+            <span className="min-w-0 truncate">
+              <span className="font-mono font-bold text-slate-700">@{staff.username}</span>
+              {' · '}
+              <span className="capitalize font-medium">{staff.role.replace('_', ' ')}</span>
+            </span>
+          </span>
+          <span className="font-medium">{staff.cabang_nama || 'Pusat'}</span>
         </div>
 
-        <div className="mt-3 flex justify-end gap-2 border-t border-slate-100 pt-2.5">
-          <IconButton icon={Pencil} label={`Edit ${staff.display_name}`} onClick={() => onEdit(staff)} size="sm" />
-          <IconButton icon={RotateCcw} label="Reset password" onClick={() => onReset(staff)} size="sm" />
-          {staff.status === 'nonaktif' ? (
-            <IconButton
-              icon={Power}
-              label="Aktifkan"
-              onClick={() => onStatusToggle({ staff, status: 'aktif' })}
-              size="sm"
-            />
-          ) : (
-            <IconButton
-              icon={PowerOff}
-              label="Nonaktifkan"
-              onClick={() => onStatusToggle({ staff, status: 'nonaktif' })}
-              size="sm"
-              variant="danger"
-            />
-          )}
-          {canDelete && (
-            <IconButton
-              icon={Trash2}
-              label={`Hapus permanen ${staff.display_name}`}
-              onClick={() => onDelete(staff)}
-              size="sm"
-              variant="danger"
-            />
-          )}
-        </div>
+        <div className="mt-2 flex flex-wrap justify-end gap-1.5 border-t border-slate-100 pt-2">
+        <button
+          type="button"
+          onClick={() => onEdit(staff)}
+          aria-label={`Edit ${staff.display_name}`}
+          title={`Edit ${staff.display_name}`}
+          className="inline-flex items-center justify-center gap-1.5 h-8 px-2 sm:px-3 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 active:scale-95 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/25 focus-visible:ring-offset-2"
+        >
+          <Pencil className="w-4 h-4 shrink-0" strokeWidth={2.4} />
+          <span className="hidden sm:block text-xs font-bold">Edit</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => onReset(staff)}
+          aria-label="Reset password"
+          title="Reset password"
+          className="inline-flex items-center justify-center gap-1.5 h-8 px-2 sm:px-3 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 active:scale-95 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/25 focus-visible:ring-offset-2"
+        >
+          <RotateCcw className="w-4 h-4 shrink-0" strokeWidth={2.4} />
+          <span className="hidden sm:block text-xs font-bold">Reset</span>
+        </button>
+        {staff.status === 'nonaktif' ? (
+          <button
+            type="button"
+            onClick={() => onStatusToggle({ staff, status: 'aktif' })}
+            aria-label="Aktifkan"
+            title="Aktifkan"
+            className="inline-flex items-center justify-center gap-1.5 h-8 px-2 sm:px-3 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 active:scale-95 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/25 focus-visible:ring-offset-2"
+          >
+            <Power className="w-4 h-4 shrink-0" strokeWidth={2.4} />
+            <span className="hidden sm:block text-xs font-bold">Aktifkan</span>
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => onStatusToggle({ staff, status: 'nonaktif' })}
+            aria-label="Nonaktifkan"
+            title="Nonaktifkan"
+            className="inline-flex items-center justify-center gap-1.5 h-8 px-2 sm:px-3 rounded-lg bg-red-50 text-red-700 hover:bg-red-100 border border-red-100 active:scale-95 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-200 focus-visible:ring-offset-2"
+          >
+            <PowerOff className="w-4 h-4 shrink-0" strokeWidth={2.4} />
+            <span className="hidden sm:block text-xs font-bold">Nonaktifkan</span>
+          </button>
+        )}
+        {canDelete && (
+          <button
+            type="button"
+            onClick={() => onDelete(staff)}
+            aria-label={`Hapus permanen ${staff.display_name}`}
+            title={`Hapus permanen ${staff.display_name}`}
+            className="inline-flex items-center justify-center gap-1.5 h-8 px-2 sm:px-3 rounded-lg bg-red-50 text-red-700 hover:bg-red-100 border border-red-100 active:scale-95 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-200 focus-visible:ring-offset-2"
+          >
+            <Trash2 className="w-4 h-4 shrink-0" strokeWidth={2.4} />
+            <span className="hidden sm:block text-xs font-bold">Hapus</span>
+          </button>
+        )}
+      </div>
       </div>
     </div>
   );
@@ -352,47 +378,70 @@ export function WaliStatusBadge({ status }) {
 
 export function WaliCard({ wali, onEdit, onReset, onStatusToggle }) {
   return (
-    <div className="bg-white border border-slate-200/80 hover:border-slate-300 rounded-xl p-3 flex gap-3 items-start transition cursor-pointer active:scale-[0.98]">
-      <StudentAvatar name={wali.display_name} size="lg" />
+    <div className="bg-white border border-slate-200 hover:border-slate-300 rounded-xl p-3.5 flex gap-3 items-start transition shadow-sm">
+      <StudentAvatar name={wali.display_name} url={wali.foto} size="lg" />
       <div className="min-w-0 flex-1">
-        <div className="flex items-start justify-between gap-2">
-          <div className="font-bold text-text-main text-sm truncate leading-tight" title={wali.display_name}>
-            {wali.display_name}
-          </div>
-          <WaliStatusBadge status={wali.status} />
+        {/* Nama dapat lebar penuh; badge status pindah ke baris meta. */}
+        <div className="font-black text-text-main text-sm truncate leading-tight" title={wali.display_name}>
+          {wali.display_name}
         </div>
-        <div className="text-xs text-slate-500 mt-2 space-y-1">
-          <div>
-            <span className="font-medium text-slate-400">WA:</span>{' '}
-            <span className="font-mono text-slate-700 font-bold">{wali.no_wa}</span>
-          </div>
-          <div>
-            <span className="font-medium text-slate-400">Siswa:</span>{' '}
-            <span className="font-medium text-slate-600">{wali.siswa_nama || '-'}</span>
-          </div>
-          <div>
-            <span className="font-medium text-slate-400">Cabang:</span>{' '}
-            <span className="font-medium text-slate-600">{wali.cabang_nama || 'Pusat'}</span>
-          </div>
+
+        {/* Meta mengalir: status, WA, siswa, cabang. */}
+        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] leading-snug text-slate-500">
+          <span className="inline-flex min-w-0 max-w-full items-center gap-1.5">
+            <WaliStatusBadge status={wali.status} />
+            <span className="min-w-0 truncate">
+              <span className="font-mono font-bold text-slate-700">{wali.no_wa}</span>
+              {' · '}
+              <span className="font-medium">{wali.siswa_nama || '-'}</span>
+            </span>
+          </span>
+          <span className="font-medium">{wali.cabang_nama || 'Pusat'}</span>
         </div>
-        <div className="mt-3 flex justify-end gap-2 border-t border-slate-100 pt-2.5">
-          <IconButton icon={Pencil} label={`Edit ${wali.display_name}`} onClick={() => onEdit(wali)} size="sm" />
-          <IconButton icon={RotateCcw} label="Reset password" onClick={() => onReset(wali)} size="sm" />
+
+        <div className="mt-2 flex flex-wrap justify-end gap-1.5 border-t border-slate-100 pt-2">
+          <button
+            type="button"
+            onClick={() => onEdit(wali)}
+            aria-label={`Edit ${wali.display_name}`}
+            title={`Edit ${wali.display_name}`}
+            className="inline-flex items-center justify-center gap-1.5 h-8 px-2 sm:px-3 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 active:scale-95 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/25 focus-visible:ring-offset-2"
+          >
+            <Pencil className="w-4 h-4 shrink-0" strokeWidth={2.4} />
+            <span className="hidden sm:block text-xs font-bold">Edit</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => onReset(wali)}
+            aria-label="Reset password"
+            title="Reset password"
+            className="inline-flex items-center justify-center gap-1.5 h-8 px-2 sm:px-3 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 active:scale-95 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/25 focus-visible:ring-offset-2"
+          >
+            <RotateCcw className="w-4 h-4 shrink-0" strokeWidth={2.4} />
+            <span className="hidden sm:block text-xs font-bold">Reset</span>
+          </button>
           {wali.status === 'nonaktif' ? (
-            <IconButton
-              icon={Check}
-              label="Aktifkan"
+            <button
+              type="button"
               onClick={() => onStatusToggle({ wali, status: 'aktif' })}
-              size="sm"
-            />
+              aria-label="Aktifkan"
+              title="Aktifkan"
+              className="inline-flex items-center justify-center gap-1.5 h-8 px-2 sm:px-3 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 active:scale-95 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/25 focus-visible:ring-offset-2"
+            >
+              <Check className="w-4 h-4 shrink-0" strokeWidth={2.4} />
+              <span className="hidden sm:block text-xs font-bold">Aktifkan</span>
+            </button>
           ) : (
-            <IconButton
-              icon={Power}
-              label="Nonaktifkan"
+            <button
+              type="button"
               onClick={() => onStatusToggle({ wali, status: 'nonaktif' })}
-              size="sm"
-              variant="danger"
-            />
+              aria-label="Nonaktifkan"
+              title="Nonaktifkan"
+              className="inline-flex items-center justify-center gap-1.5 h-8 px-2 sm:px-3 rounded-lg bg-red-50 text-red-700 hover:bg-red-100 border border-red-100 active:scale-95 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-200 focus-visible:ring-offset-2"
+            >
+              <Power className="w-4 h-4 shrink-0" strokeWidth={2.4} />
+              <span className="hidden sm:block text-xs font-bold">Nonaktifkan</span>
+            </button>
           )}
         </div>
       </div>

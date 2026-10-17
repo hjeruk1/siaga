@@ -192,28 +192,16 @@ export default function StaffTab({ user, toast }) {
     Number(s.id) !== Number(user.id) &&
     (user.role === 'admin' || ['guru', 'gerbang'].includes(s.role));
   const right = (
-    <div className="flex w-full items-center gap-2 sm:w-auto">
-      <ActionButton
-        icon={UserPlus}
-        onClick={() => {
-          setForm({ display_name: '', username: '', role: 'guru', cabang_id: m.cabangId || '' });
-          setOpenForm(true);
-        }}
-        className="w-full sm:hidden"
-      >
-        Tambah Staff
-      </ActionButton>
-      <ActionButton
-        icon={UserPlus}
-        onClick={() => {
-          setForm({ display_name: '', username: '', role: 'guru', cabang_id: m.cabangId || '' });
-          setOpenForm(true);
-        }}
-        className="hidden sm:inline-flex"
-      >
-        Tambah Staff
-      </ActionButton>
-    </div>
+    <ActionButton
+      icon={UserPlus}
+      onClick={() => {
+        setForm({ display_name: '', username: '', role: 'guru', cabang_id: m.cabangId || '' });
+        setOpenForm(true);
+      }}
+      className="w-full sm:w-auto"
+    >
+      Tambah Staff
+    </ActionButton>
   );
 
   return (
@@ -229,7 +217,7 @@ export default function StaffTab({ user, toast }) {
                 </span>
                 <input
                   type="text"
-                  placeholder="Cari nama atau username staff…"
+                  placeholder="Cari staff…"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="input pl-10 w-full font-bold"

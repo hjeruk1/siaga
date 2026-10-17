@@ -58,10 +58,36 @@ const pembayaranSchema = z.object({
     .optional()
 });
 
+const jam = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Format jam harus HH:MM');
+const boolish = z.union([z.boolean(), z.number(), z.string().max(10)]);
+
+// Serah terima manual: satu-satunya jalan keluar ketika QR penjemput tidak
+// terbaca / kartu hilang. Wajib menyebut alasan karena jalan ini melewati scan.
+const penjemputanManualSchema = z.object({
+  siswa_id: idLike,
+  penjemput_id: idLike,
+  alasan: z.string().min(5, 'Alasan minimal 5 karakter').max(500),
+  tanggal: tanggal.optional()
+});
+
+// Konfigurasi operasional: jam harus "HH:MM" zero-padded supaya perbandingan
+// terlambat/pulang tetap benar.
+const operasionalConfigSchema = z.object({
+  jam_masuk: jam.optional(),
+  jam_pulang: jam.optional(),
+  daily_record_due_time: jam.optional(),
+  hitung_terlambat: boolish.optional(),
+  pakai_kalender: boolish.optional(),
+  daily_record_wajib: boolish.optional(),
+  pickup_fleksibel: boolish.optional()
+});
+
 module.exports = {
   loginSchema,
   changePasswordSchema,
   absensiCheckinSchema,
   absensiKeteranganSchema,
-  pembayaranSchema
+  pembayaranSchema,
+  penjemputanManualSchema,
+  operasionalConfigSchema
 };

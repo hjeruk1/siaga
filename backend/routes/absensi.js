@@ -15,7 +15,13 @@ const {
   audit,
   notify,
   isSchoolDay,
-  isDayClosed
+  isDayClosed,
+  jamMenit,
+  rejectFutureTanggal,
+  minutesBetween,
+  pickupActorId,
+  insertPickupLog,
+  notifyKepsek
 } = require('../utils/workflow');
 
 function configFor(e) {
@@ -27,7 +33,10 @@ function configFor(e) {
 }
 function late(jam, cfg) {
   if (!cfg.hitung_terlambat) return false;
-  return String(jam) > String(cfg.jam_masuk || '08:00');
+  const now = jamMenit(jam);
+  const limit = jamMenit(cfg.jam_masuk);
+  if (now === null || limit === null) return false;
+  return now > limit;
 }
 function ensureAbsensi(siswaId, tanggal) {
   const e = activeEnrollment(siswaId, tanggal);
@@ -88,54 +97,6 @@ function logNfc({
     nowUtc()
   );
 }
-function notifyKepsek(cabangId, tipe, title, body, entityType, entityId, skipId) {
-  const recipients = db
-    .prepare(
-      `
-    SELECT p.id FROM pengguna p
-    JOIN staff_profile sp ON sp.pengguna_id=p.id
-    WHERE p.role='kepsek' AND p.status='aktif' AND sp.cabang_id=?
-  `
-    )
-    .all(cabangId);
-  for (const r of recipients) {
-    if (skipId && Number(r.id) === Number(skipId)) continue;
-    notify(r.id, tipe, title, body, entityType, entityId, cabangId);
-  }
-}
-function minutesBetween(start, end) {
-  if (!start || !end) return null;
-  const [sh, sm] = String(start).split(':').map(Number);
-  const [eh, em] = String(end).split(':').map(Number);
-  if ([sh, sm, eh, em].some(Number.isNaN)) return null;
-  return Math.max(0, eh * 60 + em - (sh * 60 + sm));
-}
-function pickupActorId(actorId) {
-  if (!actorId) return null;
-  return db
-    .prepare("SELECT 1 FROM pengguna WHERE id=? AND role IN ('guru','admin','admin_cabang','gerbang')")
-    .get(actorId)
-    ? actorId
-    : null;
-}
-function insertPickupLog(absen, actorId, cabangId, jamPulang, sumber) {
-  db.prepare(
-    `INSERT INTO penjemputan_log(absensi_id,siswa_id,penjemput_id,guru_id,cabang_id,tanggal,jam_scan,jam_pulang,durasi_menit,sumber,created_at)
-    VALUES(?,?,?,?,?,?,?,?,?,?,?)`
-  ).run(
-    absen.id,
-    absen.siswa_id,
-    absen.penjemput_id || null,
-    pickupActorId(actorId),
-    cabangId,
-    absen.tanggal,
-    absen.jam_tunggu || null,
-    jamPulang,
-    minutesBetween(absen.jam_tunggu, jamPulang),
-    sumber,
-    nowUtc()
-  );
-}
 
 const sseClients = new Set();
 
@@ -177,7 +138,7 @@ router.get('/today', auth(), (req, res) => {
       `
     SELECT DISTINCT s.id AS siswa_id,s.nama,s.foto,se_scope.cabang_id,se_scope.rombel_id,se_scope.jenjang_id,se_scope.paket,
       c.nama AS cabang_nama,r.nama AS rombel_nama,j.nama AS jenjang_nama,
-      COALESCE(a.status,'Belum') AS status,a.jam_masuk,a.jam_tunggu,a.jam_pulang,p.nama AS penjemput_nama
+      COALESCE(a.status,'Belum') AS status,a.jam_masuk,a.jam_tunggu,a.jam_pulang,a.catatan,p.nama AS penjemput_nama
     FROM siswa s
     ${scope.join}
     JOIN cabang c ON c.id=se_scope.cabang_id
@@ -197,6 +158,7 @@ router.get('/today', auth(), (req, res) => {
 
 router.post('/checkin', auth(['guru', 'admin', 'admin_cabang']), validateBody(absensiCheckinSchema), (req, res) => {
   const tanggal = req.body?.tanggal || todayWIB();
+  if (!rejectFutureTanggal(req, res, tanggal)) return;
   const siswaId = req.body?.siswa_id;
   const access = canAccessSiswa(req.user, siswaId, { tanggal });
   if (access === false) return res.status(403).json({ error: 'Akses siswa ditolak' });
@@ -235,6 +197,7 @@ router.post(
   validateBody(absensiKeteranganSchema),
   (req, res) => {
     const tanggal = req.body?.tanggal || todayWIB();
+    if (!rejectFutureTanggal(req, res, tanggal)) return;
     const { siswa_id, status, catatan } = req.body || {};
     if (!['Izin', 'Sakit', 'Absen'].includes(status)) return res.status(400).json({ error: 'Status tidak valid' });
     const access = canAccessSiswa(req.user, siswa_id, { tanggal });
@@ -274,6 +237,7 @@ router.post(
 
 router.post('/nfc-scan', auth(['guru', 'admin', 'admin_cabang']), (req, res) => {
   const tanggal = req.body?.tanggal || todayWIB();
+  if (!rejectFutureTanggal(req, res, tanggal)) return;
   const jam = nowTimeWIB();
   const action = req.body?.action === 'pulang' ? 'pulang' : 'checkin';
   const token = normalizeNfcToken(req.body?.token);
@@ -378,6 +342,7 @@ router.post('/early-release', auth(['admin', 'admin_cabang', 'kepsek']), (req, r
   const d = req.body || {};
   if (!d.siswa_id || !d.tanggal || !d.alasan)
     return res.status(400).json({ error: 'Siswa, tanggal, dan alasan wajib' });
+  if (!rejectFutureTanggal(req, res, d.tanggal)) return;
   const access = canAccessSiswa(req.user, d.siswa_id, { tanggal: d.tanggal });
   if (access === false) return res.status(403).json({ error: 'Akses siswa ditolak' });
   if (!access) return res.status(404).json({ error: 'Siswa tidak ditemukan' });
@@ -434,11 +399,15 @@ router.delete('/early-release/:id', auth(['admin', 'admin_cabang', 'kepsek']), (
   res.json({ success: true });
 });
 
-router.post('/tutup-hari', auth(['admin', 'admin_cabang', 'kepsek', 'guru']), (req, res) => {
+router.post('/tutup-hari', auth(['admin', 'admin_cabang', 'kepsek']), (req, res) => {
   const tanggal = req.body?.tanggal || todayWIB();
+  if (!rejectFutureTanggal(req, res, tanggal)) return;
   const cabangId = req.user.role === 'admin' ? req.body.cabang_id : req.user.cabang_id;
   if (!cabangId) return res.status(400).json({ error: 'Cabang wajib' });
   if (!requireActiveCabang(req, res, cabangId)) return;
+  // Hari libur tidak boleh ditutup: penutupan memaksa siswa Belum menjadi Absen,
+  // dan itu akan mengotori rekap pada tanggal yang memang tanpa kegiatan.
+  if (!isSchoolDay(tanggal, cabangId)) return res.status(400).json({ error: 'Hari libur, tidak bisa tutup hari' });
   if (isDayClosed(tanggal, cabangId)) return res.status(400).json({ error: 'Hari sudah ditutup sebelumnya' });
   const students = db
     .prepare(

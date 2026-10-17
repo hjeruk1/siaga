@@ -11,20 +11,23 @@ import {
   meniTunggu
 } from '../components/Shared';
 import { todayWIB } from '../utils/date';
-import { DoorClosed, Plus, Save, X } from 'lucide-react';
+import RekapAbsensiBulanan from './shared/RekapAbsensiBulanan';
+import { ChevronRight, DoorClosed, Plus, Save, X } from 'lucide-react';
 const TABS = [
   { id: 'monitoring', label: 'Monitoring' },
   { id: 'laporan', label: 'Laporan' },
+  { id: 'rekap', label: 'Rekap Absensi' },
   { id: 'keuangan', label: 'Keuangan' },
   { id: 'notifikasi', label: 'Notifikasi' }
 ];
 
-export default function KepsekView({ user, toast, tab }) {
+export default function KepsekView({ user, toast, tab, syncNotif }) {
   const activeTab = TABS.some((t) => t.id === tab) ? tab : 'monitoring';
   const [tanggal, setTanggal] = useState(todayWIB());
   const [cabang, setCabang] = useState([]);
   const [cabangId, setCabangId] = useState(user.role === 'admin' ? '' : user.cabang_id);
   const [rows, setRows] = useState([]);
+  const [lapMeta, setLapMeta] = useState({ tanggal: null, is_school_day: null });
   const [notif, setNotif] = useState([]);
   const [laporan, setLaporan] = useState(null);
   const [monitoring, setMonitoring] = useState(null);
@@ -50,6 +53,7 @@ export default function KepsekView({ user, toast, tab }) {
       user.role === 'admin' || cabangId ? api.laporan({ cabang_id: cabangId }).catch(() => null) : Promise.resolve(null)
     ]);
     setRows(data.rows || data);
+    setLapMeta({ tanggal: data.tanggal || tanggal, is_school_day: data.is_school_day });
     setNotif(notifData);
     setLaporan(laporanData);
   }
@@ -136,7 +140,7 @@ export default function KepsekView({ user, toast, tab }) {
     [rows]
   );
 
-  const showTopControls = activeTab !== 'monitoring' && (user.role === 'admin' || activeTab === 'laporan');
+  const showTopControls = activeTab !== 'monitoring' && activeTab !== 'rekap' && (user.role === 'admin' || activeTab === 'laporan');
 
   return (
     <div className="w-full p-3 sm:p-4 lg:p-6 2xl:p-8 space-y-4">
@@ -189,9 +193,10 @@ export default function KepsekView({ user, toast, tab }) {
           toast={toast}
         />
       )}
-      {activeTab === 'laporan' && <LaporanPanel rows={rows} stat={stat} />}
+      {activeTab === 'laporan' && <LaporanPanel rows={rows} stat={stat} meta={lapMeta} />}
+      {activeTab === 'rekap' && <RekapAbsensiBulanan user={user} toast={toast} />}
       {activeTab === 'keuangan' && <KeuanganPanel laporan={laporan} cabangId={cabangId} />}
-      {activeTab === 'notifikasi' && <NotifikasiPanel notif={notif} />}
+      {activeTab === 'notifikasi' && <NotifikasiPanel notif={notif} syncNotif={syncNotif} />}
       {earlyOpen && (
         <Modal title="Buat Izin Pulang Dini" onClose={() => setEarlyOpen(false)} maxWidth="max-w-lg">
           <div className="space-y-3">
@@ -287,6 +292,7 @@ function MonitoringPanel({
   onDeleteER,
   toast
 }) {
+  const [detailTab, setDetailTab] = useState('kelas');
   if (loading && !data)
     return (
       <section className="bg-white border border-slate-200 rounded-2xl p-4">
@@ -302,326 +308,354 @@ function MonitoringPanel({
   const redFlags = statusRows.filter((s) => s.status === 'Menunggu' && meniTunggu(s.jam_tunggu) > 15);
   const waiting = statusRows.filter((s) => s.status === 'Menunggu' && meniTunggu(s.jam_tunggu) <= 15);
   const sc = data?.statusCounts || {};
-  const statusItems = [
-    { label: 'Hadir', value: sc.hadir || 0, tone: 'text-emerald-600 bg-emerald-50 border-emerald-200' },
-    { label: 'Terlambat', value: sc.terlambat || 0, tone: 'text-amber-600 bg-amber-50 border-amber-200' },
-    { label: 'Menunggu', value: sc.menunggu || 0, tone: 'text-sky-600 bg-sky-50 border-sky-200' },
-    { label: 'Pulang', value: sc.pulang || 0, tone: 'text-slate-600 bg-slate-100 border-slate-200' },
-    { label: 'Izin', value: sc.izin || 0, tone: 'text-violet-600 bg-violet-50 border-violet-200' },
-    { label: 'Sakit', value: sc.sakit || 0, tone: 'text-rose-600 bg-rose-50 border-rose-200' },
-    { label: 'Absen', value: sc.absen || 0, tone: 'text-red-600 bg-red-50 border-red-200' },
-    { label: 'Belum', value: sc.belum || 0, tone: 'text-slate-500 bg-slate-50 border-slate-200' }
+  const pct = totalSiswa ? Math.round((checkedIn.length / totalSiswa) * 100) : 0;
+  const tidakMasuk = (sc.izin || 0) + (sc.sakit || 0) + (sc.absen || 0);
+  const tabs = [
+    { id: 'kelas', label: 'Per Kelas' },
+    { id: 'status', label: 'Per Status' },
+    { id: 'dini', label: `Pulang Dini (${earlyReleases.length})` }
   ];
-  const activeStatusItems = statusItems.filter((i) => i.value > 0);
-  const displayStatusItems = activeStatusItems.length > 0 ? activeStatusItems : statusItems;
-  const stats = [
-    { label: 'Sudah Check-in', value: checkedIn.length, sub: `dari ${totalSiswa} siswa`, tone: 'emerald' },
-    { label: 'Masih di Sekolah', value: atSchool.length, sub: 'aktif di sekolah', tone: 'sky' },
-    { label: 'Menunggu Jemput', value: waiting.length + redFlags.length, sub: 'di kelas/gerbang', tone: 'amber' },
-    { label: 'Red Flag', value: redFlags.length, sub: '> 15 menit', tone: 'red' }
-  ];
-  const operationalActionsClass = isAdmin
-    ? 'grid grid-cols-1 sm:grid-cols-2 gap-2 w-full'
-    : 'grid grid-cols-1 sm:grid-cols-2 gap-2 w-full';
+  // Mode admin pusat bisa memuat banyak cabang: kelompokkan rombel per cabang
+  // agar nama kelas kembar antar cabang tetap bisa dibedakan.
+  const cabangGroups = new Map();
+  for (const k of byKelas) {
+    const key = k.cabang || 'Tanpa cabang';
+    if (!cabangGroups.has(key)) cabangGroups.set(key, []);
+    cabangGroups.get(key).push(k);
+  }
+  const kelasGroups = [...cabangGroups.entries()].map(([cabang, rows]) => ({ cabang, rows }));
+  const showCabangHeader = kelasGroups.length > 1;
 
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 items-start">
-        <section className="bg-slate-950 text-white border border-slate-800 rounded-2xl p-3 sm:p-4 shadow-2xl shadow-slate-950/10">
-          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 mb-3">
-            <div>
-              <h2 className="text-lg sm:text-xl font-black">Monitoring Hari Ini</h2>
-              <p className="text-xs sm:text-sm text-slate-400">
-                {data?.hari_status?.nama || 'Status hari'} - refresh otomatis 30 detik
-              </p>
-            </div>
-            <div className="sm:text-right flex-shrink-0">
-              <LiveClock className="text-2xl sm:text-3xl font-black tabular-nums text-primary" />
-              <div className="text-xs text-slate-500">
-                {new Date().toLocaleDateString('id-ID', {
-                  weekday: 'long',
-                  day: 'numeric',
-                  month: 'long',
-                  year: 'numeric'
-                })}
-              </div>
-            </div>
-          </div>
-          {data?.libur && (
-            <div className="rounded-xl border border-red-500/40 bg-red-900/20 text-red-100 px-3 py-2.5 mb-3 text-sm font-bold">
-              Hari ini libur. Aktivitas siswa aktif tidak ditampilkan.
-            </div>
-          )}
-          {redFlags.length > 0 && (
-            <div className="rounded-xl border border-red-500/50 bg-red-900/20 px-3 py-2.5 mb-3">
-              <div className="font-black text-red-200">{redFlags.length} anak menunggu lebih dari 15 menit</div>
-              <div className="text-xs text-red-100 mt-1">
-                {redFlags.map((s) => `${s.nama} (${s.kelas}) ${meniTunggu(s.jam_tunggu)} menit`).join(' | ')}
-              </div>
-            </div>
-          )}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            {stats.map((s) => (
-              <StatCard key={s.label} {...s} />
-            ))}
-          </div>
-        </section>
-
-        <section className="bg-white border border-slate-200 rounded-2xl p-3 sm:p-4 shadow-[0_18px_60px_rgba(15,23,42,.05)]">
-          <div className="grid grid-cols-1 md:grid-cols-[minmax(0,0.9fr)_minmax(250px,1.1fr)] gap-3 items-start">
-            <div className="min-w-0">
-              <div className="text-[10px] sm:text-xs font-black text-slate-400 uppercase tracking-wider">
-                Operasional Hari Ini
-              </div>
-              <div className="mt-1 text-sm font-bold text-text-main">
-                {dayClose?.closed ? 'Hari sudah ditutup' : 'Hari masih berjalan'}
-              </div>
-              {!canCloseDay && (
-                <div className="text-xs text-slate-500 mt-0.5">Pilih cabang dulu untuk menutup hari.</div>
-              )}
-              <div className="mt-3 border-t border-slate-100 pt-3">
-                <div className="text-[10px] sm:text-xs font-black text-slate-400 uppercase tracking-wider mb-2">
-                  Ringkasan Status Hari Ini
-                </div>
-                <div className="flex flex-wrap gap-1.5 sm:gap-2">
-                  {displayStatusItems.map((s) => (
-                    <span
-                      key={s.label}
-                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold border ${s.tone}`}
-                    >
-                      <span className="font-black tabular-nums">{s.value}</span>
-                      <span className="opacity-70">{s.label}</span>
-                    </span>
-                  ))}
-                </div>
-              </div>
-            </div>
-            <div className={operationalActionsClass}>
-              {isAdmin && (
-                <CustomSelect
-                  value={cabangId}
-                  onChange={(e) => onCabangChange?.(e.target.value)}
-                  className="input w-full sm:col-span-2"
-                >
-                  <option value="">Semua cabang</option>
-                  {cabang.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.nama}
-                    </option>
-                  ))}
-                </CustomSelect>
-              )}
-              <ActionButton icon={Plus} onClick={onOpenEarly} className="w-full">
-                Izin Pulang Dini
-              </ActionButton>
-              <ActionButton
-                icon={DoorClosed}
-                onClick={onOpenClose}
-                disabled={!canCloseDay || dayClose?.closed}
-                variant={dayClose?.closed ? 'ghost' : 'secondary'}
-                className="w-full"
-              >
-                {dayClose?.closed ? 'Sudah Ditutup' : 'Tutup Hari'}
-              </ActionButton>
-            </div>
-          </div>
-        </section>
-      </div>
-
-      {(redFlags.length > 0 || waiting.length > 0) && (
-        <section className="bg-white border border-slate-200 rounded-2xl p-3 sm:p-4 space-y-3 shadow-[0_18px_60px_rgba(15,23,42,.05)]">
-          <div>
-            <div className="text-[10px] sm:text-xs font-black text-slate-400 uppercase tracking-wider">
-              Perlu Perhatian
-            </div>
-            <div className="text-sm font-bold text-text-main mt-0.5">
-              Siswa yang menunggu penjemput atau melewati batas waktu.
-            </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {redFlags.length > 0 && (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                  <span className="text-xs font-black text-red-600">Red Flag ({redFlags.length})</span>
-                </div>
-                {redFlags.map((s) => {
-                  const menit = meniTunggu(s.jam_tunggu);
-                  return (
-                    <div
-                      key={s.id}
-                      className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-red-50 border border-red-200"
-                    >
-                      {s.foto ? (
-                        <img
-                          src={s.foto}
-                          alt={s.nama}
-                          className="w-9 h-9 rounded-full object-cover flex-shrink-0"
-                          loading="lazy"
-                          decoding="async"
-                        />
-                      ) : (
-                        <div className="w-9 h-9 rounded-full bg-red-100 text-red-600 grid place-items-center font-black flex-shrink-0 text-sm">
-                          {s.nama?.[0] || 'S'}
-                        </div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-black text-text-main truncate">{s.nama}</div>
-                        <div className="text-xs text-slate-500 truncate">
-                          {s.kelas}
-                          {s.nama_penjemput ? ` - ${s.nama_penjemput}` : ''}
-                        </div>
-                      </div>
-                      <span className="text-xs font-black text-red-600 tabular-nums flex-shrink-0">{menit}m</span>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-            {waiting.length > 0 && (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-amber-500" />
-                  <span className="text-xs font-black text-amber-600">Menunggu Jemput ({waiting.length})</span>
-                </div>
-                {waiting.map((s) => {
-                  const menit = meniTunggu(s.jam_tunggu);
-                  return (
-                    <div
-                      key={s.id}
-                      className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-amber-50 border border-amber-200"
-                    >
-                      {s.foto ? (
-                        <img
-                          src={s.foto}
-                          alt={s.nama}
-                          className="w-9 h-9 rounded-full object-cover flex-shrink-0"
-                          loading="lazy"
-                          decoding="async"
-                        />
-                      ) : (
-                        <div className="w-9 h-9 rounded-full bg-amber-100 text-amber-600 grid place-items-center font-black flex-shrink-0 text-sm">
-                          {s.nama?.[0] || 'S'}
-                        </div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-black text-text-main truncate">{s.nama}</div>
-                        <div className="text-xs text-slate-500 truncate">
-                          {s.kelas}
-                          {s.nama_penjemput ? ` - ${s.nama_penjemput}` : ''}
-                        </div>
-                      </div>
-                      <span className="text-xs font-black text-amber-600 tabular-nums flex-shrink-0">{menit}m</span>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </section>
-      )}
-
-      <StatusBoard rows={statusRows} />
-
-      {earlyReleases.length > 0 && (
-        <section className="bg-white border border-slate-200 rounded-2xl p-3 sm:p-4 shadow-[0_18px_60px_rgba(15,23,42,.05)]">
-          <div className="flex items-center justify-between gap-2 mb-3">
-            <div className="text-[10px] sm:text-xs font-black text-slate-400 uppercase tracking-wider">
-              Pulang Dini ({earlyReleases.length})
-            </div>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-            {earlyReleases.map((er) => (
-              <div
-                key={er.id}
-                className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-violet-50 border border-violet-200"
-              >
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-black text-text-main truncate">
-                    {er.siswa_nama || er.nama || `Siswa #${er.siswa_id}`}
-                  </div>
-                  <div className="text-xs text-slate-500 truncate">
-                    {er.cabang_nama ? `${er.cabang_nama} - ` : ''}
-                    {er.kelas_nama || er.rombel_nama || ''}
-                    {er.alasan ? ` - ${er.alasan}` : ''}
-                  </div>
-                </div>
-                {onDeleteER && (
-                  <button
-                    onClick={() => onDeleteER(er.id)}
-                    className="text-xs text-red-500 hover:text-red-700 font-bold flex-shrink-0 px-2 py-1 rounded hover:bg-red-50"
-                    title="Hapus izin"
-                  >
-                    Hapus
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
-        {byKelas.map((k) => (
-          <RombelCard key={k.id} item={k} siswa={siswaAktif.filter((s) => Number(s.rombel_id) === Number(k.id))} />
-        ))}
-        {byKelas.length === 0 && (
-          <div className="bg-white border border-dashed border-slate-200 rounded-2xl p-10 text-center text-sm font-bold text-slate-400 sm:col-span-2 lg:col-span-3 xl:col-span-5">
-            Belum ada rombel aktif untuk ditampilkan.
-          </div>
-        )}
-      </section>
-    </div>
-  );
-}
-
-function StatCard({ label, value, sub, tone }) {
-  const toneMap = {
-    emerald: 'border-emerald-500/30 text-emerald-300',
-    sky: 'border-sky-500/30 text-sky-300',
-    amber: 'border-amber-500/30 text-amber-300',
-    red: 'border-red-500/30 text-red-300'
-  };
-  return (
-    <div className={`bg-white/5 border ${toneMap[tone]} rounded-xl p-2.5`}>
-      <div className="text-2xl font-black leading-none">{value}</div>
-      <div className="text-white text-[13px] font-bold mt-1 leading-tight">{label}</div>
-      <div className="text-slate-500 text-[11px] leading-tight mt-0.5">{sub}</div>
-    </div>
-  );
-}
-
-function RombelCard({ item, siswa }) {
-  const total = Number(item.total || 0);
-  const hadir = Number(item.hadir || 0),
-    menunggu = Number(item.menunggu || 0),
-    pulang = Number(item.pulang || 0);
-  const isEmpty = siswa.length === 0;
-  return (
-    <div
-      className={`bg-white border border-slate-200 rounded-2xl overflow-hidden flex flex-col shadow-[0_18px_60px_rgba(15,23,42,.05)] ${isEmpty ? '' : 'min-h-[360px]'}`}
-    >
-      <div className="px-4 py-3 border-b border-slate-100 flex items-start justify-between gap-3">
+    <div className="space-y-3">
+      <div className="flex items-start justify-between gap-x-3 gap-y-1">
         <div className="min-w-0">
-          <div className="font-black text-text-main truncate">{item.kelas}</div>
-          <div className="text-xs text-slate-500 truncate">
-            {item.cabang} - {item.guru || '-'}
-          </div>
+          <h2 className="text-base sm:text-lg font-black leading-tight text-text-main">Monitoring Hari Ini</h2>
+          <p className="text-[11px] sm:text-xs text-slate-500">
+            {data?.hari_status?.nama || 'Status hari'} &middot; refresh 30 detik &middot;{' '}
+            {dayClose?.closed ? 'hari sudah ditutup' : 'hari masih berjalan'}
+          </p>
+          {!canCloseDay && <p className="text-[11px] font-bold text-amber-600 mt-0.5">Pilih cabang dulu untuk menutup hari.</p>}
         </div>
         <div className="text-right flex-shrink-0">
-          <div className="text-2xl font-black text-primary">{hadir + menunggu + pulang}</div>
-          <div className="text-xs text-slate-400">/ {total}</div>
+          <LiveClock className="text-base sm:text-lg font-black tabular-nums text-text-main leading-none" />
+          <div className="text-[10px] text-slate-400 mt-0.5">
+            {new Date().toLocaleDateString('id-ID', {
+              weekday: 'short',
+              day: 'numeric',
+              month: 'short',
+              year: 'numeric'
+            })}
+          </div>
         </div>
       </div>
-      <div className="flex h-1.5 mx-4 mt-3 rounded-full overflow-hidden bg-slate-100">
-        <div className="bg-emerald-500" style={{ width: total ? (hadir / total) * 100 + '%' : '0%' }} />
-        <div className="bg-primary" style={{ width: total ? (menunggu / total) * 100 + '%' : '0%' }} />
-        <div className="bg-slate-400" style={{ width: total ? (pulang / total) * 100 + '%' : '0%' }} />
+      <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+        {isAdmin && (
+          <CustomSelect
+            value={cabangId}
+            onChange={(e) => onCabangChange?.(e.target.value)}
+            className="input h-9 w-full sm:w-auto"
+          >
+            <option value="">Semua cabang</option>
+            {cabang.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.nama}
+              </option>
+            ))}
+          </CustomSelect>
+        )}
+        <ActionButton icon={Plus} onClick={onOpenEarly} className="flex-1 sm:flex-none">
+          Izin Pulang Dini
+        </ActionButton>
+        <ActionButton
+          icon={DoorClosed}
+          onClick={onOpenClose}
+          disabled={!canCloseDay || dayClose?.closed}
+          variant={dayClose?.closed ? 'ghost' : 'secondary'}
+          className="flex-1 sm:flex-none"
+        >
+          {dayClose?.closed ? 'Sudah Ditutup' : 'Tutup Hari'}
+        </ActionButton>
       </div>
-      {isEmpty ? (
-        <div className="px-4 py-2.5 text-xs text-slate-400 text-center">Tidak ada siswa aktif</div>
-      ) : (
-        <div className="flex-1 overflow-y-auto px-3 py-3 space-y-2 max-h-72 custom-scrollbar">
+
+      {data?.libur && (
+        <div className="rounded-xl border border-red-300 bg-red-50 text-red-700 px-3 py-2 text-xs sm:text-sm font-bold">
+          Hari ini libur. Aktivitas siswa aktif tidak ditampilkan.
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-[330px_minmax(0,1fr)] gap-3 items-start">
+        <aside className="min-w-0">
+          <div className="space-y-3 lg:sticky lg:top-3">
+            <CheckinCard
+              pct={pct}
+              checkedIn={checkedIn.length}
+              totalSiswa={totalSiswa}
+              atSchool={atSchool.length}
+              waiting={waiting.length + redFlags.length}
+              redFlags={redFlags.length}
+              belum={sc.belum || 0}
+              pulang={sc.pulang || 0}
+              tidakMasuk={tidakMasuk}
+            />
+            <AttentionList redFlags={redFlags} waiting={waiting} />
+          </div>
+        </aside>
+
+        <section className="min-w-0 bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-[0_18px_60px_rgba(15,23,42,.05)]">
+          <div className="flex border-b border-slate-100 overflow-x-auto">
+            {tabs.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setDetailTab(t.id)}
+                aria-pressed={detailTab === t.id}
+                className={`flex-1 min-w-[110px] px-3 py-2.5 text-xs font-black whitespace-nowrap transition ${
+                  detailTab === t.id
+                    ? 'text-primary border-b-2 border-primary bg-primary/5'
+                    : 'text-slate-500 hover:text-text-main hover:bg-slate-50'
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+          <div className="p-3">
+            {detailTab === 'kelas' && (
+              <div className="space-y-2">
+                {kelasGroups.map((g) => (
+                  <div
+                    key={g.cabang}
+                    className="rounded-xl border border-slate-100 overflow-hidden"
+                  >
+                    {showCabangHeader && (
+                      <div className="flex items-center justify-between gap-2 px-3 py-1.5 bg-slate-50 border-b border-slate-100">
+                        <span className="text-[10px] font-black uppercase tracking-[.08em] text-slate-500 truncate">
+                          {g.cabang}
+                        </span>
+                        <span className="text-[10px] font-black text-slate-400 tabular-nums shrink-0">
+                          {g.rows.length} rombel
+                        </span>
+                      </div>
+                    )}
+                    <div className="divide-y divide-slate-100">
+                      {g.rows.map((k) => (
+                        <ClassRow
+                          key={k.id}
+                          item={k}
+                          siswa={siswaAktif.filter((s) => Number(s.rombel_id) === Number(k.id))}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ))}
+                {byKelas.length === 0 && (
+                  <div className="rounded-xl border border-slate-100 p-8 text-center text-sm font-bold text-slate-400">
+                    Belum ada rombel aktif untuk ditampilkan.
+                  </div>
+                )}
+              </div>
+            )}
+            {detailTab === 'status' && <StatusBoard rows={statusRows} compact />}
+            {detailTab === 'dini' && (
+              <div className="space-y-2">
+                {earlyReleases.length === 0 && (
+                  <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-sm font-bold text-slate-400">
+                    Belum ada izin pulang dini.
+                  </div>
+                )}
+                {earlyReleases.map((er) => (
+                  <div
+                    key={er.id}
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-violet-50 border border-violet-200"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-black text-text-main truncate">
+                        {er.siswa_nama || er.nama || `Siswa #${er.siswa_id}`}
+                      </div>
+                      <div className="text-xs text-slate-500 truncate">
+                        {er.cabang_nama ? `${er.cabang_nama} - ` : ''}
+                        {er.kelas_nama || er.rombel_nama || ''}
+                        {er.alasan ? ` - ${er.alasan}` : ''}
+                      </div>
+                    </div>
+                    {onDeleteER && (
+                      <button
+                        onClick={() => onDeleteER(er.id)}
+                        className="text-xs text-red-500 hover:text-red-700 font-bold flex-shrink-0 px-2 py-1 rounded hover:bg-red-50"
+                        title="Hapus izin"
+                      >
+                        Hapus
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function CheckinCard({ pct, checkedIn, totalSiswa, atSchool, waiting, redFlags, belum, pulang, tidakMasuk }) {
+  const rows = [
+    { label: 'Di sekolah', value: atSchool, c: 'bg-emerald-500' },
+    { label: 'Menunggu jemput', value: waiting, c: 'bg-sky-500' },
+    { label: 'Red flag > 15 mnt', value: redFlags, c: 'bg-red-500', alert: redFlags > 0 },
+    { label: 'Belum check-in', value: belum, c: 'bg-slate-400' },
+    { label: 'Sudah pulang', value: pulang, c: 'bg-slate-300' },
+    { label: 'Izin / Sakit / Absen', value: tidakMasuk, c: 'bg-violet-500' }
+  ];
+  return (
+    <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-[0_18px_60px_rgba(15,23,42,.05)]">
+      <div className="text-[10px] font-black uppercase tracking-[.09em] text-slate-400">Check-in hari ini</div>
+      <div className="mt-1 text-5xl font-black tracking-tight leading-none text-text-main">
+        {pct}
+        <span className="text-2xl text-slate-400">%</span>
+      </div>
+      <div className="text-[13px] text-slate-500 mt-1.5">
+        {checkedIn} dari {totalSiswa} siswa sudah tercatat masuk.
+      </div>
+      <div className="mt-3 h-2.5 rounded-full bg-slate-100 overflow-hidden">
+        <div className="h-full bg-primary rounded-full" style={{ width: pct + '%' }} />
+      </div>
+      <div className="mt-2 grid grid-cols-2 gap-x-4 sm:grid-cols-1 sm:gap-x-0">
+        {rows.map((r) => (
+          <div
+            key={r.label}
+            className="flex items-center gap-2.5 py-[7px] border-t border-slate-100 [&:nth-child(-n+2)]:border-t-0 sm:border-t sm:[&:nth-child(-n+2)]:border-t"
+          >
+            <span className={`w-2 h-2 rounded-[3px] flex-shrink-0 ${r.c}`} />
+            <span className={`text-[12px] sm:text-[13px] font-semibold truncate ${r.alert ? 'text-red-600' : 'text-slate-600'}`}>
+              {r.label}
+            </span>
+            <span
+              className={`ml-auto text-sm sm:text-base font-black tabular-nums flex-shrink-0 ${r.alert ? 'text-red-600' : 'text-text-main'}`}
+            >
+              {r.value}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function AttentionList({ redFlags, waiting }) {
+  if (redFlags.length === 0 && waiting.length === 0) return null;
+  const renderItem = (s, isRed) => {
+    const menit = meniTunggu(s.jam_tunggu);
+    return (
+      <div
+        key={s.id}
+        className={`flex items-center gap-2.5 rounded-xl border px-2.5 py-2 ${
+          isRed ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-200'
+        }`}
+      >
+        {s.foto ? (
+          <img
+            src={s.foto}
+            alt={s.nama}
+            className="w-7 h-7 rounded-full object-cover flex-shrink-0"
+            loading="lazy"
+            decoding="async"
+          />
+        ) : (
+          <div
+            className={`w-7 h-7 rounded-full grid place-items-center font-black text-xs flex-shrink-0 ${
+              isRed ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-700'
+            }`}
+          >
+            {s.nama?.[0] || 'S'}
+          </div>
+        )}
+        <div className="flex-1 min-w-0">
+          <div className="text-xs font-black text-text-main truncate">{s.nama}</div>
+          <div className="text-[10px] text-slate-500 truncate">
+            {s.kelas}
+            {s.nama_penjemput ? ` \u00b7 ${s.nama_penjemput}` : ''}
+          </div>
+        </div>
+        <span className={`text-xs font-black tabular-nums flex-shrink-0 ${isRed ? 'text-red-600' : 'text-amber-600'}`}>
+          {menit}m
+        </span>
+      </div>
+    );
+  };
+  return (
+    <div className="bg-white border border-slate-200 rounded-2xl p-3 shadow-[0_18px_60px_rgba(15,23,42,.05)]">
+      <div className="flex items-center gap-2 flex-wrap">
+        <div className="text-[10px] font-black uppercase tracking-[.09em] text-slate-400">Perlu perhatian</div>
+        {redFlags.length > 0 && (
+          <span className="text-[10px] font-black text-red-600 bg-red-50 border border-red-200 rounded-full px-2 py-0.5">
+            {redFlags.length} red flag
+          </span>
+        )}
+        {waiting.length > 0 && (
+          <span className="text-[10px] font-black text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">
+            {waiting.length} tunggu
+          </span>
+        )}
+      </div>
+      <div className="mt-2 space-y-1.5">
+        {redFlags.map((s) => renderItem(s, true))}
+        {waiting.map((s) => renderItem(s, false))}
+      </div>
+    </div>
+  );
+}
+
+function ClassRow({ item, siswa }) {
+  const [open, setOpen] = useState(false);
+  const total = Number(item.total || 0);
+  const h = Number(item.hadir || 0),
+    w = Number(item.menunggu || 0),
+    p = Number(item.pulang || 0);
+  const belum = Math.max(total - h - w - p, 0);
+  const checkin = h + w + p;
+  const seg = (n) => (total ? (n / total) * 100 : 0) + '%';
+  return (
+    <div className={open ? 'bg-slate-50/60' : ''}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-slate-50 transition"
+      >
+        <ChevronRight
+          size={14}
+          className={`text-slate-400 flex-shrink-0 transition-transform ${open ? 'rotate-90' : ''}`}
+        />
+        <span className="text-sm font-black text-text-main min-w-[62px] shrink-0">{item.kelas}</span>
+        <span className="text-xs text-slate-500 min-w-[72px] truncate hidden sm:block">{item.guru || '-'}</span>
+        <span className="flex-1 hidden sm:flex h-2 rounded-full bg-slate-100 overflow-hidden min-w-[80px]">
+          <span className="block h-full bg-emerald-500" style={{ width: seg(h) }} />
+          <span className="block h-full bg-sky-500" style={{ width: seg(w) }} />
+          <span className="block h-full bg-slate-300" style={{ width: seg(p) }} />
+          <span className="block h-full bg-slate-200" style={{ width: seg(belum) }} />
+        </span>
+        <span className="hidden xl:flex gap-3 text-[11px] font-bold text-slate-500 tabular-nums shrink-0">
+          <span>
+            Hadir <b className="text-text-main">{h}</b>
+          </span>
+          <span>
+            Tunggu <b className="text-text-main">{w}</b>
+          </span>
+          <span>
+            Belum <b className="text-text-main">{belum}</b>
+          </span>
+        </span>
+        <span className="ml-auto text-xs font-black tabular-nums text-text-main shrink-0">
+          {checkin} <span className="text-slate-400 font-bold">/ {total}</span>
+        </span>
+      </button>
+      {open && (
+        <div className="px-3 pb-3 space-y-1.5">
+          {siswa.length === 0 && (
+            <div className="text-xs font-bold text-slate-400 py-2">Tidak ada siswa aktif di kelas ini.</div>
+          )}
           {siswa.map((s) => {
             const menit = meniTunggu(s.jam_tunggu);
             const red = s.status === 'Menunggu' && menit > 15;
@@ -635,24 +669,26 @@ function RombelCard({ item, siswa }) {
             return (
               <div
                 key={s.id}
-                className={`flex items-center gap-2 px-3 py-2 rounded-xl border ${red ? 'bg-red-50 border-red-200' : 'bg-slate-50 border-slate-100'}`}
+                className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border ${
+                  red ? 'bg-red-50 border-red-200' : 'bg-white border-slate-100'
+                }`}
               >
                 {s.foto ? (
                   <img
                     src={s.foto}
                     alt={s.nama}
-                    className="w-9 h-9 rounded-full object-cover flex-shrink-0"
+                    className="w-7 h-7 rounded-full object-cover flex-shrink-0"
                     loading="lazy"
                     decoding="async"
                   />
                 ) : (
-                  <div className="w-9 h-9 rounded-full bg-primary-container text-primary-active grid place-items-center font-black flex-shrink-0">
+                  <div className="w-7 h-7 rounded-full bg-primary-container text-primary-active grid place-items-center font-black flex-shrink-0 text-xs">
                     {s.nama?.[0] || 'S'}
                   </div>
                 )}
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-black text-text-main truncate">{s.nama}</div>
-                  {meta && <div className="text-xs text-slate-500 truncate">{meta}</div>}
+                  <div className="text-xs font-black text-text-main truncate">{s.nama}</div>
+                  {meta && <div className="text-[10px] text-slate-500 truncate">{meta}</div>}
                 </div>
                 {red ? (
                   <span className="text-xs font-black text-red-600">{menit}m</span>
@@ -664,20 +700,6 @@ function RombelCard({ item, siswa }) {
           })}
         </div>
       )}
-      <div className="grid grid-cols-3 border-t border-slate-100 text-center">
-        <MiniStat label="Hadir" value={hadir} tone="text-emerald-600" />
-        <MiniStat label="Tunggu" value={menunggu} tone="text-primary-active" />
-        <MiniStat label="Pulang" value={pulang} tone="text-slate-500" />
-      </div>
-    </div>
-  );
-}
-
-function MiniStat({ label, value, tone }) {
-  return (
-    <div className="py-2">
-      <div className={`text-lg font-black ${tone}`}>{value}</div>
-      <div className="text-xs text-slate-400">{label}</div>
     </div>
   );
 }
@@ -691,27 +713,27 @@ function StatusBoard({ rows = [], compact = false }) {
     { title: 'Sudah Pulang', tone: 'border-slate-200 bg-white', statuses: ['Pulang'] }
   ].map((g) => ({ ...g, items: rows.filter((r) => g.statuses.includes(r.status)) }));
   const groupGridClass = compact
-    ? 'grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-1 gap-2 xl:max-h-[300px] xl:overflow-y-auto xl:overscroll-contain xl:pr-1 custom-scrollbar'
+    ? 'grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2'
     : 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-2';
   const itemListClass = compact
-    ? 'space-y-1.5 max-h-40 overflow-y-auto overscroll-contain pr-1 custom-scrollbar'
+    ? 'space-y-1.5 max-h-72 overflow-y-auto overscroll-contain pr-1 custom-scrollbar'
     : 'space-y-1.5 max-h-72 overflow-y-auto overscroll-contain pr-1 custom-scrollbar';
   return (
-    <section
-      className={`bg-white border border-slate-200 rounded-2xl p-3 sm:p-4 shadow-[0_18px_60px_rgba(15,23,42,.05)] ${compact ? 'h-full' : ''}`}
-    >
-      <div className="flex items-center justify-between gap-2 mb-3">
-        <div>
-          <div className="text-[10px] sm:text-xs font-black text-slate-400 uppercase tracking-wider">Status Board</div>
-          <div className="text-xs sm:text-sm font-bold text-text-main mt-0.5">
-            Detail siswa per status dan jam aktivitas.
+    <section className={compact ? '' : 'bg-white border border-slate-200 rounded-2xl p-3 shadow-[0_18px_60px_rgba(15,23,42,.05)]'}>
+      {!compact && (
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <div>
+            <div className="text-[10px] sm:text-xs font-black text-slate-400 uppercase tracking-wider">Status Board</div>
+            <div className="text-xs sm:text-sm font-bold text-text-main mt-0.5">
+              Detail siswa per status dan jam aktivitas.
+            </div>
           </div>
         </div>
-      </div>
+      )}
       <div className={groupGridClass}>
         {groups.map((g) => (
-          <div key={g.title} className={`rounded-xl border ${g.tone} p-2.5 min-w-0 flex flex-col`}>
-            <div className="flex items-center justify-between gap-2 mb-2">
+          <div key={g.title} className={`rounded-xl border ${g.tone} p-2 min-w-0 flex flex-col`}>
+            <div className="flex items-center justify-between gap-2 mb-1.5">
               <div className="text-xs font-black text-text-main truncate">{g.title}</div>
               <div className="text-xs font-black text-slate-500 tabular-nums">{g.items.length}</div>
             </div>
@@ -720,7 +742,7 @@ function StatusBoard({ rows = [], compact = false }) {
                 <StudentStatusRow key={`${g.title}-${s.id}`} item={s} />
               ))}
               {g.items.length === 0 && (
-                <div className="rounded-lg border border-dashed border-white/70 bg-white/50 px-2 py-3 text-center text-[11px] font-bold text-slate-400">
+                <div className="rounded-lg border border-dashed border-white/70 bg-white/50 px-2 py-2 text-center text-[11px] font-bold text-slate-400">
                   Kosong
                 </div>
               )}
@@ -737,117 +759,202 @@ function StudentStatusRow({ item }) {
     item.status === 'Menunggu' ? item.jam_tunggu : item.status === 'Pulang' ? item.jam_pulang : item.jam_masuk;
   const note = time ? `${item.status} ${time}` : item.catatan || item.status || 'Belum';
   return (
-    <div className="rounded-lg bg-white/80 border border-white/70 px-2 py-1.5 min-w-0">
+    <div className="rounded-lg bg-white/80 border border-white/70 px-2 py-1 min-w-0">
       <div className="text-xs font-black text-text-main truncate">{item.nama}</div>
-      <div className="text-[11px] text-slate-500 truncate">
+      <div className="text-[10px] text-slate-500 truncate">
         {item.kelas || item.rombel_nama || '-'} - {note}
       </div>
     </div>
   );
 }
 
-function LaporanPanel({ rows, stat }) {
-  const getStatusLabel = (status) => {
-    if (status === 'published') return 'Published';
-    if (status === 'draft') return 'Draft';
-    return 'Belum';
-  };
-  const getStatusTone = (status) => {
-    if (status === 'published') return 'bg-emerald-100 text-emerald-700 border-emerald-200';
-    if (status === 'draft') return 'bg-amber-100 text-amber-700 border-amber-200';
-    return 'bg-slate-100 text-slate-400 border-slate-200';
-  };
+function LaporanPanel({ rows, stat, meta }) {
+  const [filter, setFilter] = useState('semua');
+  const belum = stat.total - stat.published;
+  const terlambat = rows.filter((r) => r.is_late).length;
+  const multiCabang = new Set(rows.map((r) => r.cabang_id)).size > 1;
+  const pct = stat.total > 0 ? Math.min(100, (stat.published / stat.total) * 100) : 0;
+  const tanggalPanjang = meta?.tanggal
+    ? new Date(`${meta.tanggal}T00:00:00`).toLocaleDateString('id-ID', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric'
+      })
+    : '';
+  const filterDefs = [
+    { id: 'semua', label: 'Semua', count: stat.total },
+    { id: 'belum', label: 'Belum', count: belum },
+    { id: 'terlambat', label: 'Terlambat', count: terlambat },
+    { id: 'published', label: 'Published', count: stat.published }
+  ];
+  const filtered = rows
+    .filter((r) => {
+      if (filter === 'belum') return r.laporan_status !== 'published';
+      if (filter === 'terlambat') return r.is_late;
+      if (filter === 'published') return r.laporan_status === 'published';
+      return true;
+    })
+    // Belum publish dulu (yang terlambat paling utama), published di bawah.
+    .sort(
+      (a, b) =>
+        (a.laporan_status === 'published') - (b.laporan_status === 'published') ||
+        (b.is_late === true) - (a.is_late === true) ||
+        String(a.nama).localeCompare(String(b.nama))
+    );
+  const groups =
+    multiCabang &&
+    Array.from(new Map(filtered.map((r) => [r.cabang_id, r.cabang_nama])).entries()).map(([id, nama]) => ({
+      id,
+      nama,
+      items: filtered.filter((r) => r.cabang_id === id)
+    }));
 
   return (
     <section className="bg-white border border-slate-200 rounded-2xl p-4 shadow-[0_18px_60px_rgba(15,23,42,.05)]">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-        <div>
-          <h2 className="font-black text-text-main text-lg">Laporan Daily Record</h2>
-          <p className="text-sm text-slate-500">Progress publish laporan harian per siswa.</p>
+      <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
+        <div className="min-w-0">
+          <h2 className="text-base sm:text-lg font-black leading-tight text-text-main">Laporan Harian</h2>
+          <p className="text-[11px] sm:text-xs text-slate-500 capitalize">
+            {tanggalPanjang || 'Progress publish daily record'} &middot; {stat.total} siswa
+          </p>
         </div>
-        <div className="text-sm font-black text-slate-500 bg-slate-50 px-3 py-1 border border-slate-200 rounded-full w-fit">
-          {stat.published}/{stat.total} published
+        <div className="inline-flex rounded-full bg-primary-container px-2.5 py-1 text-[11px] font-black uppercase tracking-wide text-primary flex-shrink-0">
+          Daily Record
         </div>
-      </div>
-      <div className="grid grid-cols-3 gap-2 mb-4">
-        <CompactStat label="Siswa" value={stat.total} />
-        <CompactStat label="Published" value={stat.published} />
-        <CompactStat label="Draft/Belum" value={stat.total - stat.published} />
       </div>
 
-      {/* Desktop view table */}
-      <div className="hidden sm:block overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr>
-              {['Siswa', 'Cabang', 'Rombel', 'Paket', 'Status'].map((h) => (
-                <th key={h} className="text-left bg-slate-50 px-3 py-2 text-slate-500 font-black">
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.siswa_id} className="border-t border-slate-100">
-                <td className="td font-bold text-text-main">{r.nama}</td>
-                <td className="td">{r.cabang_nama}</td>
-                <td className="td">{r.rombel_nama}</td>
-                <td className="td capitalize">{r.paket}</td>
-                <td className="td">
-                  <span
-                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold border ${getStatusTone(r.laporan_status)}`}
-                  >
-                    {getStatusLabel(r.laporan_status)}
-                  </span>
-                </td>
-              </tr>
-            ))}
-            {rows.length === 0 && (
-              <tr>
-                <td colSpan={5} className="td text-center py-8 text-slate-400 font-bold">
-                  Belum ada data laporan.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      {meta && meta.is_school_day === false && (
+        <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-[11px] sm:text-xs font-bold text-amber-700">
+          Bukan hari sekolah untuk tanggal ini. Data mengikuti tanggal di pemilih tanggal di atas.
+        </div>
+      )}
 
-      {/* Mobile view cards */}
-      <div className="sm:hidden space-y-3">
-        {rows.map((r) => (
-          <div key={r.siswa_id} className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex flex-col gap-2">
-            <div className="flex items-center justify-between gap-2">
-              <div className="font-bold text-text-main truncate">{r.nama}</div>
-              <span
-                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${getStatusTone(r.laporan_status)}`}
+      {stat.total === 0 ? (
+        <div className="mt-3 rounded-xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center">
+          <div className="text-sm font-bold text-slate-400">Belum ada data laporan.</div>
+          <div className="mt-1 text-xs text-slate-400">Pilih tanggal lain atau pilih cabang.</div>
+        </div>
+      ) : (
+        <>
+          {/* Hero: persentase publish, angka pertama yang dibaca. */}
+          <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3.5 sm:p-4">
+            <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+              <div className="min-w-0">
+                <div className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-slate-500">
+                  Sudah Published
+                </div>
+                <div className="mt-0.5 text-4xl sm:text-5xl font-black leading-none tabular-nums text-emerald-600">
+                  {pct.toLocaleString('id-ID', { maximumFractionDigits: 1 })}%
+                </div>
+                <div className="mt-1.5 text-[11px] sm:text-xs tabular-nums text-slate-500">
+                  {stat.published} dari {stat.total} laporan siswa
+                </div>
+              </div>
+              <div className="flex shrink-0 gap-4 sm:gap-5 text-right">
+                <HeroStat label="Siswa" value={stat.total} />
+                <HeroStat label="Published" value={stat.published} />
+                <HeroStat label="Belum" value={belum} tone={belum ? 'text-red-600' : 'text-text-main'} />
+              </div>
+            </div>
+            <div className="mt-3 h-2.5 w-full overflow-hidden rounded-full bg-slate-200">
+              <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${pct}%` }} />
+            </div>
+            <div className="mt-1.5 flex items-center justify-between gap-2 text-[11px] font-semibold tabular-nums">
+              <span className="text-emerald-600">Published {stat.published}</span>
+              <span className="text-red-600">Belum {belum}</span>
+            </div>
+          </div>
+
+          {/* Filter cepat: tombol nyata (keyboard), angka = jumlah baris. */}
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {filterDefs.map((f) => (
+              <button
+                key={f.id}
+                type="button"
+                aria-pressed={filter === f.id}
+                onClick={() => setFilter(f.id)}
+                className={`rounded-full border px-2.5 py-1 text-[11px] font-bold transition-colors ${
+                  filter === f.id
+                    ? 'border-transparent bg-primary-container text-primary'
+                    : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'
+                }`}
               >
-                {getStatusLabel(r.laporan_status)}
-              </span>
-            </div>
-            <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-xs text-slate-500 border-t border-slate-200/60 pt-2">
-              <div>
-                <span className="font-semibold text-slate-400">Cabang:</span> {r.cabang_nama}
-              </div>
-              <div>
-                <span className="font-semibold text-slate-400">Rombel:</span> {r.rombel_nama}
-              </div>
-              <div className="col-span-2">
-                <span className="font-semibold text-slate-400">Paket:</span>{' '}
-                <span className="capitalize">{r.paket}</span>
-              </div>
-            </div>
+                {f.label} <span className="tabular-nums opacity-70">{f.count}</span>
+              </button>
+            ))}
           </div>
-        ))}
-        {rows.length === 0 && (
-          <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center text-sm font-bold text-slate-400">
-            Belum ada data laporan.
+
+          <div className="mt-3 overflow-hidden rounded-xl border border-slate-200">
+            {filtered.length === 0 && (
+              <div className="p-6 text-center text-sm font-bold text-slate-400">Tidak ada siswa pada filter ini.</div>
+            )}
+            {(groups || [{ id: 'all', nama: null, items: filtered }]).map((g) => {
+              const gBelum = g.items.filter((r) => r.laporan_status !== 'published').length;
+              return (
+                <div key={g.id}>
+                  {g.nama && (
+                    <div className="flex items-baseline gap-2 border-t border-slate-100 bg-slate-50/80 px-3 py-1.5 first:border-t-0">
+                      <span className="text-xs font-black text-text-main">{g.nama}</span>
+                      <span className="text-[10px] font-semibold text-slate-400 tabular-nums">
+                        {g.items.length} siswa{gBelum ? ` · belum ${gBelum}` : ''}
+                      </span>
+                    </div>
+                  )}
+                  {g.items.map((r) => (
+                    <LaporanRow key={r.siswa_id} item={r} />
+                  ))}
+                </div>
+              );
+            })}
           </div>
-        )}
-      </div>
+        </>
+      )}
     </section>
   );
+}
+
+function StatusPill({ status }) {
+  const label = status === 'published' ? 'Published' : status === 'draft' ? 'Draft' : 'Belum';
+  const tone =
+    status === 'published'
+      ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
+      : status === 'draft'
+        ? 'bg-amber-100 text-amber-700 border-amber-200'
+        : 'bg-slate-100 text-slate-400 border-slate-200';
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${tone}`}>
+      {label}
+    </span>
+  );
+}
+
+function LaporanRow({ item }) {
+  const r = item;
+  return (
+    <div className="flex items-center gap-3 border-t border-slate-100 px-3 py-2">
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-sm font-bold text-text-main">{r.nama}</div>
+        <div className="truncate text-[10px] sm:text-[11px] text-slate-400 capitalize">
+          {[r.rombel_nama, r.paket].filter(Boolean).join(' · ') || '-'}
+        </div>
+      </div>
+      <div className="flex shrink-0 items-center gap-2">
+        {r.is_late && <span className="text-[10px] font-bold text-red-600">Terlambat</span>}
+        <StatusPill status={r.laporan_status} />
+      </div>
+    </div>
+  );
+}
+
+// Label rapi untuk rincian keuangan: jenis tagihan mentah (spp/kegiatan/care)
+// dan periode 'YYYY-MM' tidak layak tampil apa adanya.
+const JENIS_LABEL = { spp: 'SPP', kegiatan: 'Kegiatan', care: 'Care' };
+function labelKeuangan(first, value) {
+  if (first === 'jenis') return JENIS_LABEL[value] || value;
+  const d = new Date(`${value}-01T00:00:00`);
+  if (Number.isNaN(d.getTime())) return value;
+  return d.toLocaleDateString('id-ID', { month: 'short', year: 'numeric' });
 }
 
 function KeuanganPanel({ laporan, cabangId }) {
@@ -857,110 +964,270 @@ function KeuanganPanel({ laporan, cabangId }) {
         <Spinner />
       </section>
     );
+  const s = laporan.summary || {};
+  const totalNominal = Number(s.total_nominal || 0);
+  const totalPaid = Number(s.total_paid || 0);
+  const pct = totalNominal > 0 ? Math.min(100, (totalPaid / totalNominal) * 100) : 0;
+  const adaTagihan = totalNominal > 0 || (laporan.by_jenis || []).length > 0;
   return (
     <section className="bg-white border border-slate-200 rounded-2xl p-4 shadow-[0_18px_60px_rgba(15,23,42,.05)]">
-      <div className="mb-3">
-        <div className="inline-flex rounded-full bg-primary-container px-2.5 py-1 text-[11px] font-black uppercase tracking-wide text-primary">
+      <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
+        <div className="min-w-0">
+          <h2 className="text-base sm:text-lg font-black leading-tight text-text-main">Laporan Keuangan</h2>
+          <p className="text-[11px] sm:text-xs text-slate-500">
+            {cabangId ? 'Cabang terpilih' : 'Semua cabang'} &middot; {s.total_tagihan || 0} tagihan
+          </p>
+        </div>
+        <div className="inline-flex rounded-full bg-primary-container px-2.5 py-1 text-[11px] font-black uppercase tracking-wide text-primary flex-shrink-0">
           Keuangan
         </div>
-        <h2 className="mt-2 font-black text-text-main text-lg">Laporan Keuangan {!cabangId && '(Semua Cabang)'}</h2>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-        <Card label="Total Tagihan" value={money(laporan.summary.total_nominal)} />
-        <Card label="Sudah Dibayar" value={money(laporan.summary.total_paid)} />
-        <Card label="Lunas" value={laporan.summary.count_lunas} />
-        <Card
-          label="Tunggakan"
-          value={`${laporan.summary.count_outstanding} (${money(laporan.summary.total_outstanding)})`}
-        />
-      </div>
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-        <FinanceTable title="Per Jenis" rows={laporan.by_jenis} first="jenis" />
-        <FinanceTable title="Per Periode" rows={laporan.by_periode} first="periode" />
-      </div>
-    </section>
-  );
-}
 
-function FinanceTable({ title, rows, first }) {
-  return (
-    <div>
-      <h3 className="font-black text-text-main mb-2">{title}</h3>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr>
-              <th className="text-left bg-slate-50 px-3 py-2 text-slate-500 font-black">
-                {first === 'jenis' ? 'Jenis' : 'Periode'}
-              </th>
-              <th className="text-right bg-slate-50 px-3 py-2 text-slate-500 font-black">Jumlah</th>
-              <th className="text-right bg-slate-50 px-3 py-2 text-slate-500 font-black">Total</th>
-              <th className="text-right bg-slate-50 px-3 py-2 text-slate-500 font-black">Lunas</th>
-              <th className="text-right bg-slate-50 px-3 py-2 text-slate-500 font-black">Tunggakan</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r[first]} className="border-t border-slate-100">
-                <td className="td text-left">{r[first]}</td>
-                <td className="td text-right tabular-nums">{r.count}</td>
-                <td className="td text-right tabular-nums">{money(r.total)}</td>
-                <td className="td text-right tabular-nums">{money(r.lunas)}</td>
-                <td className="td text-right tabular-nums">{money(r.outstanding)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
+      {!adaTagihan ? (
+        <div className="mt-3 rounded-xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center">
+          <div className="text-sm font-bold text-slate-400">Belum ada tagihan.</div>
+          <div className="mt-1 text-xs text-slate-400">Tagihan dibuat admin lewat menu Billing.</div>
+        </div>
+      ) : (
+        <>
+          {/* Hero: realisasi pembayaran, angka pertama yang dibaca. */}
+          <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3.5 sm:p-4">
+            <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+              <div className="min-w-0">
+                <div className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-slate-500">
+                  Realisasi Pembayaran
+                </div>
+                <div className="mt-0.5 text-4xl sm:text-5xl font-black leading-none tabular-nums text-emerald-600">
+                  {pct.toLocaleString('id-ID', { maximumFractionDigits: 1 })}%
+                </div>
+                <div className="mt-1.5 text-[11px] sm:text-xs tabular-nums text-slate-500">
+                  {money(totalPaid)} terkumpul dari {money(totalNominal)} tagihan
+                </div>
+              </div>
+              <div className="flex shrink-0 gap-4 sm:gap-5 text-right">
+                <HeroStat label="Tagihan" value={s.total_tagihan || 0} />
+                <HeroStat label="Lunas" value={s.count_lunas || 0} />
+                <HeroStat label="Tunggakan" value={s.count_outstanding || 0} tone="text-red-600" />
+              </div>
+            </div>
+            <div className="mt-3 h-2.5 w-full overflow-hidden rounded-full bg-slate-200">
+              <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${pct}%` }} />
+            </div>
+            <div className="mt-1.5 flex items-center justify-between gap-2 text-[11px] font-semibold tabular-nums">
+              <span className="text-emerald-600">Nilai lunas {money(s.total_lunas)}</span>
+              <span className="text-red-600">Sisa tagihan {money(s.total_outstanding)}</span>
+            </div>
+          </div>
 
-function NotifikasiPanel({ notif }) {
-  const [limit, setLimit] = useState(12);
-  return (
-    <section className="bg-white border border-slate-200 rounded-2xl p-4 shadow-[0_18px_60px_rgba(15,23,42,.05)]">
-      <div className="mb-3">
-        <div className="inline-flex rounded-full bg-primary-container px-2.5 py-1 text-[11px] font-black uppercase tracking-wide text-primary">
-          Inbox
-        </div>
-        <h2 className="mt-2 font-black text-text-main text-lg">Notifikasi Saya</h2>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-        {notif.slice(0, limit).map((n) => (
-          <div key={n.id} className="bg-slate-50 border border-slate-200 rounded-xl p-3">
-            <div className="font-bold text-text-main">{n.title}</div>
-            <div className="text-sm text-slate-500 mt-1 leading-relaxed">{n.body || n.tipe}</div>
+          <div className="mt-4 grid grid-cols-1 xl:grid-cols-2 gap-4">
+            <FinanceLedger title="Per Jenis" rows={laporan.by_jenis} first="jenis" />
+            <FinanceLedger title="Per Periode" rows={laporan.by_periode} first="periode" />
           </div>
-        ))}
-        {notif.length === 0 && (
-          <div className="md:col-span-2 xl:col-span-3 rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center text-sm font-bold text-slate-400">
-            Belum ada notifikasi.
-          </div>
-        )}
-      </div>
-      {notif.length > limit && (
-        <div className="mt-4 text-center">
-          <button
-            onClick={() => setLimit((prev) => prev + 12)}
-            className="px-4 py-2 text-sm font-bold text-primary hover:text-primary-active bg-primary-container hover:bg-primary-container-active rounded-xl transition"
-          >
-            Lihat Lebih Banyak ({notif.length - limit} tersisa)
-          </button>
-        </div>
+        </>
       )}
     </section>
   );
 }
 
-function Card({ label, value }) {
+function HeroStat({ label, value, tone }) {
   return (
-    <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 sm:p-4">
-      <div className="text-[10px] sm:text-xs font-black text-slate-500 uppercase tracking-wider">{label}</div>
-      <div className="text-2xl sm:text-3xl font-black text-text-main mt-0.5 tabular-nums">{value}</div>
+    <div className="min-w-0">
+      <div className="text-[9px] font-black uppercase tracking-wider text-slate-500">{label}</div>
+      <div className={`text-lg sm:text-xl font-black leading-tight tabular-nums ${tone || 'text-text-main'}`}>{value}</div>
     </div>
   );
 }
+
+// Ledger ringkas: baris = nama + jumlah tagihan, bar progres lunas, dan angka
+// total/lunas/sisa di kanan. Mobile: bar turun ke baris penuh, tanpa scroll.
+function FinanceLedger({ title, rows, first }) {
+  return (
+    <div>
+      <h3 className="font-black text-sm sm:text-base text-text-main mb-2">{title}</h3>
+      <div className="overflow-hidden rounded-xl border border-slate-200">
+        {rows.length === 0 && (
+          <div className="p-6 text-center text-sm font-bold text-slate-400">Belum ada data.</div>
+        )}
+        {rows.map((r, i) => {
+          const pctBar = Number(r.total) > 0 ? Math.min(100, (Number(r.lunas) / Number(r.total)) * 100) : 0;
+          return (
+            <div
+              key={r[first]}
+              className={`flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2.5 ${i ? 'border-t border-slate-100' : ''}`}
+            >
+              <div className="min-w-0 basis-[45%] sm:basis-36">
+                <div className="truncate text-sm font-bold text-text-main">{labelKeuangan(first, r[first])}</div>
+                <div className="text-[10px] font-semibold tabular-nums text-slate-400">{r.count} tagihan</div>
+              </div>
+              <div className="order-3 w-full sm:order-none sm:w-auto sm:flex-1">
+                <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
+                  <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${pctBar}%` }} />
+                </div>
+              </div>
+              <div className="order-2 ml-auto shrink-0 text-right sm:order-none sm:ml-0">
+                <div className="text-sm font-black tabular-nums text-text-main">{money(r.total)}</div>
+                <div className="flex items-center justify-end gap-1.5 text-[10px] font-semibold tabular-nums">
+                  <span className="text-emerald-600">{money(r.lunas)}</span>
+                  <span className="text-slate-300">&middot;</span>
+                  <span className="text-red-600">{money(r.outstanding)}</span>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// Label rapi untuk tipe notifikasi mentah (notification.tipe di backend), plus
+// waktu relatif sederhana untuk kolom kanan.
+const TIPE_LABEL = {
+  absensi_keterangan: 'Absensi',
+  early_release: 'Pulang Dini',
+  pickup_waiting: 'Penjemputan',
+  pickup_manual: 'Penjemputan',
+  daily_published: 'Daily Record',
+  wali_comment: 'Feedback Wali',
+  guru_reply: 'Balasan Guru',
+  payment_verified: 'Pembayaran',
+  invoice_issued: 'Tagihan'
+};
+function tipeLabel(t) {
+  return TIPE_LABEL[t] || String(t || '').replace(/_/g, ' ');
+}
+function relTime(iso) {
+  if (!iso) return '';
+  const d = new Date(String(iso).includes(' ') ? String(iso).replace(' ', 'T') + 'Z' : iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const s = Math.max(0, Math.floor((Date.now() - d.getTime()) / 1000));
+  if (s < 60) return 'baru saja';
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m} mnt lalu`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h} jam lalu`;
+  const day = Math.floor(h / 24);
+  if (day < 30) return `${day} hari lalu`;
+  return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function NotifikasiPanel({ notif, syncNotif }) {
+  const [filter, setFilter] = useState('semua');
+  const [items, setItems] = useState(notif);
+  useEffect(() => setItems(notif), [notif]);
+  const unread = items.filter((n) => !n.read_at);
+  const list = filter === 'belum' ? unread : items;
+
+  // Setelah tulis read di backend, tarik ulang lalu selaraskan header App
+  // (ikon lonceng) supaya angka badge tidak telat.
+  async function refreshHeader() {
+    try {
+      const fresh = await api.notifikasi();
+      setItems(fresh);
+      if (syncNotif) syncNotif(fresh);
+    } catch {}
+  }
+  async function markOne(n) {
+    if (n.read_at) return;
+    setItems((prev) => prev.map((x) => (x.id === n.id ? { ...x, read_at: new Date().toISOString() } : x)));
+    await api.readNotif(n.id).catch(() => {});
+    await refreshHeader();
+  }
+  async function markAll() {
+    setItems((prev) => prev.map((x) => (x.read_at ? x : { ...x, read_at: new Date().toISOString() })));
+    await api.readAllNotif().catch(() => {});
+    await refreshHeader();
+  }
+
+  return (
+    <section className="bg-white border border-slate-200 rounded-2xl p-4 shadow-[0_18px_60px_rgba(15,23,42,.05)]">
+      <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
+        <div className="min-w-0">
+          <h2 className="text-base sm:text-lg font-black leading-tight text-text-main">Notifikasi</h2>
+          <p className="text-[11px] sm:text-xs text-slate-500">
+            {unread.length} belum dibaca &middot; {items.length} notifikasi
+          </p>
+        </div>
+        <div className="flex flex-shrink-0 items-center gap-2">
+          {unread.length > 0 && (
+            <button
+              type="button"
+              onClick={markAll}
+              className="rounded-lg px-2 py-1 text-[11px] font-bold text-primary hover:bg-primary-container transition-colors"
+            >
+              Tandai dibaca semua
+            </button>
+          )}
+          <div className="inline-flex rounded-full bg-primary-container px-2.5 py-1 text-[11px] font-black uppercase tracking-wide text-primary">
+            Inbox
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-3 flex flex-wrap gap-1.5">
+        {[
+          { id: 'semua', label: 'Semua', count: items.length },
+          { id: 'belum', label: 'Belum dibaca', count: unread.length }
+        ].map((f) => (
+          <button
+            key={f.id}
+            type="button"
+            aria-pressed={filter === f.id}
+            onClick={() => setFilter(f.id)}
+            className={`rounded-full border px-2.5 py-1 text-[11px] font-bold transition-colors ${
+              filter === f.id
+                ? 'border-transparent bg-primary-container text-primary'
+                : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'
+            }`}
+          >
+            {f.label} <span className="tabular-nums opacity-70">{f.count}</span>
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-3 overflow-hidden rounded-xl border border-slate-200">
+        {list.length === 0 ? (
+          <div className="p-6 text-center text-sm font-bold text-slate-400">
+            {filter === 'belum' ? 'Semua sudah dibaca.' : 'Belum ada notifikasi.'}
+          </div>
+        ) : (
+          list.map((n) => <NotifRow key={n.id} item={n} onRead={markOne} />)
+        )}
+      </div>
+    </section>
+  );
+}
+
+function NotifRow({ item, onRead }) {
+  const unread = !item.read_at;
+  return (
+    <button
+      type="button"
+      onClick={() => onRead(item)}
+      title={unread ? 'Tandai dibaca' : undefined}
+      className={`flex w-full items-start gap-2.5 border-t border-slate-100 px-3 py-2.5 text-left first:border-t-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
+        unread ? 'bg-white hover:bg-slate-50' : 'bg-slate-50/40'
+      }`}
+    >
+      <span aria-hidden="true" className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${unread ? 'bg-primary' : 'bg-slate-300'}`} />
+      {!unread && <span className="sr-only">Sudah dibaca</span>}
+      {unread && <span className="sr-only">Belum dibaca</span>}
+      <div className="min-w-0 flex-1">
+        <div className={`text-sm leading-snug ${unread ? 'font-black text-text-main' : 'font-semibold text-slate-400'}`}>
+          <span className="line-clamp-2 break-words">{item.title}</span>
+        </div>
+        {item.body && <div className="mt-0.5 line-clamp-2 text-[11px] sm:text-xs text-slate-500">{item.body}</div>}
+      </div>
+      <div className="flex shrink-0 flex-col items-end gap-0.5">
+        <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-slate-500">
+          {tipeLabel(item.tipe)}
+        </span>
+        <span className="text-[10px] tabular-nums text-slate-400">{relTime(item.created_at)}</span>
+      </div>
+    </button>
+  );
+}
+
 function CompactStat({ label, value }) {
   return (
     <div className="min-w-0 rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-2 sm:px-3">

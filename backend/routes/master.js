@@ -2,6 +2,8 @@ const router = require('express').Router();
 const db = require('../db');
 const auth = require('../middleware/auth');
 const { nowUtc, audit, requireCabang, requireActiveCabang } = require('../utils/workflow');
+const { validateBody } = require('../middleware/validate');
+const { operasionalConfigSchema } = require('../schemas');
 
 router.get('/cabang', auth(), (req, res) => {
   const rows =
@@ -321,7 +323,7 @@ router.get('/operasional-config', auth(), (req, res) => {
   );
 });
 
-router.put('/operasional-config/:id', auth(['admin', 'admin_cabang']), (req, res) => {
+router.put('/operasional-config/:id', auth(['admin', 'admin_cabang']), validateBody(operasionalConfigSchema), (req, res) => {
   const row = db.prepare('SELECT * FROM operasional_config WHERE id=?').get(req.params.id);
   if (!row) return res.status(404).json({ error: 'Konfigurasi tidak ditemukan' });
   if (!requireCabang(req, res, row.cabang_id)) return;

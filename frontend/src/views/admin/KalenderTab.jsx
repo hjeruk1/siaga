@@ -16,7 +16,18 @@ export default function KalenderTab({ user, toast }) {
     if (m.cabangId || user.role === 'admin')
       api
         .kalender({ cabang_id: m.cabangId, tahun })
-        .then(setEvents)
+        .then((r) => {
+          setEvents(r);
+          // Collapse months with no events to keep the list compact.
+          const monthsWithEvents = new Set(r.map((e) => e.tanggal.slice(0, 7)));
+          setCollapsedMonths(
+            new Set(
+              ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12']
+                .map((mm) => `${tahun}-${mm}`)
+                .filter((key) => !monthsWithEvents.has(key))
+            )
+          );
+        })
         .catch((e) => toast('err', e.message));
   }, [m.cabangId, tahun]);
   async function add() {
@@ -90,15 +101,8 @@ export default function KalenderTab({ user, toast }) {
       ) : (
         <div className="calendar-branch-spacer" />
       )}
-      <IconButton
-        icon={CalendarPlus}
-        label="Tambah event"
-        onClick={openAddForm}
-        variant="primary"
-        className="calendar-add-icon"
-      />
-      <ActionButton icon={CalendarPlus} onClick={openAddForm} className="calendar-add-button">
-        Tambah Event
+      <ActionButton icon={CalendarPlus} onClick={openAddForm} variant="primary" className="w-full sm:w-auto">
+        <span className="hidden sm:inline">Tambah Event</span>
       </ActionButton>
     </div>
   );

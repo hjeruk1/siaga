@@ -117,6 +117,8 @@ export function ActionButton({
     danger:
       'bg-red-50 text-red-700 hover:bg-red-100 border border-red-100 active:scale-[0.98] transition-all duration-200 focus-visible:ring-red-200'
   };
+  const hasHidden = /\bhidden\b/.test(className || '');
+  const displayClass = hasHidden ? '' : 'inline-flex';
   const text = label || children;
   return (
     <button
@@ -125,7 +127,7 @@ export function ActionButton({
       disabled={disabled}
       aria-label={typeof text === 'string' ? text : undefined}
       title={typeof text === 'string' ? text : undefined}
-      className={`inline-flex items-center justify-center gap-2 h-9 px-4 rounded-xl text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${variants[variant] || variants.primary} ${className}`}
+      className={`${displayClass} items-center justify-center gap-2 h-9 px-4 rounded-xl text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${variants[variant] || variants.primary} ${className}`.replace(/\s+/g, ' ').trim()}
     >
       {Icon && <Icon className="w-4 h-4" strokeWidth={2.4} />}
       <span>{children}</span>
@@ -179,18 +181,18 @@ export function Modal({ title, onClose, children, maxWidth = 'max-w-md', footer 
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className={`bg-white border border-slate-200 rounded-2xl w-full ${maxWidth} max-h-[92dvh] overflow-hidden animate-bounce-in flex flex-col shadow-2xl shadow-slate-950/25 focus:outline-none`}
+        className={`bg-white border border-slate-200 rounded-xl w-full ${maxWidth} max-h-[92dvh] overflow-hidden animate-bounce-in flex flex-col shadow-xl shadow-slate-950/15 focus:outline-none`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex flex-shrink-0 items-center justify-between border-b border-slate-100 bg-slate-50/70 px-4 py-3">
-          <h3 className="truncate pr-3 text-base font-black tracking-[-0.01em] text-text-main">{title}</h3>
+        <div className="flex flex-shrink-0 items-center justify-between border-b border-slate-100 bg-slate-50/70 px-3.5 py-2.5">
+          <h3 className="truncate pr-3 text-[15px] font-black tracking-[-0.01em] text-text-main">{title}</h3>
           <IconButton icon={X} label="Tutup" onClick={onClose} variant="plain" />
         </div>
-        <div className="overflow-y-auto p-4 custom-scrollbar">{children}</div>
+        <div className="overflow-y-auto px-3.5 py-3 custom-scrollbar">{children}</div>
         {/* Footer opsional di luar area scroll. Dipakai modal panjang yang aksinya harus
             selalu terjangkau: `sticky bottom-0` di dalam container ber-padding tidak bisa
             rata ke bawah (tertinggal setinggi padding-bottom container). */}
-        {footer && <div className="flex-none border-t border-slate-100 bg-slate-50/70 px-4 py-3">{footer}</div>}
+        {footer && <div className="flex-none border-t border-slate-100 bg-slate-50/70 px-3.5 py-2.5">{footer}</div>}
       </div>
     </div>
   );

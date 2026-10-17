@@ -3,8 +3,16 @@ const router = require('express').Router(),
   auth = require('../middleware/auth'),
   path = require('path'),
   fs = require('fs');
-const { todayWIB, holidayDatesInMonth, siswaScopeSql, isSchoolDay, canAccessSiswa } = require('../utils/workflow');
+const {
+  todayWIB,
+  holidayDatesInMonth,
+  holidayEventsInMonth,
+  siswaScopeSql,
+  isSchoolDay,
+  canAccessSiswa
+} = require('../utils/workflow');
 const PDFDocument = require('pdfkit');
+const { namaBerkas, periodeLabel, renderLaporanSiswa } = require('../utils/rekapPdf');
 router.get('/dashboard', auth(), (req, res) => {
   const tgl = todayWIB();
   const cabangId = req.query.cabang_id || (req.user.role !== 'admin' ? req.user.cabang_id : null);
@@ -324,13 +332,29 @@ router.get('/', auth(), (req, res) => {
   const y = req.query.tahun || new Date().getFullYear(),
     m = String(req.query.bulan || new Date().getMonth() + 1).padStart(2, '0'),
     { rombel_id } = req.query;
+  const cabangId = req.user.role === 'admin' ? req.query.cabang_id || null : req.user.cabang_id || null;
   const scope = siswaScopeSql(req.user, 's', req.query.cabang_id);
-  const liburBulan = holidayDatesInMonth(y, m).map((d) => d.slice(-2));
+  // Hari libur dan hari sekolah hanya sampai hari ini, supaya kolom matriks
+  // tidak menghitung hari yang belum berjalan sebagai "Belum".
+  const today = todayWIB();
+  const daysInMonth = new Date(Number(y), Number(m), 0).getDate();
+  const liburBulan = holidayDatesInMonth(y, m, cabangId)
+    .filter((d) => d <= today)
+    .map((d) => d.slice(-2));
+  // Nama kegiatan libur (mis. "Maulid Nabi") untuk tampilan wali. Field baru,
+  // hari_libur tetap dipertahankan agar klien lama tidak pecah.
+  const liburDetail = holidayEventsInMonth(y, m, cabangId).filter((e) => e.tanggal <= today);
+  const hariSekolah = [];
+  for (let d = 1; d <= daysInMonth; d++) {
+    const tgl = `${y}-${m}-${String(d).padStart(2, '0')}`;
+    if (tgl > today) break;
+    if (isSchoolDay(tgl, cabangId)) hariSekolah.push(tgl);
+  }
   const rombelFilter = rombel_id ? ' AND se_scope.rombel_id=?' : '';
   const list = db
     .prepare(
       `
-    SELECT DISTINCT s.id,s.nama,s.foto,r.nama AS kelas_nama
+    SELECT DISTINCT s.id,s.nama,s.foto,r.id AS rombel_id,r.nama AS kelas_nama
     FROM siswa s
     ${scope.join}
     JOIN rombel r ON r.id=se_scope.rombel_id
@@ -342,6 +366,10 @@ router.get('/', auth(), (req, res) => {
   res.json({
     bulan: parseInt(m),
     tahun: parseInt(y),
+    cabang_id: cabangId,
+    hari_sekolah: hariSekolah,
+    hari_libur: liburBulan,
+    hari_libur_detail: liburDetail,
     data: list.map((s) => {
       const rows = db
         .prepare('SELECT tanggal,status FROM absensi WHERE siswa_id=? AND tanggal LIKE ?')
@@ -353,10 +381,17 @@ router.get('/', auth(), (req, res) => {
       liburBulan.forEach((d) => {
         if (!byDate[d]) byDate[d] = 'Libur';
       });
-      const c = { H: 0, T: 0, I: 0, S: 0, A: 0, L: 0 };
-      Object.values(byDate).forEach((st) => {
+      const c = { H: 0, T: 0, P: 0, M: 0, I: 0, S: 0, A: 0, L: 0 };
+      const hariSekolahBulan = new Set(hariSekolah.map((d) => d.slice(-2)));
+      Object.entries(byDate).forEach(([d, st]) => {
+        // Hitungan hanya untuk hari sekolah berjalan, sama dengan kolom matriks.
+        if (!hariSekolahBulan.has(d)) return;
         if (st === 'Hadir') c.H++;
         else if (st === 'Terlambat') c.T++;
+        // Pulang = sudah terekam di gerbang lalu dijemput, jadi masuk hitungan
+        // hadir; Menunggu belum divalidasi kampus sehingga dihitung terpisah.
+        else if (st === 'Pulang') c.P++;
+        else if (st === 'Menunggu') c.M++;
         else if (st === 'Izin') c.I++;
         else if (st === 'Sakit') c.S++;
         else if (st === 'Absen') c.A++;
@@ -371,6 +406,8 @@ router.get('/export', auth(), (req, res) => {
   const format = req.query.format || 'pdf';
   const rombel_id = req.query.rombel_id ? Number(req.query.rombel_id) : null;
   const siswa_id = req.query.siswa_id ? Number(req.query.siswa_id) : null;
+  // per_anak = satu halaman laporan per siswa, untuk dibagikan ke orang tua.
+  const per_anak = ['1', 'true', 'yes'].includes(String(req.query.per_anak || '').toLowerCase());
   const start_date = req.query.start_date || todayWIB().slice(0, 8) + '01';
   const end_date = req.query.end_date || todayWIB();
   const start = parseDateOnly(start_date);
@@ -416,11 +453,16 @@ router.get('/export', auth(), (req, res) => {
   }
 
   // 2. Fetch data
+  // Hari sekolah hanya sampai hari ini, sama seperti matriks rekap: hari yang
+  // belum berjalan tidak boleh muncul sebagai "tanpa catatan" di dokumen yang
+  // dibagikan ke orang tua.
+  const hariIni = todayWIB();
   const schoolDays = [];
   let curr = new Date(start);
   const limit = new Date(end);
   while (curr <= limit) {
     const yyyymmdd = formatDateOnly(curr);
+    if (yyyymmdd > hariIni) break;
     if (isSchoolDay(yyyymmdd, targetCabangId)) {
       schoolDays.push(yyyymmdd);
     }
@@ -604,14 +646,56 @@ router.get('/export', auth(), (req, res) => {
     return res.send(finalCsv);
   } else {
     // Generate PDF
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="rekap_absensi_${start_date}_to_${end_date}.pdf"`);
+    const periode = periodeLabel(start_date, end_date);
+    const labelBerkas = namaBerkas(periode);
+    const namaUnduh = isIndividual
+      ? `Absensi_${namaBerkas(studentInfo.nama)}_${labelBerkas}.pdf`
+      : per_anak
+        ? `Absensi_Per-Anak_${namaBerkas(rombelInfo.nama)}_${labelBerkas}.pdf`
+        : `Rekap_${namaBerkas(rombelInfo.nama)}_${labelBerkas}.pdf`;
 
-    const doc = new PDFDocument({ margin: 40, size: 'A4', info: { Title: 'Rekap Absensi SIAGA' } });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${namaUnduh}"`);
+
+    const doc = new PDFDocument({
+      margin: 40,
+      size: 'A4',
+      info: {
+        Title: isIndividual || per_anak ? 'Laporan Kehadiran Siswa' : 'Rekap Absensi SIAGA'
+      }
+    });
     doc.pipe(res);
 
-    // Header Logo (if exists)
     const logoPath = path.join(__dirname, '../../frontend/public/tp_logo.png');
+
+    // Laporan per anak (dibagikan ke orang tua): satu halaman penuh per siswa,
+    // lengkap dengan identitas, ringkasan bulan, tabel harian, dan tanda tangan.
+    if (isIndividual || per_anak) {
+      const daftar = isIndividual
+        ? [{ siswa: studentInfo, siswaId: siswa_id }]
+        : students.map((s) => ({
+            siswa: { ...s, rombel_nama: rombelInfo.nama, cabang_nama: rombelInfo.cabang_nama },
+            siswaId: s.id
+          }));
+      daftar.forEach((item, idx) => {
+        renderLaporanSiswa(doc, {
+          siswa: item.siswa,
+          siswaId: item.siswaId,
+          schoolDays,
+          attMap,
+          periode,
+          logoPath,
+          yayasan: 'Yayasan Taruna Prima',
+          cabangNama: item.siswa.cabang_nama || rombelInfo.cabang_nama,
+          tanggalCetak: formatDate(todayWIB()),
+          halamanBaru: idx > 0
+        });
+      });
+      doc.end();
+      return;
+    }
+
+    // Header Logo (if exists)
     const hasLogo = fs.existsSync(logoPath);
     let headerX = 40;
     if (hasLogo) {
@@ -623,7 +707,7 @@ router.get('/export', auth(), (req, res) => {
 
     // Header text
     doc.font('Helvetica-Bold').fontSize(14).fillColor('#1e3a8a').text('Yayasan Taruna Prima', headerX, 35);
-    const cabangName = isIndividual ? studentInfo.cabang_nama : rombelInfo.cabang_nama;
+    const cabangName = rombelInfo.cabang_nama;
     doc.font('Helvetica-Bold').fontSize(9).fillColor('#334155').text(`Cabang ${cabangName}`, headerX, 50);
     doc
       .font('Helvetica')
@@ -633,46 +717,28 @@ router.get('/export', auth(), (req, res) => {
 
     doc.moveTo(40, 85).lineTo(555, 85).strokeColor('#cbd5e1').stroke();
 
-    let titleText = isIndividual ? 'LAPORAN KEHADIRAN SISWA' : 'REKAPITULASI ABSENSI KELAS';
-    doc.font('Helvetica-Bold').fontSize(12).fillColor('#0f172a').text(titleText, 40, 95);
+    doc.font('Helvetica-Bold').fontSize(12).fillColor('#0f172a').text('REKAPITULASI ABSENSI KELAS', 40, 95);
 
     // Metadata card
     doc.roundedRect(40, 115, 515, 45, 6).fillColor('#f8fafc').fill().strokeColor('#e2e8f0').stroke();
     doc.font('Helvetica').fontSize(8.5).fillColor('#475569');
-
-    if (isIndividual) {
-      doc.text(`Nama Siswa : ${studentInfo.nama}`, 50, 123);
-      doc.text(`NIS        : ${studentInfo.nis || '-'}`, 50, 137);
-      doc.text(`Kelas      : ${studentInfo.rombel_nama}`, 300, 123);
-      doc.text(`Periode    : ${start_date} s/d ${end_date}`, 300, 137);
-    } else {
-      doc.text(`Kelas/Rombel : ${rombelInfo.nama}`, 50, 123);
-      doc.text(`Total Siswa  : ${students.length} anak`, 50, 137);
-      doc.text(`Periode      : ${start_date} s/d ${end_date}`, 300, 123);
-      doc.text(`Hari Efektif : ${schoolDays.length} hari`, 300, 137);
-    }
+    doc.text(`Kelas/Rombel : ${rombelInfo.nama}`, 50, 123);
+    doc.text(`Total Siswa  : ${students.length} anak`, 50, 137);
+    doc.text(`Periode      : ${start_date} s/d ${end_date}`, 300, 123);
+    doc.text(`Hari Efektif : ${schoolDays.length} hari`, 300, 137);
 
     const drawHeaders = (y) => {
       doc.rect(40, y, 515, 20).fillColor('#1e3a8a').fill();
       doc.font('Helvetica-Bold').fontSize(8.5).fillColor('#ffffff');
-      if (isIndividual) {
-        doc.text('No', 48, y + 6, { width: 25 });
-        doc.text('Hari / Tanggal', 80, y + 6, { width: 110 });
-        doc.text('Status', 200, y + 6, { width: 70 });
-        doc.text('Masuk', 280, y + 6, { width: 50 });
-        doc.text('Pulang', 340, y + 6, { width: 50 });
-        doc.text('Catatan / Keterangan', 400, y + 6, { width: 145 });
-      } else {
-        doc.text('No', 48, y + 6, { width: 25 });
-        doc.text('Nama Siswa', 80, y + 6, { width: 200 });
-        doc.text('Hadir', 290, y + 6, { width: 35, align: 'center' });
-        doc.text('Tmb', 330, y + 6, { width: 30, align: 'center' });
-        doc.text('Izin', 365, y + 6, { width: 30, align: 'center' });
-        doc.text('Sakit', 400, y + 6, { width: 30, align: 'center' });
-        doc.text('Abs', 435, y + 6, { width: 30, align: 'center' });
-        doc.text('Blm', 470, y + 6, { width: 30, align: 'center' });
-        doc.text('% Hadir', 505, y + 6, { width: 45, align: 'right' });
-      }
+      doc.text('No', 48, y + 6, { width: 25 });
+      doc.text('Nama Siswa', 80, y + 6, { width: 200 });
+      doc.text('Hadir', 290, y + 6, { width: 35, align: 'center' });
+      doc.text('Tmb', 330, y + 6, { width: 30, align: 'center' });
+      doc.text('Izin', 365, y + 6, { width: 30, align: 'center' });
+      doc.text('Sakit', 400, y + 6, { width: 30, align: 'center' });
+      doc.text('Abs', 435, y + 6, { width: 30, align: 'center' });
+      doc.text('Blm', 470, y + 6, { width: 30, align: 'center' });
+      doc.text('% Hadir', 505, y + 6, { width: 45, align: 'right' });
     };
 
     let tableTop = 175;
@@ -680,107 +746,62 @@ router.get('/export', auth(), (req, res) => {
 
     let currentY = tableTop + 20;
 
-    if (isIndividual) {
-      const daysOfWeek = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
-      schoolDays.forEach((day, idx) => {
-        if (currentY > 730) {
-          doc.addPage();
-          drawHeaders(40);
-          currentY = 60;
-        }
+    students.forEach((s, idx) => {
+      if (currentY > 730) {
+        doc.addPage();
+        drawHeaders(40);
+        currentY = 60;
+      }
 
-        if (idx % 2 === 1) {
-          doc.rect(40, currentY, 515, 20).fillColor('#f8fafc').fill();
-        }
+      if (idx % 2 === 1) {
+        doc.rect(40, currentY, 515, 20).fillColor('#f8fafc').fill();
+      }
 
-        const dateObj = new Date(day + 'T00:00:00');
-        const dayName = daysOfWeek[dateObj.getDay()];
-        const att = attMap[`${siswa_id}_${day}`];
+      let H = 0,
+        T = 0,
+        I = 0,
+        S = 0,
+        A = 0,
+        B = 0;
+      schoolDays.forEach((day) => {
+        const att = attMap[`${s.id}_${day}`];
         const status = att ? att.status : 'Belum';
-
-        let statusColor = '#475569';
-        if (['Hadir', 'Menunggu', 'Pulang'].includes(status)) statusColor = '#047857';
-        else if (status === 'Terlambat') statusColor = '#b45309';
-        else if (['Izin', 'Sakit'].includes(status)) statusColor = '#2563eb';
-        else if (status === 'Absen') statusColor = '#b91c1c';
-
-        doc.font('Helvetica').fontSize(8.5).fillColor('#334155');
-        doc.text(String(idx + 1), 48, currentY + 6, { width: 25 });
-        doc.text(`${dayName}, ${day}`, 80, currentY + 6, { width: 110 });
-        doc
-          .font('Helvetica-Bold')
-          .fillColor(statusColor)
-          .text(status, 200, currentY + 6, { width: 70 });
-        doc.font('Helvetica').fillColor('#334155');
-        doc.text(att && att.jam_masuk ? att.jam_masuk : '-', 280, currentY + 6, { width: 50 });
-        doc.text(att && att.jam_pulang ? att.jam_pulang : '-', 340, currentY + 6, { width: 50 });
-        doc.text(att && att.catatan ? att.catatan : '-', 400, currentY + 6, { width: 145, height: 12, ellipsis: true });
-
-        doc
-          .moveTo(40, currentY + 20)
-          .lineTo(555, currentY + 20)
-          .strokeColor('#f1f5f9')
-          .stroke();
-        currentY += 20;
+        if (status === 'Hadir' || status === 'Menunggu' || status === 'Pulang') H++;
+        else if (status === 'Terlambat') T++;
+        else if (status === 'Izin') I++;
+        else if (status === 'Sakit') S++;
+        else if (status === 'Absen') A++;
+        else B++;
       });
-    } else {
-      students.forEach((s, idx) => {
-        if (currentY > 730) {
-          doc.addPage();
-          drawHeaders(40);
-          currentY = 60;
-        }
 
-        if (idx % 2 === 1) {
-          doc.rect(40, currentY, 515, 20).fillColor('#f8fafc').fill();
-        }
+      const totalPresent = H + T;
+      const totalEff = schoolDays.length;
+      const pct = totalEff > 0 ? Math.round((totalPresent / totalEff) * 100) : 0;
 
-        let H = 0,
-          T = 0,
-          I = 0,
-          S = 0,
-          A = 0,
-          B = 0;
-        schoolDays.forEach((day) => {
-          const att = attMap[`${s.id}_${day}`];
-          const status = att ? att.status : 'Belum';
-          if (status === 'Hadir' || status === 'Menunggu' || status === 'Pulang') H++;
-          else if (status === 'Terlambat') T++;
-          else if (status === 'Izin') I++;
-          else if (status === 'Sakit') S++;
-          else if (status === 'Absen') A++;
-          else B++;
-        });
+      doc.font('Helvetica').fontSize(8.5).fillColor('#334155');
+      doc.text(String(idx + 1), 48, currentY + 6, { width: 25 });
+      doc.font('Helvetica-Bold').text(s.nama, 80, currentY + 6, { width: 200, height: 12, ellipsis: true });
 
-        const totalPresent = H + T;
-        const totalEff = schoolDays.length;
-        const pct = totalEff > 0 ? Math.round((totalPresent / totalEff) * 100) : 0;
+      doc.font('Helvetica').text(String(H), 290, currentY + 6, { width: 35, align: 'center' });
+      doc.text(String(T), 330, currentY + 6, { width: 30, align: 'center' });
+      doc.text(String(I), 365, currentY + 6, { width: 30, align: 'center' });
+      doc.text(String(S), 400, currentY + 6, { width: 30, align: 'center' });
+      doc.text(String(A), 435, currentY + 6, { width: 30, align: 'center' });
+      doc.text(String(B), 470, currentY + 6, { width: 30, align: 'center' });
 
-        doc.font('Helvetica').fontSize(8.5).fillColor('#334155');
-        doc.text(String(idx + 1), 48, currentY + 6, { width: 25 });
-        doc.font('Helvetica-Bold').text(s.nama, 80, currentY + 6, { width: 200, height: 12, ellipsis: true });
+      let pctColor = pct >= 90 ? '#047857' : pct >= 75 ? '#d97706' : '#b91c1c';
+      doc
+        .font('Helvetica-Bold')
+        .fillColor(pctColor)
+        .text(`${pct}%`, 505, currentY + 6, { width: 45, align: 'right' });
 
-        doc.font('Helvetica').text(String(H), 290, currentY + 6, { width: 35, align: 'center' });
-        doc.text(String(T), 330, currentY + 6, { width: 30, align: 'center' });
-        doc.text(String(I), 365, currentY + 6, { width: 30, align: 'center' });
-        doc.text(String(S), 400, currentY + 6, { width: 30, align: 'center' });
-        doc.text(String(A), 435, currentY + 6, { width: 30, align: 'center' });
-        doc.text(String(B), 470, currentY + 6, { width: 30, align: 'center' });
-
-        let pctColor = pct >= 90 ? '#047857' : pct >= 75 ? '#d97706' : '#b91c1c';
-        doc
-          .font('Helvetica-Bold')
-          .fillColor(pctColor)
-          .text(`${pct}%`, 505, currentY + 6, { width: 45, align: 'right' });
-
-        doc
-          .moveTo(40, currentY + 20)
-          .lineTo(555, currentY + 20)
-          .strokeColor('#f1f5f9')
-          .stroke();
-        currentY += 20;
-      });
-    }
+      doc
+        .moveTo(40, currentY + 20)
+        .lineTo(555, currentY + 20)
+        .strokeColor('#f1f5f9')
+        .stroke();
+      currentY += 20;
+    });
 
     // Signature Block
     currentY += 40;

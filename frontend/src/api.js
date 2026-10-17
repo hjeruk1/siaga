@@ -27,7 +27,11 @@ async function req(method, url, body) {
   });
   const d = await r.json().catch(() => ({}));
   if (!r.ok) {
-    if (r.status === 401 && url !== '/api/auth/login') handleUnauthorized();
+    // Hanya picu "sesi berakhir" kalau memang ada token yang kedaluwarsa.
+    // Tanpa token (mis. /api/auth/me saat bootstrap sebelum login) tidak ada
+    // sesi untuk berakhir, dan memunculkan toast "Sesi berakhir" di halaman
+    // login hanya membingungkan pengguna.
+    if (r.status === 401 && url !== '/api/auth/login' && token()) handleUnauthorized();
     const e = new Error(d.error || 'Server error');
     Object.assign(e, d, { status: r.status });
     throw e;
@@ -147,6 +151,10 @@ export const api = {
   tutupHariStatus: (p) => req('GET', '/api/absensi/tutup-hari/status' + qs(p || {})),
   scanPenjemput: (qr) => req('POST', '/api/penjemputan/scan', { qr_code: qr }),
   pulangkan: (ids) => req('POST', '/api/penjemputan/pulang', { siswa_ids: ids }),
+  scanPenjemputManual: (d) => req('POST', '/api/penjemputan/scan-manual', d),
+  penjemputanRekap: (p = {}) => req('GET', '/api/penjemputan/rekap' + qs(p || {})),
+  siswaPenjemput: (id) => req('GET', '/api/siswa/' + id + '/penjemput'),
+  createPenjemput: (id, d) => req('POST', '/api/siswa/' + id + '/penjemput', d),
   dailyToday: (params = {}) => req('GET', '/api/daily-record/today' + qs(params)),
   dailyAdminHistory: (params = {}) => req('GET', '/api/daily-record/admin/history' + qs(params)),
   dailyHistory: (sid, limit = 30) => req('GET', '/api/daily-record/history/' + sid + '?limit=' + limit),
@@ -167,6 +175,7 @@ export const api = {
   updateModulAjar: (id, d) => req('PUT', '/api/modul-ajar/' + id, d),
   focusTheme: (params = {}) => req('GET', '/api/modul-ajar/focus-theme' + qs(params)),
   saveFocusTheme: (d) => req('POST', '/api/modul-ajar/focus-theme', d),
+  deleteFocusTheme: (params = {}) => req('DELETE', '/api/modul-ajar/focus-theme' + qs(params)),
   parseModulAjar: (file) => {
     const f = new FormData();
     f.append('file', file);
@@ -202,6 +211,7 @@ export const api = {
   receiptPdf: (id) => blob('/api/billing/pembayaran/' + id + '/pdf'),
   laporan: (p) => req('GET', '/api/billing/laporan' + qs(p || {})),
   dashboard: (p) => req('GET', '/api/rekap/dashboard' + qs(p || {})),
+  rekapBulanan: (p) => req('GET', '/api/rekap' + qs(p || {})),
   waliBilling: (siswaId) => req('GET', '/api/billing/wali/siswa/' + siswaId),
   exportRekap: (p) => blob('/api/rekap/export' + qs(p || {}))
 };

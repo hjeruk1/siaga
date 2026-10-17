@@ -373,7 +373,7 @@ router.get('/:id/penjemput', auth(), (req, res) => {
   res.json(db.prepare('SELECT * FROM penjemput WHERE siswa_id=? ORDER BY aktif DESC,nama').all(req.params.id));
 });
 
-router.post('/:id/penjemput', auth(['admin', 'admin_cabang']), (req, res) => {
+router.post('/:id/penjemput', auth(['admin', 'admin_cabang', 'guru', 'gerbang']), (req, res) => {
   const e = managementEnrollment(req.params.id);
   if (!e) return res.status(404).json({ error: 'Enrollment siswa tidak ditemukan' });
   if (!requireCabang(req, res, e.cabang_id)) return;
@@ -387,7 +387,7 @@ router.post('/:id/penjemput', auth(['admin', 'admin_cabang']), (req, res) => {
   res.json({ id: r.lastInsertRowid, qr_code: qr });
 });
 
-router.put('/penjemput/:id', auth(['admin', 'admin_cabang']), (req, res) => {
+router.put('/penjemput/:id', auth(['admin', 'admin_cabang', 'guru', 'gerbang']), (req, res) => {
   const p = db.prepare('SELECT * FROM penjemput WHERE id=?').get(req.params.id);
   if (!p) return res.status(404).json({ error: 'Penjemput tidak ditemukan' });
   const e = managementEnrollment(p.siswa_id);

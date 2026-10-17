@@ -36,9 +36,16 @@ function unique(prefix) {
   return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
 }
 
-function uniqueDate() {
-  const day = Math.floor(Date.now() / 1000) % 8000;
-  return new Date(Date.UTC(2099, 0, 1 + day)).toISOString().slice(0, 10);
+function uniqueDate(salt = 0) {
+  // Hari kerja di masa lalu, unik per salt. Jalur tulis absensi menolak tanggal
+  // masa depan, jadi fixture tidak boleh lagi memakai tahun 2099. Salt penting:
+  // satu tanggal tidak boleh dipakai dua tes di cabang yang sama, karena
+  // tutup-hari mengunci tanggal untuk seluruh cabang.
+  const back = 40 + ((Math.floor(Date.now() / 1000) + salt * 7) % 97);
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() - back);
+  while (d.getUTCDay() === 0 || d.getUTCDay() === 6) d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
 }
 
 async function loginStaff(username, password = adminPassword) {
@@ -304,6 +311,39 @@ describe('workflow regressions', () => {
     const row = today.body.rows.find((r) => r.siswa_id === siswa.id);
     assert.ok(row);
     assert.equal(row.status, 'Absen');
+  });
+
+  it('tutup hari menolak hari libur (tidak mengubah Belum menjadi Absen)', async () => {
+    const siswa = await createSiswa(adminToken, 'close-holiday');
+    // Hari Minggu selalu libur kecuali ada kalender_event tipe masuk;
+    // mundur ke Minggu sebelumnya agar tanggalnya pasti sudah lewat.
+    const minggu = new Date();
+    minggu.setUTCDate(minggu.getUTCDate() - 40);
+    while (minggu.getUTCDay() !== 0) minggu.setUTCDate(minggu.getUTCDate() - 1);
+    const tanggal = minggu.toISOString().slice(0, 10);
+
+    const close = await req(
+      'POST',
+      '/api/absensi/tutup-hari',
+      {
+        cabang_id: siswa.master.cabang.id,
+        tanggal
+      },
+      adminToken
+    );
+    assert.equal(close.status, 400, JSON.stringify(close.body));
+    assert.match(String(close.body.error || ''), /libur/i);
+
+    const today = await req(
+      'GET',
+      `/api/absensi/today?cabang_id=${siswa.master.cabang.id}&tanggal=${tanggal}`,
+      undefined,
+      adminToken
+    );
+    assert.equal(today.status, 200);
+    const row = today.body.rows.find((r) => r.siswa_id === siswa.id);
+    assert.ok(row);
+    assert.equal(row.status, 'Belum', 'hari libur tidak boleh memaksa status Absen');
   });
 
   it('rejects unsupported siswa status values and accepts schema-supported status values', async () => {
@@ -666,4 +706,157 @@ describe('workflow regressions', () => {
     assert.equal(row.action, 'error', JSON.stringify(row));
     assert.match(row.error, /Rombel tujuan/i);
   });
+  it('rejects future dates on attendance writes and blocks guru from closing the day', async () => {
+    const siswa = await createSiswa(adminToken, 'future-date');
+    const future = '2100-01-04';
+    const checkin = await req(
+      'POST',
+      '/api/absensi/checkin',
+      { siswa_id: siswa.id, tanggal: future },
+      adminToken
+    );
+    assert.equal(checkin.status, 400, JSON.stringify(checkin.body));
+    assert.match(checkin.body.error, /melewati hari ini/i);
+
+    const closeFuture = await req(
+      'POST',
+      '/api/absensi/tutup-hari',
+      { cabang_id: siswa.master.cabang.id, tanggal: future },
+      adminToken
+    );
+    assert.equal(closeFuture.status, 400, JSON.stringify(closeFuture.body));
+
+    const guruToken = await createStaffAndLogin(adminToken, 'guru', siswa.master.cabang.id, 'close-guru');
+    const closeByGuru = await req(
+      'POST',
+      '/api/absensi/tutup-hari',
+      { cabang_id: siswa.master.cabang.id, tanggal: uniqueDate() },
+      guruToken
+    );
+    assert.equal(closeByGuru.status, 403, JSON.stringify(closeByGuru.body));
+  });
+
+  it('rejects malformed jam on operational config', async () => {
+    const siswa = await createSiswa(adminToken, 'jam-format');
+    const list = await req(
+      'GET',
+      `/api/master/operasional-config?cabang_id=${siswa.master.cabang.id}`,
+      undefined,
+      adminToken
+    );
+    assert.equal(list.status, 200);
+    const row = list.body[0];
+    assert.ok(row, 'operational config row is required');
+    const bad = await req(
+      'PUT',
+      `/api/master/operasional-config/${row.id}`,
+      { jam_masuk: '8:00' },
+      adminToken
+    );
+    assert.equal(bad.status, 400, JSON.stringify(bad.body));
+    const good = await req(
+      'PUT',
+      `/api/master/operasional-config/${row.id}`,
+      { jam_masuk: '07:30' },
+      adminToken
+    );
+    assert.equal(good.status, 200, JSON.stringify(good.body));
+  });
+
+  it('supports manual pickup when QR cannot be read, then reports wait duration', async () => {
+    const master = await pickMaster(adminToken);
+    const suffix = unique('manual');
+    const gerbangToken = await createStaffAndLogin(adminToken, 'gerbang', master.cabang.id, 'manual-gate');
+    const siswa = await createSiswa(adminToken, suffix, { master });
+    const tanggal = uniqueDate(3);
+
+    const pickup = await req(
+      'POST',
+      `/api/siswa/${siswa.id}/penjemput`,
+      { nama: `Penjemput ${suffix}`, relasi: 'Wali' },
+      gerbangToken
+    );
+    assert.equal(pickup.status, 200, JSON.stringify(pickup.body));
+    const penjemputId = pickup.body.id;
+
+    // Lepas aturan waktu pulang supaya tes tidak bergantung jam berjalan.
+    const early = await req(
+      'POST',
+      '/api/absensi/early-release',
+      { siswa_id: siswa.id, tanggal, jam: '09:00', alasan: 'Tes serah terima manual' },
+      adminToken
+    );
+    assert.equal(early.status, 200, JSON.stringify(early.body));
+
+    const checkin = await req(
+      'POST',
+      '/api/absensi/checkin',
+      { siswa_id: siswa.id, tanggal },
+      adminToken
+    );
+    assert.equal(checkin.status, 200, JSON.stringify(checkin.body));
+
+    const tanpaAlasan = await req(
+      'POST',
+      '/api/penjemputan/scan-manual',
+      { siswa_id: siswa.id, penjemput_id: penjemputId, tanggal },
+      gerbangToken
+    );
+    assert.equal(tanpaAlasan.status, 400, JSON.stringify(tanpaAlasan.body));
+
+    const scan = await req(
+      'POST',
+      '/api/penjemputan/scan-manual',
+      {
+        siswa_id: siswa.id,
+        penjemput_id: penjemputId,
+        alasan: 'QR kartu tidak terbaca, verifikasi langsung',
+        tanggal
+      },
+      gerbangToken
+    );
+    assert.equal(scan.status, 200, JSON.stringify(scan.body));
+    assert.equal(scan.body.manual, true);
+    assert.ok(scan.body.jam_tunggu, 'jam_tunggu is required');
+
+    const today = await req(
+      'GET',
+      `/api/absensi/today?cabang_id=${master.cabang.id}&tanggal=${tanggal}`,
+      undefined,
+      gerbangToken
+    );
+    assert.equal(today.status, 200);
+    const row = today.body.rows.find((r) => Number(r.siswa_id) === Number(siswa.id));
+    assert.ok(row, 'student row is required');
+    assert.equal(row.status, 'Menunggu');
+    assert.match(row.catatan || '', /QR kartu tidak terbaca/);
+
+    const absen = db.prepare('SELECT id FROM absensi WHERE siswa_id=? AND tanggal=?').get(siswa.id, tanggal);
+    assert.ok(absen, 'absensi row is required');
+    const auditRow = db
+      .prepare("SELECT * FROM audit_log WHERE action='pickup_scan_manual' AND entity_id=?")
+      .get(absen.id);
+    assert.ok(auditRow, 'pickup_scan_manual audit trail is required');
+
+    const pulang = await req(
+      'POST',
+      '/api/penjemputan/pulang',
+      { siswa_ids: [siswa.id], tanggal },
+      gerbangToken
+    );
+    assert.equal(pulang.status, 200, JSON.stringify(pulang.body));
+    assert.equal(pulang.body.count, 1);
+
+    const rekap = await req(
+      'GET',
+      `/api/penjemputan/rekap?cabang_id=${master.cabang.id}&tanggal=${tanggal}`,
+      undefined,
+      adminToken
+    );
+    assert.equal(rekap.status, 200, JSON.stringify(rekap.body));
+    assert.ok(rekap.body.total >= 1, 'rekap total is required');
+    assert.notEqual(rekap.body.rata2_menit, null);
+    assert.ok(rekap.body.terlama.length >= 1, 'rekap detail is required');
+  });
+
 });
