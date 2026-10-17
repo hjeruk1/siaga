@@ -10,7 +10,10 @@ export function generatePedagogicalNote(nama, activities, mood) {
   if (mood) {
     const moodMap = {
       ceria: 'Anak tampak sangat ceria, bersemangat, dan antusias sepanjang hari.',
+      tenang: 'Anak tenang dan mengikuti seluruh kegiatan dengan nyaman.',
       biasa: 'Kondisi anak stabil dan mengikuti seluruh rutinitas kelas dengan tenang.',
+      mengantuk: 'Anak tampak mengantuk, tetapi tetap mengikuti kegiatan dengan pendampingan guru.',
+      manja: 'Anak membutuhkan perhatian ekstra hari ini dan nyaman saat didampingi guru.',
       rewel: 'Anak memerlukan perhatian lebih karena tampak kurang nyaman atau rewel hari ini.'
     };
     if (moodMap[mood]) sentences.push(moodMap[mood]);
@@ -32,7 +35,10 @@ export const AKTIVITAS = [
 ];
 export const MOOD_OPT = [
   { v: 'ceria', l: '😊 Ceria', c: 'bg-emerald-500' },
+  { v: 'tenang', l: '😌 Tenang', c: 'bg-sky-500' },
   { v: 'biasa', l: '😐 Biasa', c: 'bg-primary' },
+  { v: 'mengantuk', l: '😪 Mengantuk', c: 'bg-blue-500' },
+  { v: 'manja', l: '🥺 Manja', c: 'bg-violet-500' },
   { v: 'rewel', l: '😢 Rewel', c: 'bg-red-500' }
 ];
 export const MAKAN_OPT = [

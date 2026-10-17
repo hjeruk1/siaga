@@ -157,15 +157,7 @@ export default function RombelTab({ user, toast }) {
 
   const right = (
     <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center">
-      <ActionButton icon={UserPlus} onClick={openAssignModal} variant="ghost" className="sm:hidden px-2 text-xs">
-        Tugaskan Guru
-      </ActionButton>
-      <ActionButton
-        icon={UserPlus}
-        onClick={openAssignModal}
-        variant="ghost"
-        className="hidden sm:inline-flex px-2 sm:px-4 text-xs sm:text-sm"
-      >
+      <ActionButton icon={UserPlus} onClick={openAssignModal} variant="ghost" className="w-full sm:w-auto px-2 sm:px-4 text-xs sm:text-sm">
         Tugaskan Guru
       </ActionButton>
       <ActionButton
@@ -174,17 +166,7 @@ export default function RombelTab({ user, toast }) {
           setForm({ nama: '', jenjang_id: '', cabang_id: m.cabangId || '' });
           setOpenForm(true);
         }}
-        className="sm:hidden px-2 text-xs"
-      >
-        Tambah Rombel
-      </ActionButton>
-      <ActionButton
-        icon={Plus}
-        onClick={() => {
-          setForm({ nama: '', jenjang_id: '', cabang_id: m.cabangId || '' });
-          setOpenForm(true);
-        }}
-        className="hidden sm:inline-flex px-2 sm:px-4 text-xs sm:text-sm"
+        className="w-full sm:w-auto px-2 sm:px-4 text-xs sm:text-sm"
       >
         Tambah Rombel
       </ActionButton>

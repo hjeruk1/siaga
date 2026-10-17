@@ -1,6 +1,6 @@
 // Editor laporan harian guru. Dipisah dari GuruView.jsx (sebelumnya ~1130 baris
 // menumpuk dalam satu file bersama view induk).
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../../api';
 import {
   ArrowLeft,
@@ -31,6 +31,10 @@ import {
 export function Editor({ row, detail, setDetail, onClose, user, toast }) {
   const [comment, setComment] = useState('');
   const [busy, setBusy] = useState(false);
+  const [tersimpanField, setTersimpanField] = useState(null);
+  const timerTersimpan = useRef(null);
+  const [activityCustom, setActivityCustom] = useState('');
+  const [domainCustom, setDomainCustom] = useState('');
   const [preview, setPreview] = useState(false);
   const [edits, setEdits] = useState(null);
   const [mobileChecklistOpen, setMobileChecklistOpen] = useState(false);
@@ -140,6 +144,34 @@ export function Editor({ row, detail, setDetail, onClose, user, toast }) {
     setDetail((d) => ({ ...d, [k]: v }));
   }
 
+  // Konfirmasi singkat setelah auto-save, ditampilkan di kolom yang disimpan.
+  function tandaiTersimpan(field) {
+    setTersimpanField(field);
+    clearTimeout(timerTersimpan.current);
+    timerTersimpan.current = setTimeout(() => setTersimpanField(null), 2200);
+  }
+
+  useEffect(() => () => clearTimeout(timerTersimpan.current), []);
+
+  // Aktivitas bebas: daftar tetap tidak selalu mencakup kegiatan hari ini.
+  async function tambahAktivitas() {
+    const v = activityCustom.trim();
+    if (!v || busy) return;
+    if (activities.includes(v)) {
+      setActivityCustom('');
+      return;
+    }
+    await tapActivityCheckbox(v, true);
+    setActivityCustom('');
+  }
+
+  function tambahDomain() {
+    const v = domainCustom.trim();
+    if (!v || busy) return;
+    tap('observation_domain', v);
+    setDomainCustom('');
+  }
+
   function buildDailyPayload(extra = {}) {
     return {
       ...detail,
@@ -156,6 +188,7 @@ export function Editor({ row, detail, setDetail, onClose, user, toast }) {
     try {
       const payload = buildDailyPayload({ [field]: value });
       const r = await api.saveDaily(payload);
+      tandaiTersimpan(field);
       if (!detail.id && r.id) {
         const d = await api.dailyDetail(r.id).catch(() => null);
         if (d)
@@ -243,10 +276,15 @@ export function Editor({ row, detail, setDetail, onClose, user, toast }) {
   }
 
   async function publish() {
+    setBusy(true);
     try {
-      const id = detail.id;
+      // Simpan dulu seluruh isian yang sedang diedit (observasi, catatan guru,
+      // catatan wali) sebelum publish. Tanpa ini, teks yang diketik tapi belum
+      // sempat diklik "Simpan" tidak ikut terkirim ke wali.
+      const saved = await api.saveDaily(buildDailyPayload());
+      const id = saved?.id || detail.id;
       if (!id) {
-        toast('err', 'Simpan dulu sebelum kirim');
+        toast('err', 'Gagal menyimpan laporan');
         return;
       }
       await api.publishDaily(id);
@@ -255,6 +293,8 @@ export function Editor({ row, detail, setDetail, onClose, user, toast }) {
       setDetail(d);
     } catch (e) {
       toast('err', e.message);
+    } finally {
+      setBusy(false);
     }
   }
   async function sendComment() {
@@ -610,7 +650,19 @@ export function Editor({ row, detail, setDetail, onClose, user, toast }) {
                       {row.rombel_nama} - {detail.tanggal || row.tanggal}
                     </p>
                     <div className="mt-4 flex flex-wrap gap-2">
-                      <button onClick={publish} className="btn gap-2">
+                      <button
+                        onClick={publish}
+                        disabled={missingCount > 0 || busy}
+                        title={
+                          missingCount > 0
+                            ? `Lengkapi dulu: ${required
+                                .filter((x) => !x.ok)
+                                .map((x) => x.label)
+                                .join(', ')}`
+                            : 'Kirim laporan harian ke wali'
+                        }
+                        className="btn gap-2"
+                      >
                         <Send className="h-4 w-4" strokeWidth={2.4} />
                         Kirim ke Wali
                       </button>
@@ -900,6 +952,17 @@ export function Editor({ row, detail, setDetail, onClose, user, toast }) {
                 </button>
               </div>
               <div className="mt-4 flex flex-wrap gap-2">
+                {detail.observation_domain && !domainOptions(detail).includes(detail.observation_domain) ? (
+                  <button
+                    type="button"
+                    onClick={() => tap('observation_domain', null)}
+                    title="Klik untuk hapus domain ini"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-text-main bg-text-main px-3 py-2 text-xs font-black text-white transition-all duration-200 active:scale-95"
+                  >
+                    {detail.observation_domain}
+                    <X className="h-3 w-3" aria-hidden="true" />
+                  </button>
+                ) : null}
                 {domainOptions(detail).map((d) => (
                   <button
                     key={d}
@@ -910,10 +973,33 @@ export function Editor({ row, detail, setDetail, onClose, user, toast }) {
                   </button>
                 ))}
               </div>
+              <div className="mt-3 flex gap-2">
+                <input
+                  value={domainCustom}
+                  onChange={(e) => setDomainCustom(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      tambahDomain();
+                    }
+                  }}
+                  placeholder="Tulis domain lain…"
+                  className="input h-9 flex-1 text-xs"
+                />
+                <button
+                  type="button"
+                  onClick={tambahDomain}
+                  disabled={!domainCustom.trim() || busy}
+                  className="inline-flex h-9 shrink-0 items-center rounded-lg border border-primary/40 bg-primary-container px-3 text-xs font-black text-primary transition-all hover:bg-primary/20 active:scale-[0.98] disabled:opacity-40"
+                >
+                  Tambah
+                </button>
+              </div>
               <div className="mt-4">
                 <textarea
                   value={detail.observation_note || ''}
                   onChange={(e) => update('observation_note', e.target.value)}
+                  onBlur={saveObservation}
                   rows={4}
                   placeholder="Contoh: Rafi menunggu giliran saat memakai krayon dan meminta bantuan ketika tutupnya sulit dibuka."
                   className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm leading-relaxed focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/40"
@@ -926,9 +1012,15 @@ export function Editor({ row, detail, setDetail, onClose, user, toast }) {
                   )}
                   <button
                     onClick={saveObservation}
-                    className="h-9 rounded-lg bg-text-main px-4 text-sm font-bold text-white transition-all hover:opacity-90 active:scale-[0.98]"
+                    className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-text-main px-4 text-sm font-bold text-white transition-all hover:opacity-90 active:scale-[0.98]"
                   >
-                    Simpan observasi
+                    {tersimpanField === 'observation_note' ? (
+                      <>
+                        <CheckCircle2 className="h-4 w-4" aria-hidden="true" /> Tersimpan
+                      </>
+                    ) : (
+                      'Simpan observasi'
+                    )}
                   </button>
                 </div>
               </div>
@@ -948,6 +1040,42 @@ export function Editor({ row, detail, setDetail, onClose, user, toast }) {
                       </button>
                     );
                   })}
+                  {activities
+                    .filter((a) => !AKTIVITAS.includes(a) && !activeActivities.includes(a))
+                    .map((a) => (
+                      <button
+                        key={a}
+                        type="button"
+                        onClick={() => tapActivityCheckbox(a, false)}
+                        title="Klik untuk hapus aktivitas ini"
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-primary bg-primary px-3 py-2 text-xs font-bold text-white transition-all duration-200 active:scale-95"
+                      >
+                        {a}
+                        <X className="h-3 w-3" aria-hidden="true" />
+                      </button>
+                    ))}
+                </div>
+                <div className="mt-3 flex gap-2">
+                  <input
+                    value={activityCustom}
+                    onChange={(e) => setActivityCustom(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        tambahAktivitas();
+                      }
+                    }}
+                    placeholder="Tulis aktivitas lain…"
+                    className="input h-9 flex-1 text-xs"
+                  />
+                  <button
+                    type="button"
+                    onClick={tambahAktivitas}
+                    disabled={!activityCustom.trim() || busy}
+                    className="inline-flex h-9 shrink-0 items-center rounded-lg border border-primary/40 bg-primary-container px-3 text-xs font-black text-primary transition-all hover:bg-primary/20 active:scale-[0.98] disabled:opacity-40"
+                  >
+                    Tambah
+                  </button>
                 </div>
               </div>
             </section>
@@ -961,15 +1089,22 @@ export function Editor({ row, detail, setDetail, onClose, user, toast }) {
                     <textarea
                       value={detail.catatan || ''}
                       onChange={(e) => update('catatan', e.target.value)}
+                      onBlur={saveTeacherNote}
                       rows={3}
                       placeholder="Tambahkan catatan khusus untuk hari ini…"
                       className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/40"
                     />
                     <button
                       onClick={saveTeacherNote}
-                      className="mt-2 h-9 w-full rounded-lg bg-primary px-4 text-sm font-bold text-white transition-all hover:bg-primary-hover active:scale-[0.98]"
+                      className="mt-2 inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-lg bg-primary px-4 text-sm font-bold text-white transition-all hover:bg-primary-hover active:scale-[0.98]"
                     >
-                      Simpan catatan guru
+                      {tersimpanField === 'catatan' ? (
+                        <>
+                          <CheckCircle2 className="h-4 w-4" aria-hidden="true" /> Tersimpan
+                        </>
+                      ) : (
+                        'Simpan catatan guru'
+                      )}
                     </button>
                   </div>
                   <div className="border-t border-slate-100 pt-4">
@@ -977,15 +1112,22 @@ export function Editor({ row, detail, setDetail, onClose, user, toast }) {
                     <textarea
                       value={detail.parent_note || ''}
                       onChange={(e) => update('parent_note', e.target.value)}
+                      onBlur={saveParentNote}
                       rows={2}
                       placeholder="Opsional. Info singkat yang perlu diketahui wali."
                       className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/40"
                     />
                     <button
                       onClick={saveParentNote}
-                      className="mt-2 h-9 w-full rounded-lg border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 transition-all hover:bg-slate-50 active:scale-[0.98]"
+                      className="mt-2 inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 transition-all hover:bg-slate-50 active:scale-[0.98]"
                     >
-                      Simpan catatan wali
+                      {tersimpanField === 'parent_note' ? (
+                        <>
+                          <CheckCircle2 className="h-4 w-4 text-emerald-600" aria-hidden="true" /> Tersimpan
+                        </>
+                      ) : (
+                        'Simpan catatan wali'
+                      )}
                     </button>
                   </div>
                 </div>
@@ -1145,9 +1287,13 @@ export function Editor({ row, detail, setDetail, onClose, user, toast }) {
       </div>
 
       <div className="flex flex-shrink-0 gap-2 border-t border-slate-200/80 bg-white/95 p-3 backdrop-blur-md lg:hidden">
-        <button onClick={publish} className="btn h-10 flex-1 gap-1 px-2 text-[11px] font-bold">
+        <button
+          onClick={publish}
+          disabled={missingCount > 0 || busy}
+          className="btn h-10 flex-1 gap-1 px-2 text-[11px] font-bold"
+        >
           <Send className="h-4 w-4" strokeWidth={2.4} />
-          Kirim
+          {missingCount > 0 ? `Lengkapi ${missingCount}` : 'Kirim'}
         </button>
         <button onClick={() => setPreview(true)} className="btn-secondary h-10 gap-1 px-3 text-[11px] font-bold">
           <Eye className="h-4 w-4" strokeWidth={2.4} />

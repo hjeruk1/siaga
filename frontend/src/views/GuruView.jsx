@@ -35,6 +35,7 @@ export default function GuruView({ user, toast, tab }) {
   const [dailySearch, setDailySearch] = useState('');
   const [dailyFilter, setDailyFilter] = useState('all');
   const [selectedAbsensi, setSelectedAbsensi] = useState([]);
+  const [pulangConfirm, setPulangConfirm] = useState(null);
   const [nfcToken, setNfcToken] = useState('');
   const [nfcBusy, setNfcBusy] = useState(false);
   const [nfcMsg, setNfcMsg] = useState(null);
@@ -50,6 +51,7 @@ export default function GuruView({ user, toast, tab }) {
   const [sidebarExpanded, setSidebarExpanded] = useState(false);
   const [classThemeOpen, setClassThemeOpen] = useState(false);
   const [classThemeRombelId, setClassThemeRombelId] = useState('');
+  const [classThemeExists, setClassThemeExists] = useState(false);
   const [classThemeForm, setClassThemeForm] = useState({
     rombel_id: '',
     modul_ajar_id: '',
@@ -60,6 +62,12 @@ export default function GuruView({ user, toast, tab }) {
   });
   const [classModules, setClassModules] = useState([]);
   const [masterRombels, setMasterRombels] = useState([]);
+
+  // Tutup hari hanya boleh oleh role yang diizinkan backend (absensi.js).
+  const canTutupHari = ['admin', 'admin_cabang', 'kepsek'].includes(user.role);
+  // Web NFC hanya ada di browser pendukung (Chrome Android); tombolnya
+  // disembunyikan daripada selalu berujung pesan galat.
+  const webNfcSupported = typeof window !== 'undefined' && 'NDEFReader' in window;
 
   const [exportScope, setExportScope] = useState('class');
   const [exportSiswaId, setExportSiswaId] = useState('');
@@ -215,7 +223,29 @@ export default function GuruView({ user, toast, tab }) {
       });
     } else setDetail(seed);
   }
+  // Buka editor langsung dari baris riwayat: tanggal ikut dipindah supaya
+  // daftar di kiri dan date picker konsisten dengan catatan yang dibuka.
+  function openFromHistory(l) {
+    if (!historyFor) return;
+    const row = {
+      siswa_id: l.siswa_id,
+      nama: historyFor.nama,
+      rombel_nama: historyFor.rombel_nama,
+      foto: historyFor.foto,
+      paket: l.paket || historyFor.paket,
+      cabang_id: l.cabang_id,
+      jenjang_id: l.jenjang_id,
+      rombel_id: l.rombel_id,
+      tanggal: l.tanggal,
+      laporan_id: l.id,
+      laporan_status: l.status
+    };
+    setHistoryFor(null);
+    setTanggal(l.tanggal);
+    open(row);
+  }
   async function checkin(siswaId) {
+    if (isSchoolDay === false) return toast('err', 'Hari libur, tidak bisa check-in');
     try {
       await api.checkin({ siswa_id: siswaId, tanggal });
       toast('ok', 'Check-in berhasil');
@@ -230,6 +260,10 @@ export default function GuruView({ user, toast, tab }) {
   }
   async function submitKeterangan() {
     if (!ketModal) return;
+    if (isSchoolDay === false) {
+      setKetModal(null);
+      return toast('err', 'Hari libur, tidak bisa mengubah keterangan');
+    }
     const { siswaId, status } = ketModal;
     setKetModal(null);
     try {
@@ -240,7 +274,19 @@ export default function GuruView({ user, toast, tab }) {
       toast('err', e.message);
     }
   }
-  async function pulangkan(ids) {
+  function pulangkan(ids) {
+    setPulangConfirm({ ids });
+  }
+  const pulangTargets = (pulangConfirm?.ids || []).map(
+    (id) => absensi.find((a) => Number(a.siswa_id) === Number(id)) || { siswa_id: id, nama: `Siswa #${id}` }
+  );
+  async function pulangNow() {
+    const ids = pulangConfirm?.ids || [];
+    if (!ids.length) return setPulangConfirm(null);
+    if (isSchoolDay === false) {
+      setPulangConfirm(null);
+      return toast('err', 'Hari libur, tidak bisa memulangkan siswa');
+    }
     try {
       await api.pulangkan(ids);
       toast('ok', ids.length > 1 ? `${ids.length} siswa dipulangkan` : 'Siswa dipulangkan');
@@ -248,9 +294,12 @@ export default function GuruView({ user, toast, tab }) {
       loadAbsensi();
     } catch (e) {
       toast('err', e.message);
+    } finally {
+      setPulangConfirm(null);
     }
   }
   function doTutupHari() {
+    if (isSchoolDay === false) return toast('err', 'Hari libur, tidak bisa tutup hari');
     setShowTutupHariConfirm(true);
   }
   async function confirmTutupHari() {
@@ -276,6 +325,10 @@ export default function GuruView({ user, toast, tab }) {
   async function processNfc(raw) {
     const token = String(raw || '').trim();
     if (!token) return;
+    if (isSchoolDay === false) {
+      setNfcMsg({ type: 'err', text: 'Hari libur, absensi tidak diaktifkan.' });
+      return;
+    }
     if (!/^SIAGA-STU-[A-F0-9]{10}$/i.test(token)) {
       setNfcMsg({ type: 'err', text: 'Format token tidak valid. Format: SIAGA-STU-XXXXXXXXXX' });
       return;
@@ -466,6 +519,7 @@ export default function GuruView({ user, toast, tab }) {
         if (!alive) return;
 
         const source = theme;
+        setClassThemeExists(!!theme);
         let defaultModulAjarId = source?.modul_ajar_id || '';
         let defaultTitle = source?.title || '';
         let defaultDomains = themeDomains(source?.suggested_domains).join(', ');
@@ -538,6 +592,21 @@ export default function GuruView({ user, toast, tab }) {
       t.setHours(h, m, 0, 0);
       return now >= t && done < list.length;
     })();
+
+  async function hapusClassTheme() {
+    const judul = classThemeForm.title || 'tema ini';
+    if (!window.confirm(`Hapus Focus Theme "${judul}" untuk ${tanggal}? Laporan yang menunjuknya hanya dilepas temanya, isian lain tetap utuh.`))
+      return;
+    try {
+      await api.deleteFocusTheme({ rombel_id: classThemeRombelId, tanggal });
+      toast('ok', 'Focus Theme dihapus');
+      setClassThemeExists(false);
+      setClassThemeForm((prev) => ({ ...prev, modul_ajar_id: '', title: '', activity_summary: '', menu_makanan: '' }));
+      load();
+    } catch (e) {
+      toast('err', e.message);
+    }
+  }
   return (
     <div className="w-full p-3 sm:p-4 lg:p-6 2xl:p-8 space-y-4">
       {activeTab === 'daily' && (
@@ -649,7 +718,7 @@ export default function GuruView({ user, toast, tab }) {
                       <div className="flex-1 min-w-0">
                         <div className="font-black text-text-main text-sm truncate">
                           {r.nama}
-                          {r.is_late && (
+                          {r.is_late && isSchoolDay !== false && (
                             <span className="ml-2 text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full font-black align-middle">
                               Terlambat
                             </span>
@@ -659,7 +728,11 @@ export default function GuruView({ user, toast, tab }) {
                           {r.rombel_nama} · {r.paket}
                         </div>
                         <div className="flex items-center justify-between mt-1">
-                          <CompleteBadge pct={pct} />
+                          {isSchoolDay === false ? (
+                            <span className="text-[10px] font-black uppercase tracking-wide text-slate-400">Libur</span>
+                          ) : (
+                            <CompleteBadge pct={pct} />
+                          )}
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -697,11 +770,41 @@ export default function GuruView({ user, toast, tab }) {
                   toast={toast}
                 />
               ) : (
-                <div className="hidden lg:grid w-full place-items-center bg-white border border-slate-200 rounded-2xl text-center p-10 text-slate-400">
+                <div className="hidden h-full w-full flex-col items-center justify-center gap-4 rounded-2xl border border-slate-200 bg-white p-8 text-center lg:flex">
+                  <div className="grid h-14 w-14 place-items-center rounded-2xl bg-primary-container text-2xl">📝</div>
                   <div>
-                    <div className="text-lg font-black text-slate-500">Pilih siswa</div>
-                    <div className="text-sm mt-1">Editor laporan harian akan muncul di sini.</div>
+                    <div className="text-lg font-black text-text-main">Pilih siswa untuk mulai mengisi</div>
+                    <p className="mx-auto mt-1 max-w-sm text-sm leading-relaxed text-slate-500">
+                      Klik siswa di kiri untuk mengisi mood, makan, kegiatan, penilaian, dan observasi. Editor muncul di
+                      sini.
+                    </p>
                   </div>
+                  <div className="grid w-full max-w-sm grid-cols-3 gap-2">
+                    <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+                      <div className="text-lg font-black tabular-nums text-text-main">{dailyCounts.belum}</div>
+                      <div className="text-[10px] font-black uppercase tracking-wide text-slate-400">Belum</div>
+                    </div>
+                    <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+                      <div className="text-lg font-black tabular-nums text-text-main">{dailyCounts.sebagian}</div>
+                      <div className="text-[10px] font-black uppercase tracking-wide text-slate-400">Sebagian</div>
+                    </div>
+                    <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+                      <div className="text-lg font-black tabular-nums text-text-main">{dailyCounts.lengkap}</div>
+                      <div className="text-[10px] font-black uppercase tracking-wide text-slate-400">Lengkap</div>
+                    </div>
+                  </div>
+                  {filteredDaily[0] && isSchoolDay !== false ? (
+                    <button
+                      type="button"
+                      onClick={() => open(filteredDaily[0])}
+                      className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-primary px-4 text-xs font-black text-white transition-all hover:bg-primary-hover active:scale-[0.98]"
+                    >
+                      Isi {filteredDaily[0].nama}
+                    </button>
+                  ) : null}
+                  {isSchoolDay === false ? (
+                    <p className="text-xs font-bold text-red-500">Hari libur — catatan harian tidak dibuat hari ini.</p>
+                  ) : null}
                 </div>
               )}
             </div>
@@ -713,32 +816,114 @@ export default function GuruView({ user, toast, tab }) {
           <div className="bg-white border border-slate-200 rounded-2xl p-3 sm:p-4 min-w-0 w-full max-w-full">
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
               <div>
-                <h1 className="text-xl font-black text-text-main">Absensi Kelas</h1>
-                <p className="text-sm text-slate-500">
-                  Check-in pagi, keterangan, NFC, dan pulang setelah gerbang validasi penjemput.{' '}
-                  {isSchoolDay === false && <span className="font-black text-red-500">Hari Libur</span>}
-                  {isSchoolDay === true && <span className="font-black text-emerald-600">Hari Masuk</span>}
+                <div className="flex flex-wrap items-center gap-2">
+                  <h1 className="text-xl font-black text-text-main">Absensi Kelas</h1>
+                  {isSchoolDay !== null && (
+                    <span
+                      className={`rounded-full border px-2 py-0.5 text-[10px] font-black uppercase tracking-wide ${
+                        isSchoolDay
+                          ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                          : 'border-red-200 bg-red-50 text-red-600'
+                      }`}
+                    >
+                      {isSchoolDay ? 'Hari Masuk' : 'Hari Libur'}
+                    </span>
+                  )}
+                </div>
+                <p
+                  className="text-xs text-slate-500 truncate"
+                  title="Check-in pagi, keterangan, NFC, dan pulang setelah gerbang validasi penjemput."
+                >
+                  {isSchoolDay === false
+                    ? 'Tidak ada absensi pada tanggal ini.'
+                    : 'Check-in pagi, keterangan, NFC, lalu pulang.'}
                 </p>
               </div>
-              <div className="flex flex-wrap gap-2">
-                <input type="date" value={tanggal} onChange={(e) => setTanggal(e.target.value)} className="input" />
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="date"
+                  value={tanggal}
+                  onChange={(e) => setTanggal(e.target.value)}
+                  className="input flex-1 min-w-[8.25rem] max-w-[10rem]"
+                />
                 <button onClick={loadAbsensi} className="btn-secondary">
                   Refresh
                 </button>
+                <div
+                  className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5 ml-auto"
+                  role="group"
+                  aria-label="Tampilan daftar absensi"
+                >
+                  {[
+                    {
+                      id: 'card',
+                      label: 'Tampilan kartu',
+                      icon: (
+                        <>
+                          <rect x="3" y="3" width="7" height="7" rx="1.5" />
+                          <rect x="14" y="3" width="7" height="7" rx="1.5" />
+                          <rect x="3" y="14" width="7" height="7" rx="1.5" />
+                          <rect x="14" y="14" width="7" height="7" rx="1.5" />
+                        </>
+                      )
+                    },
+                    {
+                      id: 'list',
+                      label: 'Tampilan daftar',
+                      icon: (
+                        <>
+                          <line x1="8" y1="6" x2="21" y2="6" />
+                          <line x1="8" y1="12" x2="21" y2="12" />
+                          <line x1="8" y1="18" x2="21" y2="18" />
+                          <line x1="3" y1="6" x2="3.01" y2="6" />
+                          <line x1="3" y1="12" x2="3.01" y2="12" />
+                          <line x1="3" y1="18" x2="3.01" y2="18" />
+                        </>
+                      )
+                    }
+                  ].map((v) => (
+                    <button
+                      key={v.id}
+                      onClick={() => setAbsenView(v.id)}
+                      aria-pressed={absenView === v.id}
+                      aria-label={v.label}
+                      title={v.label}
+                      className={`p-1.5 rounded-md transition-all duration-200 active:scale-95 ${
+                        absenView === v.id ? 'bg-white text-text-main shadow-sm' : 'text-slate-400 hover:text-slate-600'
+                      }`}
+                    >
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden="true"
+                      >
+                        {v.icon}
+                      </svg>
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
-            <div className="grid grid-cols-2 min-[350px]:grid-cols-4 lg:grid-cols-8 gap-2 mt-4">
-              {absenStats.map((x) => (
-                <button
-                  key={x.s}
-                  onClick={() => setAbsenStatus(x.s)}
-                  className={`text-left rounded-lg border p-2 sm:p-3 transition-all duration-200 active:scale-95 ${absenStatus === x.s ? 'border-primary bg-primary-container' : 'border-slate-200 bg-slate-50 hover:bg-slate-100'}`}
-                >
-                  <div className="text-[9px] xs:text-[10px] sm:text-xs font-black text-slate-500 truncate">{x.s}</div>
-                  <div className="text-base xs:text-lg sm:text-2xl font-black text-text-main leading-tight">{x.n}</div>
-                </button>
-              ))}
-            </div>
+            {isSchoolDay === false ? null : (
+              <div className="flex gap-2 mt-4 overflow-x-auto scrollbar-none">
+                {absenStats.map((x) => (
+                  <button
+                    key={x.s}
+                    onClick={() => setAbsenStatus(x.s)}
+                    className={`text-left rounded-lg border px-2.5 py-1.5 shrink-0 grow basis-0 min-w-[74px] transition-all duration-200 active:scale-95 ${absenStatus === x.s ? 'border-primary bg-primary-container' : 'border-slate-200 bg-slate-50 hover:bg-slate-100'}`}
+                  >
+                    <div className="text-[9px] sm:text-[10px] font-black text-slate-500 truncate">{x.s}</div>
+                    <div className="text-base sm:text-lg font-black text-text-main leading-tight">{x.n}</div>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           <div className="grid grid-cols-1 xl:grid-cols-[360px_minmax(0,1fr)] 2xl:grid-cols-[380px_minmax(0,1fr)] gap-4 w-full max-w-full">
             <div className="flex flex-col gap-2 xl:gap-0">
@@ -747,11 +932,13 @@ export default function GuruView({ user, toast, tab }) {
                 className="xl:hidden flex items-center justify-between w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 font-black text-text-main text-sm active:scale-[0.99] transition-all duration-200"
               >
                 <div className="flex items-center gap-2">
-                  <span>📟</span>
-                  <span>NFC & Kontrol Absensi</span>
-                  <span className="text-[10px] bg-primary-container text-primary-active px-2 py-0.5 rounded-md uppercase font-bold">
-                    {absenMode}
-                  </span>
+                  <span>{isSchoolDay === false ? '📊' : '📟'}</span>
+                  <span>{isSchoolDay === false ? 'Panel Kontrol' : 'NFC & Kontrol Absensi'}</span>
+                  {isSchoolDay !== false && (
+                    <span className="text-[10px] bg-primary-container text-primary-active px-2 py-0.5 rounded-md uppercase font-bold">
+                      {absenMode}
+                    </span>
+                  )}
                 </div>
                 <span
                   className={`text-slate-400 transition-transform duration-200 ${sidebarExpanded ? 'rotate-180' : ''}`}
@@ -762,82 +949,90 @@ export default function GuruView({ user, toast, tab }) {
               <aside
                 className={`${sidebarExpanded ? 'block' : 'hidden'} xl:block bg-white border border-slate-200 rounded-2xl p-4 space-y-4`}
               >
-                <div>
-                  <div className="label">Mode NFC</div>
-                  <div className="grid grid-cols-2 gap-2">
-                    {[
-                      { id: 'masuk', label: 'Masuk' },
-                      { id: 'pulang', label: 'Pulang' }
-                    ].map((m) => (
-                      <button
-                        key={m.id}
-                        onClick={() => setAbsenMode(m.id)}
-                        className={`py-2 rounded-lg text-sm font-medium border transition-all duration-200 active:scale-95 ${absenMode === m.id ? 'bg-text-main text-white border-text-main' : 'bg-white text-slate-600 border-slate-200 hover:border-primary/40'}`}
+                {isSchoolDay !== false && (
+                  <>
+                    <div>
+                      <div className="label">Mode NFC</div>
+                      <div className="grid grid-cols-2 gap-2">
+                        {[
+                          { id: 'masuk', label: 'Masuk' },
+                          { id: 'pulang', label: 'Pulang' }
+                        ].map((m) => (
+                          <button
+                            key={m.id}
+                            onClick={() => setAbsenMode(m.id)}
+                            className={`py-2 rounded-lg text-sm font-medium border transition-all duration-200 active:scale-95 ${absenMode === m.id ? 'bg-text-main text-white border-text-main' : 'bg-white text-slate-600 border-slate-200 hover:border-primary/40'}`}
+                          >
+                            {m.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        processNfc(nfcToken);
+                      }}
+                      className="space-y-2"
+                    >
+                      <label className="label">Tap / input token NFC</label>
+                      <input
+                        value={nfcToken}
+                        onChange={(e) => setNfcToken(e.target.value.toUpperCase())}
+                        autoComplete="off"
+                        spellCheck={false}
+                        className="input w-full font-mono"
+                        placeholder="SIAGA-STU-XXXXXXXXXX"
+                        disabled={nfcBusy}
+                      />
+                      <div className={`grid gap-2 ${webNfcSupported ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                        <button className="btn" disabled={nfcBusy}>
+                          {nfcBusy ? 'Proses…' : 'Proses'}
+                        </button>
+                        {webNfcSupported && (
+                          <button type="button" onClick={startWebNfc} className="btn-secondary">
+                            Web NFC
+                          </button>
+                        )}
+                      </div>
+                    </form>
+                    {nfcMsg && (
+                      <div
+                        className={`rounded-lg p-3 text-sm font-bold ${nfcMsg.type === 'ok' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'}`}
                       >
-                        {m.label}
+                        {nfcMsg.text}
+                      </div>
+                    )}
+                    <div className="border-t border-slate-100 pt-4 space-y-2">
+                      <div className="label">Bulk pulang</div>
+                      <p className="text-xs text-slate-500">Pilih siswa berstatus Menunggu, lalu konfirmasi pulang.</p>
+                      <button
+                        onClick={() => pulangkan(selectedAbsensi)}
+                        disabled={!selectedAbsensi.length}
+                        className="btn w-full"
+                      >
+                        Pulangkan ({selectedAbsensi.length})
                       </button>
-                    ))}
-                  </div>
-                </div>
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    processNfc(nfcToken);
-                  }}
-                  className="space-y-2"
-                >
-                  <label className="label">Tap / input token NFC</label>
-                  <input
-                    value={nfcToken}
-                    onChange={(e) => setNfcToken(e.target.value.toUpperCase())}
-                    autoComplete="off"
-                    spellCheck={false}
-                    className="input w-full font-mono"
-                    placeholder="SIAGA-STU-XXXXXXXXXX"
-                    disabled={nfcBusy}
-                  />
-                  <div className="grid grid-cols-2 gap-2">
-                    <button className="btn" disabled={nfcBusy}>
-                      {nfcBusy ? 'Proses…' : 'Proses'}
+                    </div>
+                  </>
+                )}
+                {canTutupHari && isSchoolDay !== false && (
+                  <div className="border-t border-slate-100 pt-4 space-y-2">
+                    <div className="label">Tutup Hari</div>
+                    <p className="text-xs text-slate-500">
+                      {dayClosed
+                        ? 'Hari sudah ditutup. Tidak ada perubahan absensi yang bisa dilakukan.'
+                        : 'Kunci absensi hari ini. Siswa Belum → Absen.'}
+                    </p>
+                    <button
+                      onClick={doTutupHari}
+                      disabled={dayClosed || tutupHariLoading}
+                      className={`w-full py-2 rounded-lg text-sm font-medium border transition-all duration-200 active:scale-[0.98] ${dayClosed ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed' : 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'}`}
+                    >
+                      {dayClosed ? '✓ Hari Ditutup' : tutupHariLoading ? 'Menutup…' : 'Tutup Hari'}
                     </button>
-                    <button type="button" onClick={startWebNfc} className="btn-secondary">
-                      Web NFC
-                    </button>
-                  </div>
-                </form>
-                {nfcMsg && (
-                  <div
-                    className={`rounded-lg p-3 text-sm font-bold ${nfcMsg.type === 'ok' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'}`}
-                  >
-                    {nfcMsg.text}
                   </div>
                 )}
-                <div className="border-t border-slate-100 pt-4 space-y-2">
-                  <div className="label">Bulk pulang</div>
-                  <p className="text-xs text-slate-500">Pilih siswa berstatus Menunggu, lalu konfirmasi pulang.</p>
-                  <button
-                    onClick={() => pulangkan(selectedAbsensi)}
-                    disabled={!selectedAbsensi.length}
-                    className="btn w-full"
-                  >
-                    Pulangkan ({selectedAbsensi.length})
-                  </button>
-                </div>
-                <div className="border-t border-slate-100 pt-4 space-y-2">
-                  <div className="label">Tutup Hari</div>
-                  <p className="text-xs text-slate-500">
-                    {dayClosed
-                      ? 'Hari sudah ditutup. Tidak ada perubahan absensi yang bisa dilakukan.'
-                      : 'Kunci absensi hari ini. Siswa Belum → Absen.'}
-                  </p>
-                  <button
-                    onClick={doTutupHari}
-                    disabled={dayClosed || tutupHariLoading}
-                    className={`w-full py-2 rounded-lg text-sm font-medium border transition-all duration-200 active:scale-[0.98] ${dayClosed ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed' : 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'}`}
-                  >
-                    {dayClosed ? '✓ Hari Ditutup' : tutupHariLoading ? 'Menutup…' : 'Tutup Hari'}
-                  </button>
-                </div>
                 <div className="border-t border-slate-100 pt-4 space-y-3">
                   <div className="label flex items-center gap-1.5">
                     <span>📊</span>
@@ -949,165 +1144,167 @@ export default function GuruView({ user, toast, tab }) {
               </aside>
             </div>
             <div className="bg-white border border-slate-200 rounded-2xl p-3 sm:p-4 min-w-0 w-full max-w-full">
-              <div className="flex flex-col lg:flex-row gap-2 lg:items-center justify-between mb-4">
-                <div className="flex flex-col xs:flex-row flex-1 gap-2">
-                  <input
-                    value={absenSearch}
-                    onChange={(e) => setAbsenSearch(e.target.value)}
-                    autoComplete="off"
-                    className="input flex-1"
-                    placeholder="Cari siswa atau rombel"
-                  />
-                  <CustomSelect
-                    value={absenStatus}
-                    onChange={(e) => setAbsenStatus(e.target.value)}
-                    className="input w-full xs:w-40"
-                  >
-                    <option value="all">Semua</option>
-                    {absenStats.map((x) => (
-                      <option key={x.s} value={x.s}>
-                        {x.s}
-                      </option>
-                    ))}
-                  </CustomSelect>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    onClick={() => setAbsenView('card')}
-                    className={`px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 active:scale-95 ${absenView === 'card' ? 'bg-text-main text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
-                  >
-                    Kartu
-                  </button>
-                  <button
-                    onClick={() => setAbsenView('list')}
-                    className={`px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 active:scale-95 ${absenView === 'list' ? 'bg-text-main text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
-                  >
-                    List
-                  </button>
-                </div>
-              </div>
-              {absenView === 'card' ? (
-                <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-2 sm:gap-3">
-                  {filteredAbsensi.map((a) => (
-                    <AbsensiCard
-                      key={a.siswa_id}
-                      row={a}
-                      selected={selectedAbsensi.includes(a.siswa_id)}
-                      onSelect={() => toggleAbsensi(a.siswa_id)}
-                      onCheckin={() => checkin(a.siswa_id)}
-                      onKet={setKeterangan}
-                      onPulang={() => pulangkan([a.siswa_id])}
-                    />
-                  ))}
+              {isSchoolDay === false ? (
+                <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center">
+                  <div className="text-3xl">🌙</div>
+                  <div className="mt-1 text-sm font-black text-slate-600">Hari Libur</div>
+                  <p className="mx-auto mt-0.5 max-w-sm text-xs text-slate-500">
+                    Ganti tanggal untuk melihat hari masuk.
+                  </p>
                 </div>
               ) : (
                 <>
-                  {/* Mobile/Tablet List View (< lg) */}
-                  <div className="lg:hidden space-y-3">
-                    {filteredAbsensi.map((a) => (
-                      <div
-                        key={a.siswa_id}
-                        className={`flex flex-col p-3 rounded-2xl border transition-all duration-200 ${selectedAbsensi.includes(a.siswa_id) ? 'border-primary bg-primary-container' : 'border-slate-200 bg-white'}`}
+                  <div className="flex flex-col lg:flex-row gap-2 lg:items-center justify-between mb-4">
+                    <div className="flex flex-col xs:flex-row flex-1 gap-2">
+                      <input
+                        value={absenSearch}
+                        onChange={(e) => setAbsenSearch(e.target.value)}
+                        autoComplete="off"
+                        className="input flex-1"
+                        placeholder="Cari siswa atau rombel"
+                      />
+                      <CustomSelect
+                        value={absenStatus}
+                        onChange={(e) => setAbsenStatus(e.target.value)}
+                        className="input w-full xs:w-40"
                       >
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <input
-                              type="checkbox"
-                              checked={selectedAbsensi.includes(a.siswa_id)}
-                              onChange={() => toggleAbsensi(a.siswa_id)}
-                              disabled={a.status !== 'Menunggu'}
-                              className="w-4 h-4 rounded accent-primary flex-shrink-0 disabled:opacity-30"
-                            />
-                            <div className="min-w-0">
-                              <h4 className="font-black text-text-main text-sm truncate">{a.nama}</h4>
-                              <p className="text-[10px] text-slate-500 truncate">{a.rombel_nama}</p>
-                            </div>
-                          </div>
-                          <StatusBadge status={a.status} />
-                        </div>
-
-                        <div className="grid grid-cols-3 gap-2 text-center text-[10px] xs:text-xs text-slate-500 bg-slate-50/70 rounded-xl px-2 py-1.5 my-2">
-                          <div>
-                            <div className="text-[8px] xs:text-[9px] font-semibold text-slate-400 uppercase">Masuk</div>
-                            <div className="font-bold text-slate-700">{a.jam_masuk || '-'}</div>
-                          </div>
-                          <div>
-                            <div className="text-[8px] xs:text-[9px] font-semibold text-slate-400 uppercase">
-                              Tunggu
-                            </div>
-                            <div className="font-bold text-slate-700">{a.jam_tunggu || '-'}</div>
-                          </div>
-                          <div>
-                            <div className="text-[8px] xs:text-[9px] font-semibold text-slate-400 uppercase">
-                              Pulang
-                            </div>
-                            <div className="font-bold text-slate-700">{a.jam_pulang || '-'}</div>
-                          </div>
-                        </div>
-
-                        <div className="w-full">
-                          <AbsensiActions
-                            row={a}
-                            onCheckin={() => checkin(a.siswa_id)}
-                            onKet={setKeterangan}
-                            onPulang={() => pulangkan([a.siswa_id])}
-                            compact={true}
-                          />
-                        </div>
-                      </div>
-                    ))}
-                    {filteredAbsensi.length === 0 && (
-                      <div className="text-center py-10 text-sm text-slate-400">Tidak ada siswa sesuai filter.</div>
-                    )}
+                        <option value="all">Semua</option>
+                        {absenStats.map((x) => (
+                          <option key={x.s} value={x.s}>
+                            {x.s}
+                          </option>
+                        ))}
+                      </CustomSelect>
+                    </div>
                   </div>
-
-                  {/* Desktop List View (>= lg) */}
-                  <div className="hidden lg:block overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr>
-                          {['', 'Siswa', 'Rombel', 'Status', 'Masuk', 'Tunggu', 'Pulang', 'Aksi'].map((h) => (
-                            <th key={h} className="text-left py-2 px-3 bg-slate-50 text-slate-500 font-black">
-                              {h}
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
+                  {absenView === 'card' ? (
+                    <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-2 sm:gap-3">
+                      {filteredAbsensi.map((a) => (
+                        <AbsensiCard
+                          key={a.siswa_id}
+                          row={a}
+                          selected={selectedAbsensi.includes(a.siswa_id)}
+                          onSelect={() => toggleAbsensi(a.siswa_id)}
+                          onCheckin={() => checkin(a.siswa_id)}
+                          onKet={setKeterangan}
+                          onPulang={() => pulangkan([a.siswa_id])}
+                          disabled={isSchoolDay === false}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <>
+                      {/* Mobile/Tablet List View (< lg) */}
+                      <div className="lg:hidden space-y-3">
                         {filteredAbsensi.map((a) => (
-                          <tr key={a.siswa_id}>
-                            <td className="py-2 px-3">
-                              <input
-                                type="checkbox"
-                                checked={selectedAbsensi.includes(a.siswa_id)}
-                                onChange={() => toggleAbsensi(a.siswa_id)}
-                                disabled={a.status !== 'Menunggu'}
-                              />
-                            </td>
-                            <td className="py-2 px-3 font-black text-text-main">{a.nama}</td>
-                            <td className="py-2 px-3 text-slate-600">{a.rombel_nama}</td>
-                            <td className="py-2 px-3">
+                          <div
+                            key={a.siswa_id}
+                            className={`flex flex-col p-3 rounded-2xl border transition-all duration-200 ${selectedAbsensi.includes(a.siswa_id) ? 'border-primary bg-primary-container' : 'border-slate-200 bg-white'}`}
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedAbsensi.includes(a.siswa_id)}
+                                  onChange={() => toggleAbsensi(a.siswa_id)}
+                                  disabled={a.status !== 'Menunggu'}
+                                  className="w-4 h-4 rounded accent-primary flex-shrink-0 disabled:opacity-30"
+                                />
+                                <div className="min-w-0">
+                                  <h4 className="font-black text-text-main text-sm truncate">{a.nama}</h4>
+                                  <p className="text-[10px] text-slate-500 truncate">{a.rombel_nama}</p>
+                                </div>
+                              </div>
                               <StatusBadge status={a.status} />
-                            </td>
-                            <td className="py-2 px-3">{a.jam_masuk || '-'}</td>
-                            <td className="py-2 px-3">{a.jam_tunggu || '-'}</td>
-                            <td className="py-2 px-3">{a.jam_pulang || '-'}</td>
-                            <td className="py-2 px-3">
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-2 text-center text-[10px] xs:text-xs text-slate-500 bg-slate-50/70 rounded-xl px-2 py-1.5 my-2">
+                              <div>
+                                <div className="text-[8px] xs:text-[9px] font-semibold text-slate-400 uppercase">
+                                  Masuk
+                                </div>
+                                <div className="font-bold text-slate-700">{a.jam_masuk || '-'}</div>
+                              </div>
+                              <div>
+                                <div className="text-[8px] xs:text-[9px] font-semibold text-slate-400 uppercase">
+                                  Tunggu
+                                </div>
+                                <div className="font-bold text-slate-700">{a.jam_tunggu || '-'}</div>
+                              </div>
+                              <div>
+                                <div className="text-[8px] xs:text-[9px] font-semibold text-slate-400 uppercase">
+                                  Pulang
+                                </div>
+                                <div className="font-bold text-slate-700">{a.jam_pulang || '-'}</div>
+                              </div>
+                            </div>
+
+                            <div className="w-full">
                               <AbsensiActions
                                 row={a}
                                 onCheckin={() => checkin(a.siswa_id)}
                                 onKet={setKeterangan}
                                 onPulang={() => pulangkan([a.siswa_id])}
+                                compact={true}
+                                disabled={isSchoolDay === false}
                               />
-                            </td>
-                          </tr>
+                            </div>
+                          </div>
                         ))}
-                      </tbody>
-                    </table>
-                    {filteredAbsensi.length === 0 && (
-                      <div className="text-center py-10 text-sm text-slate-400">Tidak ada siswa sesuai filter.</div>
-                    )}
-                  </div>
+                        {filteredAbsensi.length === 0 && (
+                          <div className="text-center py-10 text-sm text-slate-400">Tidak ada siswa sesuai filter.</div>
+                        )}
+                      </div>
+
+                      {/* Desktop List View (>= lg) */}
+                      <div className="hidden lg:block overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr>
+                              {['', 'Siswa', 'Rombel', 'Status', 'Masuk', 'Tunggu', 'Pulang', 'Aksi'].map((h) => (
+                                <th key={h} className="text-left py-2 px-3 bg-slate-50 text-slate-500 font-black">
+                                  {h}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {filteredAbsensi.map((a) => (
+                              <tr key={a.siswa_id}>
+                                <td className="py-2 px-3">
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedAbsensi.includes(a.siswa_id)}
+                                    onChange={() => toggleAbsensi(a.siswa_id)}
+                                    disabled={a.status !== 'Menunggu'}
+                                  />
+                                </td>
+                                <td className="py-2 px-3 font-black text-text-main">{a.nama}</td>
+                                <td className="py-2 px-3 text-slate-600">{a.rombel_nama}</td>
+                                <td className="py-2 px-3">
+                                  <StatusBadge status={a.status} />
+                                </td>
+                                <td className="py-2 px-3">{a.jam_masuk || '-'}</td>
+                                <td className="py-2 px-3">{a.jam_tunggu || '-'}</td>
+                                <td className="py-2 px-3">{a.jam_pulang || '-'}</td>
+                                <td className="py-2 px-3">
+                                  <AbsensiActions
+                                    row={a}
+                                    onCheckin={() => checkin(a.siswa_id)}
+                                    onKet={setKeterangan}
+                                    onPulang={() => pulangkan([a.siswa_id])}
+                                  />
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                        {filteredAbsensi.length === 0 && (
+                          <div className="text-center py-10 text-sm text-slate-400">Tidak ada siswa sesuai filter.</div>
+                        )}
+                      </div>
+                    </>
+                  )}
                 </>
               )}
             </div>
@@ -1115,7 +1312,9 @@ export default function GuruView({ user, toast, tab }) {
         </section>
       )}
       {activeTab === 'modulAjar' && <KegiatanMingguanTab user={user} toast={toast} />}
-      {historyFor && <HistoryModal siswa={historyFor} onClose={() => setHistoryFor(null)} />}
+      {historyFor && (
+        <HistoryModal siswa={historyFor} onClose={() => setHistoryFor(null)} onOpenDate={openFromHistory} />
+      )}
       {showTutupHariConfirm && (
         <ConfirmActionModal
           title="Tutup Hari Absensi"
@@ -1130,14 +1329,14 @@ export default function GuruView({ user, toast, tab }) {
       )}
       {ketModal && (
         <Modal title={`Keterangan ${ketModal.status}`} onClose={() => setKetModal(null)}>
-          <div className="space-y-4">
+          <div className="space-y-3">
             <div>
               <label className="label">Catatan (opsional)</label>
               <textarea
                 value={ketCatatan}
                 onChange={(e) => setKetCatatan(e.target.value)}
                 rows={3}
-                className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-primary/40"
                 placeholder="Tulis alasan izin/sakit/absen…"
               />
             </div>
@@ -1312,12 +1511,55 @@ export default function GuruView({ user, toast, tab }) {
               </div>
             )}
 
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100">
+              {classThemeExists ? (
+                <button
+                  onClick={hapusClassTheme}
+                  className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-red-200 bg-red-50 px-3 text-xs font-black text-red-600 transition-all hover:bg-red-100 active:scale-[0.98]"
+                >
+                  Hapus Tema
+                </button>
+              ) : (
+                <span />
+              )}
+              <div className="ml-auto flex gap-2">
+                <button onClick={() => setClassThemeOpen(false)} className="btn-secondary">
+                  Batal
+                </button>
+                <button onClick={saveClassTheme} disabled={!classThemeRombelId} className="btn">
+                  Simpan & Terapkan ke Kelas
+                </button>
+              </div>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {pulangConfirm && (
+        <Modal title="Konfirmasi Serah Terima" onClose={() => setPulangConfirm(null)}>
+          <div className="space-y-3">
+            <div>
+              <span className="text-xs font-black text-slate-400 uppercase block mb-1">
+                Siswa yang akan dipulangkan
+              </span>
+              <div className="space-y-1">
+                {pulangTargets.map((t) => (
+                  <div key={t.siswa_id} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-[13px]">
+                    <span className="font-bold text-text-main">{t.nama}</span>
+                    {t.penjemput_nama && <span className="text-slate-500"> - dijemput {t.penjemput_nama}</span>}
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm font-bold text-amber-800">
+              Pastikan anak sudah bertemu penjemput yang valid sebelum menekan Pulang.
+            </div>
             <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
-              <button onClick={() => setClassThemeOpen(false)} className="btn-secondary">
+              <button onClick={() => setPulangConfirm(null)} className="btn-secondary">
                 Batal
               </button>
-              <button onClick={saveClassTheme} disabled={!classThemeRombelId} className="btn">
-                Simpan & Terapkan ke Kelas
+              <button onClick={pulangNow} className="btn">
+                {pulangTargets.length > 1 ? `Pulangkan (${pulangTargets.length})` : 'Pulangkan'}
               </button>
             </div>
           </div>
