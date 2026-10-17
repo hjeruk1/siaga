@@ -21,3 +21,6 @@ backend/*-key.json
 *.key.json
 .workbuddy-ai/
 .eslintcache
+
+.freebuff/
+backend/*.db.bak*
