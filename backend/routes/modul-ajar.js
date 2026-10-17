@@ -348,11 +348,42 @@ router.put('/:id', auth(['admin', 'admin_cabang', 'kepsek', 'guru']), (req, res)
 });
 
 router.get('/focus-theme', auth(['admin', 'admin_cabang', 'kepsek', 'guru']), (req, res) => {
-  const { rombel_id, tanggal } = req.query;
-  if (!rombel_id || !tanggal) return res.status(400).json({ error: 'Rombel dan tanggal wajib' });
+  const { rombel_id, tanggal, start, end, bulan } = req.query;
+  if (!rombel_id) return res.status(400).json({ error: 'Rombel wajib' });
   const rombel = canUseRombel(req, res, rombel_id);
   if (!rombel) return;
 
+  // Mode rentang bulan/tanggal: kembalikan array tema untuk kalender Focus Theme.
+  let rangeStart = start;
+  let rangeEnd = end;
+  if (bulan && !rangeStart && !rangeEnd) {
+    const m = String(bulan).match(/^(\d{4})-(\d{2})$/);
+    if (!m) return res.status(400).json({ error: 'Format bulan tidak valid (YYYY-MM)' });
+    const y = Number(m[1]);
+    const mo = Number(m[2]);
+    const last = new Date(y, mo, 0).getDate();
+    rangeStart = `${m[1]}-${m[2]}-01`;
+    rangeEnd = `${m[1]}-${m[2]}-${String(last).padStart(2, '0')}`;
+  }
+  if (rangeStart || rangeEnd) {
+    if (!rangeStart || !rangeEnd) return res.status(400).json({ error: 'start dan end wajib bersama' });
+    const rows = db
+      .prepare(
+        `
+      SELECT ft.*,m.title AS modul_ajar_title
+      FROM focus_theme ft
+      LEFT JOIN modul_ajar m ON m.id=ft.modul_ajar_id
+      WHERE ft.rombel_id=? AND ft.tanggal>=? AND ft.tanggal<=?
+      ORDER BY ft.tanggal ASC
+    `
+      )
+      .all(rombel_id, rangeStart, rangeEnd);
+    const filtered = rows.filter((r) => Number(r.cabang_id) === Number(rombel.cabang_id));
+    return res.json(filtered.map(themeRow));
+  }
+
+  // Mode single tanggal (kompatibel lama).
+  if (!tanggal) return res.status(400).json({ error: 'Rombel dan tanggal wajib' });
   const row = db
     .prepare(
       `

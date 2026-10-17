@@ -192,7 +192,7 @@ export function Modal({ title, onClose, children, maxWidth = 'max-w-md', footer 
         {/* Footer opsional di luar area scroll. Dipakai modal panjang yang aksinya harus
             selalu terjangkau: `sticky bottom-0` di dalam container ber-padding tidak bisa
             rata ke bawah (tertinggal setinggi padding-bottom container). */}
-        {footer && <div className="flex-none border-t border-slate-100 bg-slate-50/70 px-3.5 py-2.5">{footer}</div>}
+        {footer && <div className="flex-none border-t border-slate-200 bg-slate-50/70 px-3.5 py-2.5">{footer}</div>}
       </div>
     </div>
   );

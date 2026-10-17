@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
+import FocusThemeCalendar from './guru/FocusThemeCalendar';
 import { ConfirmActionModal, Modal, CustomSelect } from '../components/Shared';
 import { todayWIB } from '../utils/date';
 import KegiatanMingguanTab from './KegiatanMingguanTab';
@@ -50,6 +51,8 @@ export default function GuruView({ user, toast, tab }) {
   const [ketCatatan, setKetCatatan] = useState('');
   const [sidebarExpanded, setSidebarExpanded] = useState(false);
   const [classThemeOpen, setClassThemeOpen] = useState(false);
+  const [classThemeCalendarOpen, setClassThemeCalendarOpen] = useState(false);
+  const [classThemeStep, setClassThemeStep] = useState(1);
   const [classThemeRombelId, setClassThemeRombelId] = useState('');
   const [classThemeExists, setClassThemeExists] = useState(false);
   const [classThemeForm, setClassThemeForm] = useState({
@@ -555,6 +558,36 @@ export default function GuruView({ user, toast, tab }) {
     };
   }, [classThemeOpen, classThemeRombelId, tanggal, user.cabang_id]);
 
+  async function saveClassThemeToNextDay() {
+    const title = classThemeForm.title.trim();
+    if (!title) {
+      toast('err', 'Judul Focus Theme wajib diisi');
+      return;
+    }
+    if (!classThemeRombelId) return;
+    // Urai sebagai UTC supaya penambahan hari tidak tergeser zona waktu
+    // (parsing lokal WIB + toISOString membuat "besok" malah jadi hari ini).
+    const d0 = new Date(tanggal + 'T00:00:00Z');
+    d0.setUTCDate(d0.getUTCDate() + 1);
+    const next = d0.toISOString().slice(0, 10);
+    try {
+      const payload = {
+        cabang_id: user.cabang_id,
+        rombel_id: classThemeRombelId,
+        tanggal: next,
+        modul_ajar_id: classThemeForm.modul_ajar_id || null,
+        title,
+        activity_summary: classThemeForm.activity_summary.trim(),
+        suggested_domains: themeDomains(classThemeForm.suggested_domains),
+        menu_makanan: classThemeForm.menu_makanan.trim()
+      };
+      await api.saveFocusTheme(payload);
+      toast('ok', `Tema disalin ke ${next}`);
+    } catch (e) {
+      toast('err', e.message);
+    }
+  }
+
   async function saveClassTheme() {
     const title = classThemeForm.title.trim();
     if (!title) {
@@ -595,7 +628,11 @@ export default function GuruView({ user, toast, tab }) {
 
   async function hapusClassTheme() {
     const judul = classThemeForm.title || 'tema ini';
-    if (!window.confirm(`Hapus Focus Theme "${judul}" untuk ${tanggal}? Laporan yang menunjuknya hanya dilepas temanya, isian lain tetap utuh.`))
+    if (
+      !window.confirm(
+        `Hapus Focus Theme "${judul}" untuk ${tanggal}? Laporan yang menunjuknya hanya dilepas temanya, isian lain tetap utuh.`
+      )
+    )
       return;
     try {
       await api.deleteFocusTheme({ rombel_id: classThemeRombelId, tanggal });
@@ -680,11 +717,23 @@ export default function GuruView({ user, toast, tab }) {
                     if (rombels.length > 0) {
                       setClassThemeRombelId(rombels[0].id);
                     }
+                    setClassThemeStep(1);
                     setClassThemeOpen(true);
                   }}
                   className="w-full h-10 rounded-xl bg-primary hover:bg-primary-hover text-white font-black text-xs transition-all active:scale-[0.98] flex items-center justify-center gap-1.5 shadow-sm"
                 >
                   🎯 Atur Tema & Kegiatan Kelas
+                </button>
+                <button
+                  onClick={() => {
+                    if (rombels.length > 0 && !classThemeRombelId) {
+                      setClassThemeRombelId(rombels[0].id);
+                    }
+                    setClassThemeCalendarOpen(true);
+                  }}
+                  className="w-full h-9 rounded-xl border border-primary/30 bg-white hover:bg-primary-container text-primary font-black text-xs transition-all active:scale-[0.98] flex items-center justify-center gap-1.5"
+                >
+                  📅 Kalender Tema Bulanan
                 </button>
               </div>
               <div className="space-y-2 overflow-y-auto pr-1 lg:flex-1 lg:min-h-0">
@@ -727,6 +776,14 @@ export default function GuruView({ user, toast, tab }) {
                         <div className="text-xs text-slate-500 truncate">
                           {r.rombel_nama} · {r.paket}
                         </div>
+                        {r.focus_theme_title ? (
+                          <div className="mt-1.5">
+                            <span className="inline-flex items-center gap-1 max-w-full px-2 py-0.5 rounded-full text-[10px] font-black text-primary bg-gradient-to-r from-primary-container to-white border border-primary/30 shadow-sm truncate">
+                              <span className="shrink-0">🎯</span>
+                              <span className="truncate">{r.focus_theme_title}</span>
+                            </span>
+                          </div>
+                        ) : null}
                         <div className="flex items-center justify-between mt-1">
                           {isSchoolDay === false ? (
                             <span className="text-[10px] font-black uppercase tracking-wide text-slate-400">Libur</span>
@@ -1352,8 +1409,58 @@ export default function GuruView({ user, toast, tab }) {
         </Modal>
       )}
       {classThemeOpen && (
-        <Modal title="Atur Tema & Kegiatan Kelas" onClose={() => setClassThemeOpen(false)}>
+        <Modal title="Atur Tema & Kegiatan Kelas" onClose={() => setClassThemeOpen(false)} footer={
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              {classThemeExists && (
+                <button onClick={hapusClassTheme} className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                  Hapus
+                </button>
+              )}
+            </div>
+            <div className="flex items-center gap-2 flex-wrap justify-end">
+              {classThemeStep === 2 && (
+                <button onClick={() => setClassThemeStep(1)} className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
+                  ← Kembali
+                </button>
+              )}
+              {classThemeStep === 1 && classThemeRombelId && (
+                <button onClick={() => setClassThemeStep(2)} disabled={!classThemeForm.title.trim()} className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg shadow-sm transition-all active:scale-[0.98]">
+                  Lanjut →
+                </button>
+              )}
+              {classThemeStep === 2 && (
+                <>
+                  <button onClick={saveClassThemeToNextDay} disabled={!classThemeRombelId || !classThemeForm.title.trim()} className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-slate-700 border border-slate-200 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors">
+                    Salin ke Besok
+                  </button>
+                  <button onClick={saveClassTheme} disabled={!classThemeRombelId} className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg shadow-sm transition-all active:scale-[0.98]">
+                    Simpan & Terapkan
+                  </button>
+                </>
+              )}
+              {classThemeStep === 1 && !classThemeRombelId && (
+                <button onClick={() => setClassThemeOpen(false)} className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
+                  Batal
+                </button>
+              )}
+            </div>
+          </div>
+        }>
           <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <div className={`flex items-center gap-2 px-2.5 py-1.5 rounded-full text-xs font-black transition-all ${classThemeStep === 1 ? 'bg-primary text-white shadow-sm' : 'bg-emerald-50 text-emerald-600'}`}>
+                <span className={`h-5 w-5 rounded-full flex items-center justify-center text-[10px] font-black ${classThemeStep === 1 ? 'bg-white/25 text-white' : 'bg-emerald-500 text-white'}`}>
+                  {classThemeStep === 1 ? '1' : '✓'}
+                </span>
+                Identitas
+              </div>
+              <div className="h-px flex-1 bg-slate-200" />
+              <div className={`flex items-center gap-2 px-2.5 py-1.5 rounded-full text-xs font-black transition-all ${classThemeStep === 2 ? 'bg-primary text-white shadow-sm' : 'bg-slate-100 text-slate-400'}`}>
+                <span className={`h-5 w-5 rounded-full flex items-center justify-center text-[10px] font-black ${classThemeStep === 2 ? 'bg-white/25 text-white' : 'bg-slate-200 text-slate-500'}`}>2</span>
+                Kegiatan
+              </div>
+            </div>
             <div>
               <label className="label">Pilih Rombel / Kelas</label>
               <CustomSelect
@@ -1372,138 +1479,147 @@ export default function GuruView({ user, toast, tab }) {
 
             {classThemeRombelId ? (
               <>
-                <div>
-                  <label className="label">Kegiatan Mingguan</label>
-                  <CustomSelect
-                    value={classThemeForm.modul_ajar_id || ''}
-                    onChange={(e) => {
-                      const id = e.target.value;
-                      const m = scopedClassModules.find((x) => String(x.id) === String(id));
-                      const domains = themeDomains(m?.suggested_domains).join(', ');
+                {classThemeStep === 1 && (
+                  <>
+                    <div>
+                      <label className="label">Kegiatan Mingguan</label>
+                      <CustomSelect
+                        value={classThemeForm.modul_ajar_id || ''}
+                        onChange={(e) => {
+                          const id = e.target.value;
+                          const m = scopedClassModules.find((x) => String(x.id) === String(id));
+                          const domains = themeDomains(m?.suggested_domains).join(', ');
 
-                      // Auto-fill all activities of the selected week day by default
-                      const norm = normalizeActivities(m?.suggested_activities);
-                      const dayActs = norm[classTodayDayName] || {
-                        opening: [],
-                        focus_theme: [],
-                        break: [],
-                        closing: []
-                      };
-                      const allActs = [
-                        ...dayActs.opening,
-                        ...dayActs.focus_theme,
-                        ...dayActs.break,
-                        ...dayActs.closing
-                      ];
-                      const activitySummary = allActs.map((a) => `- ${a}`).join('\n');
+                          // Auto-fill all activities of the selected week day by default
+                          const norm = normalizeActivities(m?.suggested_activities);
+                          const dayActs = norm[classTodayDayName] || {
+                            opening: [],
+                            focus_theme: [],
+                            break: [],
+                            closing: []
+                          };
+                          const allActs = [
+                            ...dayActs.opening,
+                            ...dayActs.focus_theme,
+                            ...dayActs.break,
+                            ...dayActs.closing
+                          ];
+                          const activitySummary = allActs.map((a) => `- ${a}`).join('\n');
 
-                      setClassThemeForm((f) => ({
-                        ...f,
-                        modul_ajar_id: id,
-                        title: m?.title || f.title || '',
-                        suggested_domains: domains || f.suggested_domains,
-                        activity_summary: activitySummary
-                      }));
-                    }}
-                    className="input w-full"
-                  >
-                    <option value="">Tanpa modul</option>
-                    {scopedClassModules.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.title} - {moduleScopeLabel(m)}
-                      </option>
-                    ))}
-                  </CustomSelect>
-                  {scopedClassModules.length === 0 && (
-                    <div className="mt-1 text-[11px] font-bold text-slate-400">
-                      Belum ada Focus Theme mingguan yang cocok untuk rombel, jenjang, dan paket kelas ini.
+                          setClassThemeForm((f) => ({
+                            ...f,
+                            modul_ajar_id: id,
+                            title: m?.title || f.title || '',
+                            suggested_domains: domains || f.suggested_domains,
+                            activity_summary: activitySummary
+                          }));
+                        }}
+                        className="input w-full"
+                      >
+                        <option value="">Tanpa modul</option>
+                        {scopedClassModules.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.title} - {moduleScopeLabel(m)}
+                          </option>
+                        ))}
+                      </CustomSelect>
+                      {scopedClassModules.length === 0 && (
+                        <div className="mt-1 text-[11px] font-bold text-slate-400">
+                          Belum ada Focus Theme mingguan yang cocok untuk rombel, jenjang, dan paket kelas ini.
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
 
-                <div>
-                  <label className="label">Judul Tema Hari Ini</label>
-                  <input
-                    value={classThemeForm.title}
-                    onChange={(e) => setClassThemeForm((f) => ({ ...f, title: e.target.value }))}
-                    autoComplete="off"
-                    className="input w-full"
-                    placeholder="Contoh: Membuat konten baik"
-                  />
-                </div>
-
-                <div>
-                  <label className="label">Menu Makanan Hari Ini</label>
-                  <input
-                    value={classThemeForm.menu_makanan}
-                    onChange={(e) => setClassThemeForm((f) => ({ ...f, menu_makanan: e.target.value }))}
-                    autoComplete="off"
-                    className="input w-full"
-                    placeholder="Contoh: Nasi kuning + ayam goreng"
-                  />
-                </div>
-
-                {classThemeForm.modul_ajar_id && (
-                  <div className="space-y-3 bg-slate-50 rounded-xl p-3 border border-slate-200">
-                    <div className="text-xs font-black text-slate-500 uppercase tracking-wider font-bold">
-                      Pilih Rangkaian Kegiatan ({classTodayDayName})
+                    <div>
+                      <label className="label">Judul Tema Hari Ini</label>
+                      <input
+                        value={classThemeForm.title}
+                        onChange={(e) => setClassThemeForm((f) => ({ ...f, title: e.target.value }))}
+                        autoComplete="off"
+                        className="input w-full"
+                        placeholder="Contoh: Membuat konten baik"
+                      />
                     </div>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      {Object.entries(sections).map(([sectionKey, sectionLabel]) => {
-                        const list = classSuggestedActivities[sectionKey] || [];
-                        if (list.length === 0) return null;
-                        return (
-                          <div key={sectionKey} className="bg-white rounded-lg p-2.5 border border-slate-100">
-                            <div className="mb-2 text-[10px] font-black uppercase text-slate-400 font-bold">
-                              {sectionLabel}
-                            </div>
-                            <div className="space-y-1">
-                              {list.map((act, idx) => {
-                                const isSelected = activityLinesFromText(classThemeForm.activity_summary).includes(act);
-                                return (
-                                  <label
-                                    key={idx}
-                                    className="flex items-start gap-2 cursor-pointer text-xs font-semibold text-slate-700"
-                                  >
-                                    <input
-                                      type="checkbox"
-                                      checked={isSelected}
-                                      onChange={(e) => handleClassActivityCheckboxChange(act, e.target.checked)}
-                                      className="mt-0.5 h-3.5 w-3.5 rounded border-slate-300 text-primary focus:ring-primary/45"
-                                    />
-                                    <span className="leading-snug">{act}</span>
-                                  </label>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        );
-                      })}
+
+                    <div>
+                      <label className="label">Menu Makanan Hari Ini</label>
+                      <input
+                        value={classThemeForm.menu_makanan}
+                        onChange={(e) => setClassThemeForm((f) => ({ ...f, menu_makanan: e.target.value }))}
+                        autoComplete="off"
+                        className="input w-full"
+                        placeholder="Contoh: Nasi kuning + ayam goreng"
+                      />
                     </div>
-                  </div>
+                  </>
                 )}
+                {classThemeStep === 2 && (
+                  <>
+                    {classThemeForm.modul_ajar_id && (
+                      <div className="space-y-3 bg-slate-50 rounded-xl p-3 border border-slate-200">
+                        <div className="text-xs font-black text-slate-500 uppercase tracking-wider font-bold">
+                          Pilih Rangkaian Kegiatan ({classTodayDayName})
+                        </div>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          {Object.entries(sections).map(([sectionKey, sectionLabel]) => {
+                            const list = classSuggestedActivities[sectionKey] || [];
+                            if (list.length === 0) return null;
+                            return (
+                              <div key={sectionKey} className="bg-white rounded-lg p-2.5 border border-slate-100">
+                                <div className="mb-2 text-[10px] font-black uppercase text-slate-400 font-bold">
+                                  {sectionLabel}
+                                </div>
+                                <div className="space-y-1">
+                                  {list.map((act, idx) => {
+                                    const isSelected = activityLinesFromText(classThemeForm.activity_summary).includes(
+                                      act
+                                    );
+                                    return (
+                                      <label
+                                        key={idx}
+                                        className="flex items-start gap-2 cursor-pointer text-xs font-semibold text-slate-700"
+                                      >
+                                        <input
+                                          type="checkbox"
+                                          checked={isSelected}
+                                          onChange={(e) => handleClassActivityCheckboxChange(act, e.target.checked)}
+                                          className="mt-0.5 h-3.5 w-3.5 rounded border-slate-300 text-primary focus:ring-primary/45"
+                                        />
+                                        <span className="leading-snug">{act}</span>
+                                      </label>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
 
-                <div>
-                  <label className="label">Ringkasan Aktivitas</label>
-                  <textarea
-                    value={classThemeForm.activity_summary}
-                    onChange={(e) => setClassThemeForm((f) => ({ ...f, activity_summary: e.target.value }))}
-                    rows={3}
-                    className="w-full resize-none rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
-                    placeholder="Daftar kegiatan harian (satu per baris)..."
-                  />
-                </div>
+                    <div>
+                      <label className="label">Ringkasan Aktivitas</label>
+                      <textarea
+                        value={classThemeForm.activity_summary}
+                        onChange={(e) => setClassThemeForm((f) => ({ ...f, activity_summary: e.target.value }))}
+                        rows={3}
+                        className="w-full resize-none rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                        placeholder="Daftar kegiatan harian (satu per baris)..."
+                      />
+                    </div>
 
-                <div>
-                  <label className="label">Domain Observasi yang Disarankan</label>
-                  <input
-                    value={classThemeForm.suggested_domains}
-                    onChange={(e) => setClassThemeForm((f) => ({ ...f, suggested_domains: e.target.value }))}
-                    autoComplete="off"
-                    className="input w-full"
-                    placeholder="Literasi, Numerasi, dll"
-                  />
-                </div>
+                    <div>
+                      <label className="label">Domain Observasi yang Disarankan</label>
+                      <input
+                        value={classThemeForm.suggested_domains}
+                        onChange={(e) => setClassThemeForm((f) => ({ ...f, suggested_domains: e.target.value }))}
+                        autoComplete="off"
+                        className="input w-full"
+                        placeholder="Literasi, Numerasi, dll"
+                      />
+                    </div>
+                  </>
+                )}
               </>
             ) : (
               <div className="text-center py-6 text-slate-400 text-xs italic">
@@ -1511,28 +1627,24 @@ export default function GuruView({ user, toast, tab }) {
               </div>
             )}
 
-            <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100">
-              {classThemeExists ? (
-                <button
-                  onClick={hapusClassTheme}
-                  className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-red-200 bg-red-50 px-3 text-xs font-black text-red-600 transition-all hover:bg-red-100 active:scale-[0.98]"
-                >
-                  Hapus Tema
-                </button>
-              ) : (
-                <span />
-              )}
-              <div className="ml-auto flex gap-2">
-                <button onClick={() => setClassThemeOpen(false)} className="btn-secondary">
-                  Batal
-                </button>
-                <button onClick={saveClassTheme} disabled={!classThemeRombelId} className="btn">
-                  Simpan & Terapkan ke Kelas
-                </button>
-              </div>
-            </div>
-          </div>
+                      </div>
         </Modal>
+      )}
+
+      {classThemeCalendarOpen && (
+        <FocusThemeCalendar
+          open={classThemeCalendarOpen}
+          onClose={() => setClassThemeCalendarOpen(false)}
+          rombelId={classThemeRombelId}
+          tanggal={tanggal}
+          onSelectDay={(ds) => {
+            setTanggal(ds);
+            setSelected(null);
+            setDetail(null);
+            setClassThemeStep(1);
+            setClassThemeOpen(true);
+          }}
+        />
       )}
 
       {pulangConfirm && (
