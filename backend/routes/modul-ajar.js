@@ -1,7 +1,7 @@
 const router = require('express').Router();
 const db = require('../db');
 const auth = require('../middleware/auth');
-const { nowUtc, requireCabang, audit } = require('../utils/workflow');
+const { nowUtc, requireCabang, audit, isSchoolDay } = require('../utils/workflow');
 const multer = require('multer');
 const mammoth = require('mammoth');
 const { GoogleGenAI } = require('@google/genai');
@@ -380,6 +380,12 @@ router.post('/focus-theme', auth(['guru', 'admin', 'admin_cabang', 'kepsek']), (
     return res.status(400).json({ error: 'Format tanggal tidak valid (wajib YYYY-MM-DD)' });
   }
 
+  // Tema untuk hari libur/akhir pekan tidak akan pernah dipakai daily record
+  // (daily record sendiri diblokir di hari tersebut) — cegah data sampah.
+  if (!isSchoolDay(d.tanggal, cabangId)) {
+    return res.status(400).json({ error: 'Hari libur/akhir pekan, tidak bisa mengatur Focus Theme' });
+  }
+
   if (!checkGuruModulAjarPermission(req, res, null, d.rombel_id)) return;
 
   const rombel = canUseRombel(req, res, d.rombel_id, cabangId);
@@ -438,6 +444,28 @@ router.post('/focus-theme', auth(['guru', 'admin', 'admin_cabang', 'kepsek']), (
     );
   audit(req.user, 'create', 'focus_theme', r.lastInsertRowid, { cabang_id: cabangId, after: d });
   res.json({ id: r.lastInsertRowid, action: 'created' });
+});
+
+// Hapus tema yang salah buat. Laporan yang sudah menunjuk tema ini tidak ikut
+// terhapus — hanya dilepas (focus_theme_id=NULL) supaya tidak melanggar foreign
+// key; isian lain laporan tetap utuh dan bisa diberi tema baru.
+router.delete('/focus-theme', auth(['guru', 'admin', 'admin_cabang', 'kepsek']), (req, res) => {
+  const { rombel_id, tanggal } = req.query;
+  if (!rombel_id || !tanggal) return res.status(400).json({ error: 'Rombel dan tanggal wajib' });
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(tanggal))) {
+    return res.status(400).json({ error: 'Format tanggal tidak valid (wajib YYYY-MM-DD)' });
+  }
+  if (req.user.role === 'guru' && !checkGuruModulAjarPermission(req, res, null, rombel_id)) return;
+  const rombel = canUseRombel(req, res, rombel_id);
+  if (!rombel) return;
+
+  const row = db.prepare('SELECT * FROM focus_theme WHERE rombel_id=? AND tanggal=?').get(rombel_id, tanggal);
+  if (!row) return res.status(404).json({ error: 'Focus Theme tidak ditemukan' });
+
+  db.prepare('UPDATE laporan_harian SET focus_theme_id=NULL WHERE focus_theme_id=?').run(row.id);
+  db.prepare('DELETE FROM focus_theme WHERE id=?').run(row.id);
+  audit(req.user, 'delete', 'focus_theme', row.id, { cabang_id: row.cabang_id, before: row });
+  res.json({ success: true });
 });
 
 // POST /api/modul-ajar/parse-file

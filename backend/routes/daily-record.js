@@ -370,6 +370,9 @@ router.post('/:id/publish', auth(['guru', 'admin', 'admin_cabang']), (req, res) 
   if (!requireActiveCabang(req, res, l.cabang_id)) return;
   if (!isSchoolDay(l.tanggal, l.cabang_id))
     return res.status(400).json({ error: 'Hari libur, tidak bisa publish daily record' });
+  // Tanggal yang belum berjalan tidak mungkin punya observasi nyata.
+  if (l.tanggal > todayWIB())
+    return res.status(400).json({ error: 'Tanggal laporan belum berjalan, tidak bisa dipublish' });
   const completionError = dailyCompletionError(l);
   if (completionError) return res.status(400).json({ error: completionError });
   const first = l.status !== 'published';
