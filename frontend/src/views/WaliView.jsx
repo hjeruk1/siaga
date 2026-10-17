@@ -10,6 +10,8 @@ import CatatanTimeline from './wali/CatatanTimeline.jsx';
 import Kehadiran from './wali/Kehadiran.jsx';
 import Tagihan from './wali/Tagihan.jsx';
 import Laporan from './wali/Laporan.jsx';
+import { PushCard } from './wali/PushCard.jsx';
+import { InstallBanner } from './wali/InstallBanner.jsx';
 import { SegmentedTabs, Sheet } from './wali/ui.jsx';
 import {
   bulanIni,
@@ -41,7 +43,12 @@ export default function WaliView({ user, toast }) {
   const [comment, setComment] = useState('');
   const [mengirim, setMengirim] = useState(false);
   const [notif, setNotif] = useState([]);
-  const [activeTab, setActiveTab] = useState('catatan');
+  // Tab bisa datang dari URL (notifikasi push, shortcut manifest) supaya
+  // orang tua langsung mendarat di bagian yang dimaksud.
+  const [activeTab, setActiveTab] = useState(() => {
+    const t = new URLSearchParams(window.location.search).get('tab');
+    return ['catatan', 'kehadiran', 'tagihan', 'laporan'].includes(t) ? t : 'catatan';
+  });
   const [billing, setBilling] = useState(null);
   const [loadingBilling, setLoadingBilling] = useState(false);
   const [rekap, setRekap] = useState(null);
@@ -226,8 +233,8 @@ export default function WaliView({ user, toast }) {
           t.id === 'tagihan' && ringkasTag.jumlahBelum > 0
             ? ringkasTag.jumlahBelum
             : t.id === 'catatan' && unread > 0
-            ? unread
-            : undefined
+              ? unread
+              : undefined
       })),
     [ringkasTag.jumlahBelum, unread]
   );
@@ -259,127 +266,138 @@ export default function WaliView({ user, toast }) {
       />
       <div className="relative mx-auto w-full max-w-6xl space-y-4 p-4 sm:p-6">
         <HeroAnak
-        user={user}
-        siswa={siswa}
-        selected={selected}
-        rekap={rekap}
-        ringkas={ringkas}
-        statusHariIni={hariIni}
-        sapaan={sapaan}
-        unread={unread}
-        onSelect={setSelected}
-        onOpenKabar={() => setKabarOpen(true)}
-        muatKehadiran={loadingRekap}
-        peta={peta}
-        tagihanRingkas={ringkasTag}
-        catatanTerakhir={catatanTerakhir}
-      />
+          user={user}
+          siswa={siswa}
+          selected={selected}
+          rekap={rekap}
+          ringkas={ringkas}
+          statusHariIni={hariIni}
+          sapaan={sapaan}
+          unread={unread}
+          onSelect={setSelected}
+          onOpenKabar={() => setKabarOpen(true)}
+          muatKehadiran={loadingRekap}
+          peta={peta}
+          tagihanRingkas={ringkasTag}
+          catatanTerakhir={catatanTerakhir}
+        />
 
-      <SegmentedTabs tabs={tabs} value={activeTab} onChange={setActiveTab} ariaLabel="Bagian portal wali" />
+        <InstallBanner />
 
-      {activeTab === 'catatan' ? (
-        <div className="space-y-4">
-          <HariIni
+        <SegmentedTabs tabs={tabs} value={activeTab} onChange={setActiveTab} ariaLabel="Bagian portal wali" />
+
+        {activeTab === 'catatan' ? (
+          <div className="space-y-4">
+            <HariIni
+              siswa={selected}
+              hariIni={hariIni}
+              todayInfo={null}
+              catatanHariIni={catatanHariIni}
+              memuat={loadingRekap && !rekap}
+              galat={null}
+              onMuatUlang={() => loadRekap(bulan)}
+              komentar={comment}
+              setKomentar={setComment}
+              onKirimKomentar={send}
+              mengirim={mengirim}
+            />
+            <CatatanTimeline
+              riwayat={history}
+              detail={detail}
+              pratinjau={catatanTerakhir}
+              memuat={false}
+              galat={null}
+              onMuatUlang={() => {
+                if (selected)
+                  api
+                    .dailyHistory(selected.id, historyLimit)
+                    .then(setHistory)
+                    .catch(() => {});
+              }}
+              onBuka={(r) => open(r.id)}
+              onTutupDetail={() => setDetail(null)}
+              komentar={comment}
+              setKomentar={setComment}
+              onKirimKomentar={send}
+              mengirim={mengirim}
+              onMuatLagi={muatCatatanLagi}
+              bisaMuatLagi={bisaMuatLagi}
+              memuatLagi={memuatLagi}
+            />
+          </div>
+        ) : null}
+
+        {activeTab === 'kehadiran' ? (
+          <Kehadiran
             siswa={selected}
-            hariIni={hariIni}
-            todayInfo={null}
-            catatanHariIni={catatanHariIni}
-            memuat={loadingRekap && !rekap}
+            rekap={rekap}
+            bulan={bulan}
+            onGantiBulan={setBulan}
+            memuat={loadingRekap}
             galat={null}
             onMuatUlang={() => loadRekap(bulan)}
-            komentar={comment}
-            setKomentar={setComment}
-            onKirimKomentar={send}
-            mengirim={mengirim}
+            onBukaLaporan={() => setActiveTab('laporan')}
           />
-          <CatatanTimeline
-            riwayat={history}
-            detail={detail}
-            pratinjau={catatanTerakhir}
-            memuat={false}
+        ) : null}
+
+        {activeTab === 'tagihan' ? (
+          <Tagihan
+            siswa={selected}
+            billing={billing}
+            memuat={loadingBilling}
             galat={null}
-            onMuatUlang={() => {
-              if (selected) api.dailyHistory(selected.id, historyLimit).then(setHistory).catch(() => {});
-            }}
-            onBuka={(r) => open(r.id)}
-            onTutupDetail={() => setDetail(null)}
-            komentar={comment}
-            setKomentar={setComment}
-            onKirimKomentar={send}
-            mengirim={mengirim}
-            onMuatLagi={muatCatatanLagi}
-            bisaMuatLagi={bisaMuatLagi}
-            memuatLagi={memuatLagi}
+            onMuatUlang={() => selected && loadBilling(selected.id)}
+            toast={toast}
           />
-        </div>
-      ) : null}
+        ) : null}
 
-      {activeTab === 'kehadiran' ? (
-        <Kehadiran
-          siswa={selected}
-          rekap={rekap}
-          bulan={bulan}
-          onGantiBulan={setBulan}
-          memuat={loadingRekap}
-          galat={null}
-          onMuatUlang={() => loadRekap(bulan)}
-          onBukaLaporan={() => setActiveTab('laporan')}
-        />
-      ) : null}
+        {activeTab === 'laporan' ? (
+          <Laporan
+            siswa={selected}
+            bulan={bulan}
+            onGantiBulan={setBulan}
+            rekap={rekap}
+            memuat={loadingRekap}
+            toast={toast}
+          />
+        ) : null}
 
-      {activeTab === 'tagihan' ? (
-        <Tagihan
-          siswa={selected}
-          billing={billing}
-          memuat={loadingBilling}
-          galat={null}
-          onMuatUlang={() => selected && loadBilling(selected.id)}
-          toast={toast}
-        />
-      ) : null}
-
-      {activeTab === 'laporan' ? (
-        <Laporan
-          siswa={selected}
-          bulan={bulan}
-          onGantiBulan={setBulan}
-          rekap={rekap}
-          memuat={loadingRekap}
-          toast={toast}
-        />
-      ) : null}
-
-      <Sheet
-        open={kabarOpen}
-        onClose={() => setKabarOpen(false)}
-        title="Kabar terbaru"
-        subtitle={selected ? `Untuk ${namaPanggilan(selected)}` : 'Notifikasi keluarga'}
-      >
-        {notif.length === 0 ? (
-          <div className="py-8 text-center text-xs font-semibold text-slate-400">Belum ada kabar.</div>
-        ) : (
-          <ul className="space-y-2">
-            {notif.slice(0, 30).map((n) => (
-              <li key={n.id}>
-                <button
-                  type="button"
-                  onClick={() => openFromNotif(n)}
-                  className={`w-full rounded-2xl border p-3 text-left transition-colors duration-200 ${
-                    n.read_at ? 'border-slate-200 bg-slate-50 hover:bg-slate-100' : 'border-primary/20 bg-primary-container hover:border-primary/30'
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="text-sm font-black text-text-main">{n.title}</div>
-                      <div className="mt-0.5 text-xs text-slate-500">{n.body || n.tipe}</div>
+        <Sheet
+          open={kabarOpen}
+          onClose={() => setKabarOpen(false)}
+          title="Kabar terbaru"
+          subtitle={selected ? `Untuk ${namaPanggilan(selected)}` : 'Notifikasi keluarga'}
+        >
+          <div className="mb-3">
+            <PushCard toast={toast} />
+          </div>
+          {notif.length === 0 ? (
+            <div className="py-8 text-center text-xs font-semibold text-slate-400">Belum ada kabar.</div>
+          ) : (
+            <ul className="space-y-2">
+              {notif.slice(0, 30).map((n) => (
+                <li key={n.id}>
+                  <button
+                    type="button"
+                    onClick={() => openFromNotif(n)}
+                    className={`w-full rounded-2xl border p-3 text-left transition-colors duration-200 ${
+                      n.read_at
+                        ? 'border-slate-200 bg-slate-50 hover:bg-slate-100'
+                        : 'border-primary/20 bg-primary-container hover:border-primary/30'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="text-sm font-black text-text-main">{n.title}</div>
+                        <div className="mt-0.5 text-xs text-slate-500">{n.body || n.tipe}</div>
+                      </div>
+                      {!n.read_at ? <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-primary" /> : null}
                     </div>
-                    {!n.read_at ? <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-primary" /> : null}
-                  </div>
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </Sheet>
       </div>
     </div>

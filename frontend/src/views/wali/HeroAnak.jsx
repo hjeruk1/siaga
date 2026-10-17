@@ -156,6 +156,7 @@ export default function HeroAnak({
           <button
             type="button"
             onClick={onOpenKabar}
+            aria-label="Kabar terbaru"
             className="relative inline-flex h-10 shrink-0 items-center gap-2 rounded-xl border border-white/25 bg-white/15 px-3 text-xs font-black text-white backdrop-blur-sm transition-colors hover:bg-white/25 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
           >
             <Bell className="h-4 w-4" aria-hidden="true" />

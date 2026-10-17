@@ -56,9 +56,12 @@ app.use((req, res, next) => {
   res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
   if (process.env.NODE_ENV === 'production') {
     res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    // Push service browser (FCM untuk Chrome/Edge, Mozilla untuk Firefox,
+    // Apple untuk Safari) harus boleh dihubungi browser saat pushManager
+    // .subscribe() — kalau tidak, notifikasi push gagal senyap di produksi.
     res.setHeader(
       'Content-Security-Policy',
-      "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+      "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self' 'unsafe-inline'; connect-src 'self' https://fcm.googleapis.com https://updates.push.services.mozilla.com https://web.push.apple.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
     );
   }
   next();
@@ -188,6 +191,7 @@ app.use('/api/daily-record', require('./routes/daily-record'));
 app.use('/api/notifikasi', require('./routes/notifikasi'));
 app.use('/api/billing', require('./routes/billing'));
 app.use('/api/rekap', require('./routes/rekap'));
+app.use('/api/push', require('./routes/push'));
 
 // 404 JSON untuk endpoint API yang tidak dikenal. Tanpa ini Express mengirim
 // halaman HTML default, yang membingungkan klien API.

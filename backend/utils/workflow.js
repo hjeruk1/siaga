@@ -182,6 +182,28 @@ function notify(recipientId, tipe, title, body, entityType, entityId, cabangId) 
     `INSERT INTO notifikasi(recipient_pengguna_id,tipe,title,body,entity_type,entity_id,cabang_id,created_at)
     VALUES(?,?,?,?,?,?,?,?)`
   ).run(recipientId, tipe, title, body || null, entityType || null, entityId || null, cabangId || null, nowUtc());
+  // Notifikasi in-app + push jalan beriringan. Push bersifat fire-and-forget:
+  // kalau VAPID belum diset atau perangkat mati, notifikasi di aplikasi tetap
+  // tersimpan dan push gagal tanpa mengganggu siapa pun.
+  try {
+    const { pushAsync } = require('./push');
+    pushAsync(recipientId, {
+      title,
+      body: body || 'Ada pembaruan baru di SIAGA.',
+      tag: `${tipe}-${entityId || recipientId}`,
+      url: pushUrl(tipe)
+    });
+  } catch {
+    // push.js opsional; kalau modul bermasalah, notifikasi in-app tetap jalan.
+  }
+}
+
+// Tujuan saat notifikasi diklik: orang tua selalu dibawa ke portal wali pada
+// tab yang berkaitan dengan isinya (catatan/tagihan), bukan beranda umum.
+function pushUrl(tipe) {
+  if (['payment_verified', 'invoice_issued'].includes(tipe)) return '/?view=wali&tab=tagihan';
+  if (['daily_published', 'guru_reply'].includes(tipe)) return '/?view=wali&tab=catatan';
+  return '/';
 }
 
 function nextSequence(key) {
