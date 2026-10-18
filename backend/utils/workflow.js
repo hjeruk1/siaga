@@ -34,7 +34,22 @@ function monthKey(tanggal = todayWIB()) {
 function canAccessCabang(user, cabangId) {
   if (!user) return false;
   if (user.role === 'admin') return true;
-  return Number(user.cabang_id) === Number(cabangId);
+  if (Number(user.cabang_id) === Number(cabangId)) return true;
+  // Wali tidak punya staff_profile, jadi cabang_id-nya selalu NULL. Mereka
+  // tetap boleh bertransaksi di cabang tempat anaknya bersekolah — kalau tidak,
+  // semua rute wali yang melewati requireActiveCabang pasti 403.
+  if (user.role === 'wali') {
+    return !!db
+      .prepare(
+        `SELECT 1
+         FROM wali_siswa ws
+         JOIN siswa_enrollment se ON se.siswa_id=ws.siswa_id AND se.status='aktif'
+         WHERE ws.wali_pengguna_id=? AND ws.aktif=1 AND se.cabang_id=?
+         LIMIT 1`
+      )
+      .get(user.id, cabangId);
+  }
+  return false;
 }
 
 function requireCabang(req, res, cabangId) {

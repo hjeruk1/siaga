@@ -1,8 +1,10 @@
 // Tab Tagihan: ringkasan, daftar tagihan aktif, invoice, riwayat pembayaran,
-// dan tautan WhatsApp untuk berbagi kuitansi.
+// konfirmasi pembayaran (wali kirim bukti transfer), dan tautan WhatsApp untuk
+// berbagi kuitansi.
 import { useState } from 'react';
-import { CreditCard, Download, MessageCircle, Receipt } from 'lucide-react';
+import { CreditCard, Download, MessageCircle, Receipt, Upload } from 'lucide-react';
 import { Card, CopyButton, EmptyState, ErrorState, InfoNote, Pill, SectionTitle, Skeleton } from './ui.jsx';
+import { KonfirmasiBayarModal, StatusKlaim } from './KonfirmasiBayarModal.jsx';
 import {
   labelPeriode,
   ringkasTagihan,
@@ -17,6 +19,7 @@ import {
 
 export default function Tagihan({ siswa, billing, memuat = false, galat, onMuatUlang, toast }) {
   const [tab, setTab] = useState('tagihan');
+  const [konfirmasiOpen, setKonfirmasiOpen] = useState(false);
   const ringkas = ringkasTagihan(billing?.tagihan || []);
   const terbayar = totalTerbayar(billing?.pembayaran || []);
 
@@ -39,7 +42,7 @@ export default function Tagihan({ siswa, billing, memuat = false, galat, onMuatU
             <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-amber-50 text-amber-600">
               <Receipt className="h-5 w-5" aria-hidden="true" />
             </span>
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">Tagihan tertunda</div>
               <div className="mt-0.5 text-2xl font-black tabular-nums text-amber-600">{rupiah(ringkas.totalSisa)}</div>
               <p className="text-[11px] font-semibold text-slate-500">
@@ -47,6 +50,16 @@ export default function Tagihan({ siswa, billing, memuat = false, galat, onMuatU
                 {ringkas.jumlahLunas ? ` • ${ringkas.jumlahLunas} lunas` : ''}
               </p>
             </div>
+            {ringkas.jumlahBelum > 0 ? (
+              <button
+                type="button"
+                onClick={() => setKonfirmasiOpen(true)}
+                className="flex shrink-0 items-center gap-1.5 rounded-xl bg-primary px-3.5 py-2.5 text-xs font-black text-white shadow-sm transition-all hover:bg-primary-hover active:scale-[0.98]"
+              >
+                <Upload className="h-3.5 w-3.5" aria-hidden="true" />
+                Konfirmasi Bayar
+              </button>
+            ) : null}
           </div>
         </Card>
         <Card className="relative overflow-hidden p-4">
@@ -261,6 +274,19 @@ export default function Tagihan({ siswa, billing, memuat = false, galat, onMuatU
       <InfoNote>
         Nomor WhatsApp guru kelas ada di hero. Kuitansi yang sudah terverifikasi dapat diunduh dan dibagikan ke keluarga.
       </InfoNote>
+
+      <StatusKlaim pembayaran={billing?.pembayaran} />
+
+      <KonfirmasiBayarModal
+        open={konfirmasiOpen}
+        onClose={() => setKonfirmasiOpen(false)}
+        siswaId={siswa?.id}
+        billing={billing}
+        onSukses={() => {
+          toast?.('ok', 'Konfirmasi terkirim. Anda akan dinotifikasi setelah diverifikasi.');
+          onMuatUlang?.();
+        }}
+      />
     </div>
   );
 }

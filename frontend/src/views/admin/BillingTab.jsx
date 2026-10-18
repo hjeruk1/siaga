@@ -18,6 +18,7 @@ import {
   ChevronDown,
   Clock,
   CreditCard,
+  FileImage,
   FilePenLine,
   FilePlus,
   FileText,
@@ -1302,8 +1303,17 @@ export default function BillingTab({ user, toast }) {
                             className="hover:bg-slate-100 text-slate-600"
                           />
                         )}
-                        {p.status === 'pending_verification' && user.role === 'admin' && (
+                        {p.status === 'pending_verification' && ['admin', 'admin_cabang'].includes(user.role) && (
                           <>
+                            {p.bukti_path && (
+                              <IconButton
+                                icon={FileImage}
+                                label={`Lihat bukti pembayaran ${p.siswa_nama}`}
+                                onClick={() => window.open(p.bukti_path, '_blank', 'noopener')}
+                                size="sm"
+                                className="hover:bg-slate-100 text-slate-600"
+                              />
+                            )}
                             <IconButton
                               icon={CheckCircle2}
                               label={`Verifikasi pembayaran ${p.siswa_nama}`}
@@ -1431,7 +1441,7 @@ export default function BillingTab({ user, toast }) {
                             <FileText className="w-3.5 h-3.5" /> PDF
                           </button>
                         )}
-                        {p.status === 'pending_verification' && user.role === 'admin' && (
+                        {p.status === 'pending_verification' && ['admin', 'admin_cabang'].includes(user.role) && (
                           <>
                             <button
                               type="button"

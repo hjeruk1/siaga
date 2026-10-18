@@ -57,18 +57,36 @@ router.get('/:folder/:filename', auth.media(), (req, res) => {
     if (staff) {
       if (!canAccessStaffPhoto(req.user, staff)) return res.status(403).json({ error: 'Akses media ditolak' });
     } else {
-      const report = db
+      // Bukti pembayaran dari wali: hanya wali pemilik siswa + staff satu
+      // cabang (bendahara/kepala sekolah/guru) yang boleh melihat.
+      const bukti = db
         .prepare(
-          `
+          `SELECT p.id,p.siswa_id,p.cabang_id,p.status
+         FROM pembayaran p WHERE p.bukti_path=?`
+        )
+        .get(url);
+      if (bukti) {
+        const boleh =
+          req.user.role === 'wali'
+            ? canWaliAccessSiswa(req.user, bukti.siswa_id)
+            : req.user.role === 'admin'
+              ? true
+              : Number(req.user.cabang_id) === Number(bukti.cabang_id);
+        if (!boleh) return res.status(403).json({ error: 'Akses media ditolak' });
+      } else {
+        const report = db
+          .prepare(
+            `
         SELECT l.siswa_id,l.tanggal,l.status
         FROM laporan_attachment a
         JOIN laporan_harian l ON l.id=a.laporan_id
         WHERE a.url=?
       `
-        )
-        .get(url);
-      if (!report || !canAccessReport(req.user, report)) {
-        return res.status(403).json({ error: 'Akses media ditolak' });
+          )
+          .get(url);
+        if (!report || !canAccessReport(req.user, report)) {
+          return res.status(403).json({ error: 'Akses media ditolak' });
+        }
       }
     }
   }

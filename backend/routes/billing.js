@@ -14,8 +14,12 @@ const {
   requireActiveCabang,
   audit,
   canAccessSiswa,
+  canWaliAccessSiswa,
+  rejectFutureTanggal,
   notify
 } = require('../utils/workflow');
+const { uploadImage, ensureDir } = require('../utils/image-upload');
+const sharp = require('sharp');
 const PDFDocument = require('pdfkit');
 const crypto = require('crypto');
 const SECRET = process.env.JWT_SECRET || 'siaga-dev';
@@ -957,9 +961,14 @@ router.post('/pembayaran', auth(['admin', 'admin_cabang']), validateBody(pembaya
   }
 });
 
-router.post('/pembayaran/:id/verify', auth(['admin']), (req, res) => {
+router.post('/pembayaran/:id/verify', auth(['admin', 'admin_cabang']), (req, res) => {
   const p = db.prepare('SELECT * FROM pembayaran WHERE id=?').get(req.params.id);
   if (!p) return res.status(404).json({ error: 'Pembayaran tidak ditemukan' });
+  // Klaim datang dari wali, yang mengetahuinya di tingkat cabang: admin_cabang
+  // adalah "bendahara cabang" — dia menerima notifikasi, jadi harus bisa
+  // menindaklanjuti, tetapi hanya untuk cabangnya sendiri.
+  if (req.user.role === 'admin_cabang' && Number(req.user.cabang_id) !== Number(p.cabang_id))
+    return res.status(403).json({ error: 'Akses cabang ditolak' });
   if (p.status !== 'pending_verification') return res.status(400).json({ error: 'Pembayaran bukan pending' });
   const cabang = db.prepare('SELECT kode FROM cabang WHERE id=?').get(p.cabang_id);
   const receiptNo = `TP-${cabang.kode}-${schoolYearForDate(p.tanggal_bayar).slice(0, 4)}-${String(nextSequence(`receipt:${p.cabang_id}:${schoolYearForDate(p.tanggal_bayar)}`)).padStart(6, '0')}`;
@@ -996,9 +1005,11 @@ router.post('/pembayaran/:id/verify', auth(['admin']), (req, res) => {
   res.json({ success: true, receipt_no: receiptNo });
 });
 
-router.post('/pembayaran/:id/reject', auth(['admin']), (req, res) => {
+router.post('/pembayaran/:id/reject', auth(['admin', 'admin_cabang']), (req, res) => {
   const p = db.prepare('SELECT * FROM pembayaran WHERE id=?').get(req.params.id);
   if (!p) return res.status(404).json({ error: 'Pembayaran tidak ditemukan' });
+  if (req.user.role === 'admin_cabang' && Number(req.user.cabang_id) !== Number(p.cabang_id))
+    return res.status(403).json({ error: 'Akses cabang ditolak' });
   if (p.status !== 'pending_verification') return res.status(400).json({ error: 'Pembayaran bukan pending' });
   const reason = String(req.body?.reason || '').trim();
   if (!reason) return res.status(400).json({ error: 'Alasan wajib' });
@@ -1009,6 +1020,27 @@ router.post('/pembayaran/:id/reject', auth(['admin']), (req, res) => {
   for (const a of allocations) refreshBillStatus(a.tagihan_id);
   reverseCredit(p.id);
   audit(req.user, 'reject_payment', 'pembayaran', p.id, { cabang_id: p.cabang_id, before: p, reason });
+
+  // Wali harus tahu alasannya: tanpa notifikasi, status di aplikasi berubah
+  // tanpa penjelasan dan orang tua mengirim bukti yang sama berulang kali.
+  try {
+    const walis = db.prepare('SELECT wali_pengguna_id FROM wali_siswa WHERE siswa_id=? AND aktif=1').all(p.siswa_id);
+    const student = db.prepare('SELECT nama FROM siswa WHERE id=?').get(p.siswa_id);
+    for (const w of walis) {
+      notify(
+        w.wali_pengguna_id,
+        'payment_rejected',
+        'Pembayaran perlu diperbaiki',
+        `Konfirmasi pembayaran untuk ${student.nama} ditolak: ${reason}`,
+        'pembayaran',
+        p.id,
+        p.cabang_id
+      );
+    }
+  } catch (err) {
+    console.error('Gagal mengirim notifikasi penolakan pembayaran:', err);
+  }
+
   res.json({ success: true });
 });
 
@@ -1933,6 +1965,167 @@ router.get('/public/pembayaran/:id/pdf', (req, res) => {
 });
 
 // --- WALI BILLING VIEWS ENDPOINT ---
+
+// ---------------------------------------------------------------------------
+// Wali: konfirmasi pembayaran + unggah bukti transfer.
+//
+// Alur: wali memilih tagihan, mengisi nominal, mengunggah foto bukti transfer,
+// lalu pembayaran tercatat dengan status pending_verification. Struk/kuitansi
+// baru dibuat oleh bendahara saat memverifikasi (rute verify yang sudah ada),
+// jadi pencatatan uang — kuitansi, alokasi, saldo kredit — tetap terjadi di
+// satu jalur saja dan tidak bisa dilewati.
+// ---------------------------------------------------------------------------
+const BUKTI_DIR = path.join(__dirname, '..', 'uploads', 'bukti');
+
+function parseTagihanIds(raw) {
+  // multipart mengirim array sebagai JSON string; dukung juga array asli.
+  let v = raw;
+  if (typeof v === 'string') {
+    try {
+      v = JSON.parse(v);
+    } catch {
+      return [];
+    }
+  }
+  if (!Array.isArray(v)) return [];
+  return v.map(Number).filter((n) => Number.isInteger(n) && n > 0);
+}
+
+router.post('/wali/konfirmasi', auth(['wali']), uploadImage.single('bukti'), async (req, res) => {
+  const d = req.body || {};
+  const siswaId = Number(d.siswa_id);
+  if (!siswaId || !canWaliAccessSiswa(req.user, siswaId))
+    return res.status(403).json({ error: 'Akses siswa ditolak' });
+
+  const siswa = db.prepare('SELECT id,nama,status FROM siswa WHERE id=?').get(siswaId);
+  if (!siswa || siswa.status !== 'aktif')
+    return res.status(400).json({ error: 'Siswa nonaktif tidak bisa dikonfirmasi' });
+
+  const enrollment = db
+    .prepare("SELECT * FROM siswa_enrollment WHERE siswa_id=? AND status='aktif' LIMIT 1")
+    .get(siswaId);
+  if (!enrollment) return res.status(404).json({ error: 'Enrollment siswa tidak ditemukan' });
+  if (!requireActiveCabang(req, res, enrollment.cabang_id)) return;
+
+  const tanggalBayar = d.tanggal_bayar || todayWIB();
+  if (!rejectFutureTanggal(req, res, tanggalBayar)) return;
+
+  const metode = ['transfer', 'qris', 'lainnya'].includes(d.metode) ? d.metode : null;
+  if (!metode) return res.status(400).json({ error: 'Metode pembayaran tidak valid' });
+
+  const nominal = Number(d.nominal);
+  if (!Number.isFinite(nominal) || nominal <= 0)
+    return res.status(400).json({ error: 'Nominal pembayaran tidak valid' });
+
+  const tagihanIds = parseTagihanIds(d.tagihan_ids);
+  if (!tagihanIds.length) return res.status(400).json({ error: 'Pilih minimal satu tagihan' });
+
+  // Bukti wajib: tanpa foto, bendahara tidak bisa memverifikasi dan
+  // pembayaran nyaris pasti ditolak. Pesannya jelas agar wali tidak bingung.
+  if (!req.file) return res.status(400).json({ error: 'Foto bukti pembayaran wajib diunggah' });
+
+  // Tagihan harus milik siswa ini dan masih punya sisa. Nilai mengikuti
+  // parameter terikat (?), jadi tidak ada risiko injeksi dari daftar id.
+  const bills = db
+    .prepare(
+      `SELECT id,nominal_final FROM tagihan
+       WHERE siswa_id=? AND status IN ('open','sebagian')
+         AND id IN (${tagihanIds.map(() => '?').join(',')})`
+    )
+    .all(siswaId, ...tagihanIds);
+  if (bills.length !== tagihanIds.length)
+    return res.status(400).json({ error: 'Ada tagihan yang tidak valid atau sudah lunas' });
+
+  // total sisa tagihan terpilih (pakai paidAmount yang sudah ada di modul)
+  const sisaTotal = bills.reduce((sum, b) => sum + (b.nominal_final - paidAmount(b.id)), 0);
+  if (nominal > sisaTotal)
+    return res.status(400).json({ error: 'Nominal melebihi sisa tagihan yang dipilih' });
+
+  ensureDir(BUKTI_DIR);
+  // Struk sering berukuran A4: resize lebar 1400px (bukan crop kotak) supaya
+  // tulisan di struk tetap terbaca saat bendahara memeriksa.
+  const filename = `bukti-${siswaId}-${Date.now()}.jpg`;
+  await sharp(req.file.buffer)
+    .resize(1400, null, { withoutEnlargement: true })
+    .jpeg({ quality: 85 })
+    .toFile(path.join(BUKTI_DIR, filename));
+  const buktiPath = `/uploads/bukti/${filename}`;
+
+  const catatan = String(d.catatan || '').trim().slice(0, 500) || null;
+  const tx = db.transaction(() => {
+    const r = db
+      .prepare(
+        `INSERT INTO pembayaran(cabang_id,siswa_id,receipt_no,tanggal_bayar,nominal,metode,status,reference,catatan,bukti_path,created_by,created_at,updated_at)
+      VALUES(?,?,?,?,?,?,'pending_verification',?,?,?,?,?,?)`
+      )
+      .run(
+        enrollment.cabang_id,
+        siswaId,
+        null, // struk dibuat saat diverifikasi
+        tanggalBayar,
+        nominal,
+        metode,
+        'Konfirmasi pembayaran via aplikasi wali',
+        catatan,
+        buktiPath,
+        req.user.id,
+        nowUtc(),
+        nowUtc()
+      );
+
+    // Alokasi ke tagihan terpilih (terlama dulu, seperti pembayaran biasa).
+    let remaining = nominal;
+    for (const b of bills.sort((x, y) => x.id - y.id)) {
+      if (remaining <= 0) break;
+      const unpaid = b.nominal_final - paidAmount(b.id);
+      const pakai = Math.min(remaining, unpaid);
+      if (pakai > 0) {
+        db.prepare(
+          'INSERT INTO pembayaran_alokasi(pembayaran_id,tagihan_id,nominal,created_at) VALUES(?,?,?,?)'
+        ).run(r.lastInsertRowid, b.id, pakai, nowUtc());
+        remaining -= pakai;
+      }
+    }
+    // Kelebihan (kalau ada) jadi saldo kredit, tercatat saat verifikasi —
+    // tidak dicatat di sini karena uangnya belum diterima bendahara.
+
+    audit(req.user, 'create', 'pembayaran', r.lastInsertRowid, {
+      cabang_id: enrollment.cabang_id,
+      after: { siswa_id: siswaId, nominal, metode, status: 'pending_verification', via: 'wali' }
+    });
+
+    // Beri tahu bendahara/kepala sekolah: ada bukti yang perlu diverifikasi.
+    const penerima = db
+      .prepare(
+        `SELECT p.id FROM pengguna p
+       LEFT JOIN staff_profile sp ON sp.pengguna_id=p.id
+       WHERE p.status='aktif'
+         AND (p.role='admin'
+              OR (p.role IN ('admin_cabang','kepsek') AND sp.cabang_id=?))`
+      )
+      .all(enrollment.cabang_id);
+    const nominalText = 'Rp ' + Number(nominal).toLocaleString('id-ID');
+    for (const t of penerima) {
+      notify(
+        t.id,
+        'payment_claim',
+        'Konfirmasi pembayaran baru',
+        `${siswa.nama}: ${nominalText} (${metode}) menunggu verifikasi.`,
+        'pembayaran',
+        r.lastInsertRowid,
+        enrollment.cabang_id
+      );
+    }
+    return r.lastInsertRowid;
+  });
+
+  try {
+    const id = tx();
+    res.json({ success: true, id, status: 'pending_verification' });
+  } catch (e) {
+    res.status(400).json({ error: e.message || 'Konfirmasi pembayaran gagal' });
+  }
+});
 
 router.get('/wali/siswa/:siswaId', auth(['wali']), (req, res) => {
   const siswaId = Number(req.params.siswaId);

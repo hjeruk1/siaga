@@ -217,6 +217,23 @@ export const api = {
   dashboard: (p) => req('GET', '/api/rekap/dashboard' + qs(p || {})),
   rekapBulanan: (p) => req('GET', '/api/rekap' + qs(p || {})),
   waliBilling: (siswaId) => req('GET', '/api/billing/wali/siswa/' + siswaId),
+  konfirmasiBayar: (fd) => {
+    // FormData: Content-Type dibiarkan ke browser agar batas multipart ikut.
+    // Pakai token() (bukan localStorage langsung) supaya cache token modul ini
+    // tetap dipakai dan event "sesi berakhir" konsisten dengan request lain.
+    return fetch('/api/billing/wali/konfirmasi', {
+      method: 'POST',
+      headers: token() ? { Authorization: 'Bearer ' + token() } : {},
+      body: fd
+    }).then(async (r) => {
+      const d = await r.json().catch(() => null);
+      if (!r.ok) {
+        if (r.status === 401 && token()) handleUnauthorized();
+        throw new Error((d && d.error) || 'Konfirmasi pembayaran gagal');
+      }
+      return d;
+    });
+  },
   exportRekap: (p) => blob('/api/rekap/export' + qs(p || {}))
 };
 

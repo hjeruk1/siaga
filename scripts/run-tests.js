@@ -19,7 +19,8 @@ const files =
         'scripts/migration.test.js',
         'scripts/index-usage.test.js',
         'scripts/maintenance.test.js',
-        'scripts/push.test.js'
+        'scripts/push.test.js',
+        'scripts/wali-konfirmasi.test.js'
       ];
 const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'siaga-test-'));
 const dbPath = path.join(tempDir, 'siaga.db');
