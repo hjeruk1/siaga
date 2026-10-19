@@ -1,0 +1,71 @@
+[Unit]
+Description=SIAGA kanal WhatsApp (Easy API open-wa)
+Documentation=file:/opt/siaga/app/docs/whatsapp.md
+# Berjalan terpisah dari SIAGA Backend: Easy API menjalankan Chromium dan sesi
+# WhatsApp, sedangkan backend hanya memanggilnya lewat HTTP. Memisahkan keduanya
+# berarti restart backend TIDAK memutus sesi WhatsApp (yang kalau terputus harus
+# pindai QR ulang), dan beban Chromium tidak menyentuh proses API utama.
+After=network.target
+
+[Service]
+Type=simple
+User=siaga
+Group=siaga
+
+# Direktori kerja penting: di sinilah Easy API menyimpan berkas sesi
+# `*.data.json` yang BERISI KREDENSIAL WhatsApp. Direktori ini harus persisten
+# (bukan /tmp) dan hanya boleh dibaca user `siaga`.
+WorkingDirectory=/var/lib/siaga/wa
+
+# Seluruh konfigurasi memakai berkas environment yang SAMA dengan backend,
+# sehingga WA_PROVIDER / WA_API_URL / WA_API_KEY cukup dikelola di satu tempat.
+EnvironmentFile=/etc/siaga/siaga.env
+
+# Kunci API wajib ada. Gagal di sini (sebelum Chromium dijalankan) jauh lebih
+# jelas daripada Easy API berjalan tanpa autentikasi.
+EnvironmentFile=-/etc/siaga/wa.env
+ExecStartPre=/bin/sh -c 'test -n "$WA_API_KEY" || { echo "WA_API_KEY belum diset di /etc/siaga/siaga.env"; exit 1; }'
+
+# Pakai binari hasil instalasi global, BUKAN `npx --yes`: npx akan menghubungi
+# registry npm setiap kali service start. Kalau server sedang offline atau
+# registry bermasalah, sesi WhatsApp ikut mati padahal aplikasinya sudah ada
+# di disk. Pasang sekali:
+#   sudo npm install -g @open-wa/wa-automate@5.6.6
+#   sudo readlink -f "$(command -v wa-automate)"   # untuk memastikan path
+ExecStart=/usr/local/bin/wa-automate \
+  --session-id siaga \
+  --host 127.0.0.1 --port 8080 \
+  --api-key "$WA_API_KEY"
+
+Restart=always
+# Jeda lebih panjang dari backend: setelah kegagalan, Chromium butuh waktu
+# membersihkan proses orphan dan berkas kunci sesi.
+RestartSec=15
+
+# open-wa menulis log ke stdout; journald yang mengelolanya.
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=siaga-wa
+
+# --- Pembatasan sumber daya ---
+# Chromium bisa memakai memori jauh lebih besar dari backend Node; kalau
+# dibiarkan, ia bisa membuat server kehabisan RAM dan membunuh backend. Batas
+# ini membuat Easy API dimatikan (dan direstart systemd) sebelum sampai di
+# titik itu. Sesuaikan dengan RAM server.
+MemoryMax=1500M
+MemoryHigh=1200M
+TasksMax=500
+OOMPolicy=stop
+
+# Hardening yang wajar untuk proses berbasis Chromium. /var/lib tetap bisa
+# ditulis karena ProtectSystem=full hanya membuat /usr dan /boot read-only.
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=full
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+
+[Install]
+WantedBy=multi-user.target

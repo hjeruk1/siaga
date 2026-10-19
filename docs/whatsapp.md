@@ -31,6 +31,13 @@ penerima berperan **wali** yang punya `no_wa`. Notifikasi operasional staff
 Tipe bawaan yang diizinkan: `daily_published`, `guru_reply`,
 `payment_verified`, `payment_rejected`, `invoice_issued`, `payment_claim`.
 
+**Tidak ada open-wa di dalam repo ini.** Tidak ada paket `@open-wa` di
+`package.json`, tidak ada Chromium yang diunduh saat `npm install`, dan tidak
+ada kode yang mengaktifkannya sendiri. open-wa adalah **proses terpisah di
+server** yang dipanggil lewat HTTP; komputer pengembangan yang terlanjur
+memasangnya tidak memengaruhi apa pun. Lihat [bagian 6](#6-deploy-di-server-sendiri-bukan-komputer-pengembangan)
+untuk topologi dan langkah deploy.
+
 ---
 
 ## 2. ⚠️ Risiko open-wa — baca sebelum produksi
@@ -134,7 +141,129 @@ GROUP BY tipe ORDER BY total DESC;
 
 ---
 
-## 6. Pindah ke gateway resmi
+## 6. Deploy di server sendiri (bukan komputer pengembangan)
+
+**Repo ini tidak punya dependensi ke open-wa.** Tidak ada paket `@open-wa` di
+`package.json`, tidak ada Chromium yang diunduh saat `npm install`, dan tidak
+ada kode yang mencoba mengaktifkannya sendiri. Yang ada hanya klien HTTP di
+`backend/utils/wa.js` yang memanggil Easy API kalau `WA_PROVIDER=openwa`.
+
+Artinya: komputer pengembangan yang terlanjur memasang open-wa **tidak
+menentukan apa pun** untuk server. Semuanya ditentukan oleh `.env` di server:
+
+| Lingkungan | `.env` server/komputer | Akibat |
+| --- | --- | --- |
+| Server produksi | `WA_PROVIDER=gateway` + token resmi | Pesan lewat reseller, tanpa risiko blokir, tanpa Chromium |
+| Server pilot | `WA_PROVIDER=openwa` + `WA_API_URL` | Easy API dijalankan sebagai service di server yang sama |
+| Pengembangan lokal | `WA_PROVIDER=log` / `none` | Tidak mengirim apa pun; aman untuk tes |
+
+Karena `.env` tidak masuk git, setiap lingkungan memilih sendiri. Tidak ada
+kode versi-produksi yang "kebawa" pengaturan laptop pengembang.
+
+### 6a. Topologi di server
+
+```
+         HP orang tua  <------ WhatsApp ------  HP nomor sekolah
+                                                 ^  (Linked Devices)
+                                                 |
+                            [server sekolah]     |
+                            +----------------+   |
+   nginx :443 -------------> SIAGA Backend :3001|
+                            +----------------+   |
+                                    |            |
+                                    | HTTP       |
+                                    v            |
+                            Easy API open-wa :8080 (127.0.0.1)
+                              - proses terpisah (systemd: siaga-wa.service)
+                              - Chromium + berkas sesi *.data.json
+                              - HANYA di localhost, tidak diekspos nginx
+```
+
+Dua keputusan penting di topologi ini:
+
+1. **Port 8080 tidak pernah dibuka ke internet.** Easy API berjalan di
+   `127.0.0.1:8080` dan nginx **tidak** mem-proxy-nya. Satu-satuntu jalan
+   keluar adalah proses backend yang sudah terautentikasi dengan API key.
+   Kalau Easy API dibuka publik, siapa pun yang menemukan port itu bisa
+   mengirim WhatsApp atas nama sekolah.
+2. **Sesi ada di direktori persisten** (`/var/lib/siaga/wa`), bukan `/tmp`,
+   supaya tidak perlu pindai QR setiap kali server reboot.
+
+### 6b. Langkah instalasi di server (Ubuntu/Debian dengan systemd)
+
+```bash
+# 1. Direktori sesi (hanya user siaga yang boleh membaca)
+sudo mkdir -p /var/lib/siaga/wa
+sudo chown siaga:siaga /var/lib/siaga/wa
+sudo chmod 700 /var/lib/siaga/wa
+
+# 2. Pasang Easy API secara GLOBAL (bukan npx): service tidak boleh bergantung
+#    pada registry npm setiap kali start.
+sudo npm install -g @open-wa/wa-automate@5.6.6
+sudo readlink -f "$(command -v wa-automate)"   # catat path binari-nya
+
+# 3. Konfigurasi WA di berkas environment yang SUDAH dipakai backend:
+#    /etc/siaga/siaga.env  (tambahkan/edit)
+#      WA_PROVIDER=openwa
+#      WA_API_URL=http://127.0.0.1:8080
+#      WA_API_KEY=<kunci-acak-panjang>
+
+# 4. Pasang unit service yang sudah disiapkan di repo.
+#    Kalau path binari wa-automate di server Anda bukan /usr/local/bin,
+#    sesuaikan ExecStart.
+sudo cp deploy/systemd/siaga-wa.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now siaga-wa
+
+# 5. Cek log sampai muncul QR / status ready
+sudo journalctl -u siaga-wa -f
+```
+
+### 6c. Memindai QR tanpa membuka port ke internet
+
+Dashboard Easy API hanya di `127.0.0.1:8080`. Dari komputer Anda:
+
+```bash
+ssh -L 8080:127.0.0.1:8080 user@server-sekolah
+```
+
+Lalu buka `http://127.0.0.1:8080/dashboard/` di browser lokal dan pindai QR
+dengan HP nomor sekolah. Tunnel SSH yang jadi jalan akses, bukan port publik.
+
+### 6d. Menyalakan-kanal di backend
+
+Setelah Easy API `ready`:
+
+```bash
+# restart backend supaya membaca WA_PROVIDER terbaru
+sudo systemctl restart siaga
+
+# verifikasi (dari server, dengan token admin)
+curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:3001/api/wa/status
+```
+
+Harus menampilkan `aktif: true`, `provider: "openwa"`, `connected: true`,
+`ready: true`.
+
+### 6e. Catatan operasional khusus server
+
+- **RAM.** Chromium di dalam Easy API bisa memakai 500 MB–1,5 GB. Unit service
+  sudah membatasi `MemoryMax=1500M` agar tidak menghabiskan RAM server dan
+  membunuh backend. Sesuaikan angka itu dengan RAM server.
+- **Update versi.** Versi open-wa dipatok di unit service (`@5.6.6`). Naikkan
+  sengaja, lalu cek `journalctl -u siaga-wa` — perubahan protokol WhatsApp Web
+  kadang membuat versi lama berhenti bekerja.
+- **Sesi rusak.** Kalau `journalctl` menunjukkan sesi tidak bisa dipulihkan,
+  hapus berkas sesi di `/var/lib/siaga/wa` dan pindai QR baru.
+- **Firewall.** Pastikan 8080 hanya terbuka untuk `127.0.0.1`
+  (`ss -tlnp | grep 8080`). Kalau terlihat `0.0.0.0:8080`, HATI-HATI: Easy API
+  bisa diakses dari luar; perbaiki binding atau firewall segera.
+- **Backup.** Jangan mem-backup direktori sesi bersama backup database biasa.
+  Berkas itu kredensial; kalau ikut ter-backup, ikut pula risikonya.
+
+---
+
+## 7. Pindah ke gateway resmi
 
 Karena pemanggil hanya bergantung pada `utils/wa.js`, pindah provider cukup
 mengubah `.env`:
@@ -155,7 +284,7 @@ sesuaikan mapping di `backend/utils/wa.js` bila reseller memakai bentuk lain
 
 ---
 
-## 7. Menguji tanpa mengirim pesan
+## 8. Menguji tanpa mengirim pesan
 
 ```bash
 # tidak mengirim apa pun; alur normal & pelacakan wa_sent_at tetap teruji
@@ -167,7 +296,7 @@ gate tipe, isolasi kegagalan, kontrak HTTP Easy API via stub server).
 
 ---
 
-## 8. Yang TIDAK dilakukan kanal ini (sengaja)
+## 9. Yang TIDAK dilakukan kanal ini (sengaja)
 
 - **Tidak ada auto-reply / chatbot.** Kalau orang tua membalas pesan, balasan
   masuk ke WhatsApp nomor sekolah, bukan ke aplikasi (open-wa Easy API bisa
