@@ -147,6 +147,13 @@ describe('wali konfirmasi pembayaran', () => {
       .prepare("SELECT COUNT(*) c FROM notifikasi WHERE tipe='payment_claim' AND entity_id=?")
       .get(r.body.id).c;
     assert.ok(notifBendahara >= 1, 'bendahara harus dapat notifikasi');
+    // WA hanya untuk wali: notifikasi ke staff tidak boleh ikut WhatsApp,
+    // walau provider aktif di server uji.
+    const waBendahara = db
+      .prepare("SELECT wa_sent_at, wa_error FROM notifikasi WHERE tipe='payment_claim' AND entity_id=? LIMIT 1")
+      .get(r.body.id);
+    assert.equal(waBendahara.wa_sent_at, null, 'notifikasi staff tidak dikirim ke WA');
+    assert.equal(waBendahara.wa_error, null);
   });
 
   it('wali lain tidak bisa mengonfirmasi pembayaran siswa orang lain', async () => {
@@ -211,6 +218,17 @@ describe('wali konfirmasi pembayaran', () => {
       .prepare("SELECT COUNT(*) c FROM notifikasi WHERE tipe='payment_verified' AND entity_id=?")
       .get(dibuat.body.id).c;
     assert.ok(notifWali >= 1, 'wali harus dinotifikasi saat terverifikasi');
+    // Kanal WA ikut jalan (provider 'log' di server uji): wa_sent_at tercatat.
+    // Pengiriman asinkron (antrean), jadi tunggu sebentar, jangan asumsikan
+    // sudah selesai saat respons verify kembali.
+    const rowWa = db.prepare("SELECT wa_sent_at FROM notifikasi WHERE tipe='payment_verified' AND entity_id=? LIMIT 1").get(dibuat.body.id);
+    if (!rowWa?.wa_sent_at) {
+      await new Promise((r) => setTimeout(r, 1500));
+      const ulang = db
+        .prepare("SELECT wa_sent_at FROM notifikasi WHERE tipe='payment_verified' AND entity_id=? LIMIT 1")
+        .get(dibuat.body.id);
+      assert.ok(ulang?.wa_sent_at, 'wali dengan no_wa harus dapat notifikasi WhatsApp');
+    }
   });
 
   it('penolakan memberitahu wali beserta alasannya', async () => {

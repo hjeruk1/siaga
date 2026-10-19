@@ -24,3 +24,8 @@ backend/*-key.json
 
 .freebuff/
 backend/*.db.bak*
+
+# Sesi Easy API open-wa: BERISI KREDENSIAL WhatsApp nomor sekolah.
+# Jangan pernah di-commit; kalau terlanjur, cabut sesi lewat
+# WhatsApp -> Perangkat Tertaut -> logout perangkat, lalu ganti nomor.
+*.data.json

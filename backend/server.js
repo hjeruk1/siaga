@@ -192,6 +192,7 @@ app.use('/api/notifikasi', require('./routes/notifikasi'));
 app.use('/api/billing', require('./routes/billing'));
 app.use('/api/rekap', require('./routes/rekap'));
 app.use('/api/push', require('./routes/push'));
+app.use('/api/wa', require('./routes/wa'));
 
 // 404 JSON untuk endpoint API yang tidak dikenal. Tanpa ini Express mengirim
 // halaman HTML default, yang membingungkan klien API.

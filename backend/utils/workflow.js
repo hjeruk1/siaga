@@ -197,9 +197,15 @@ function notify(recipientId, tipe, title, body, entityType, entityId, cabangId) 
     `INSERT INTO notifikasi(recipient_pengguna_id,tipe,title,body,entity_type,entity_id,cabang_id,created_at)
     VALUES(?,?,?,?,?,?,?,?)`
   ).run(recipientId, tipe, title, body || null, entityType || null, entityId || null, cabangId || null, nowUtc());
-  // Notifikasi in-app + push jalan beriringan. Push bersifat fire-and-forget:
-  // kalau VAPID belum diset atau perangkat mati, notifikasi di aplikasi tetap
-  // tersimpan dan push gagal tanpa mengganggu siapa pun.
+  const notifId = db.prepare('SELECT last_insert_rowid() AS id').get().id;
+
+  // Notifikasi in-app + push + WhatsApp jalan beriringan; ketiganya fire-and-
+  // forget. Kalau push/WA belum dikonfigurasi atau gagal, notifikasi di
+  // aplikasi tetap tersimpan dan kegagalannya tercatat di kolom wa_* supaya
+  // masih bisa diaudit ("orang tua bilang tidak pernah terima kabar").
+  //
+  // WhatsApp hanya untuk tipe yang benar-benar penting dan hanya untuk wali
+  // (staff sudah dapat notifikasi in-app/push dan punya jalur kerja sendiri).
   try {
     const { pushAsync } = require('./push');
     pushAsync(recipientId, {
@@ -211,6 +217,42 @@ function notify(recipientId, tipe, title, body, entityType, entityId, cabangId) 
   } catch {
     // push.js opsional; kalau modul bermasalah, notifikasi in-app tetap jalan.
   }
+  try {
+    kirimWaJikaPerlu({ notifId, recipientId, tipe, title, body });
+  } catch {
+    // kanal WA tidak boleh menjatuhkan alur utama
+  }
+}
+
+/**
+ * Putuskan apakah sebuah notifikasi juga dikirim ke WhatsApp orang tua.
+ * Syarat: kanal aktif, tipe termasuk daftar yang diizinkan, penerima adalah
+ * wali dengan nomor WA terisi. Hasil (sukses/gagal) ditulis balik ke baris
+ * notifikasi supaya bisa ditelusuri.
+ */
+function kirimWaJikaPerlu({ notifId, recipientId, tipe, title, body }) {
+  const wa = require('./wa');
+  const penerima = db.prepare('SELECT role,no_wa FROM pengguna WHERE id=?').get(recipientId);
+  if (!penerima || penerima.role !== 'wali') return;
+  if (!penerima.no_wa) return;
+  if (!wa.tipeAktif().has(tipe)) return;
+
+  const link = (process.env.FRONTEND_URL || '').replace(/\/$/, '');
+  const pesan = wa.formatPesan({
+    title,
+    body,
+    link: link ? `${link}/` : null
+  });
+
+  wa.kirimWA({ no_wa: penerima.no_wa, pesan }).then((hasil) => {
+    if (hasil.status === 'terkirim') {
+      db.prepare('UPDATE notifikasi SET wa_sent_at=? WHERE id=?').run(nowUtc(), notifId);
+    } else if (hasil.status === 'gagal') {
+      db.prepare('UPDATE notifikasi SET wa_error=? WHERE id=?').run(String(hasil.error).slice(0, 300), notifId);
+    }
+    // status 'dimati'/'nomor-tidak-valid': sengaja tidak dicatat sebagai error,
+    // itu kondisi konfigurasi, bukan kegagalan pengiriman.
+  });
 }
 
 // Tujuan saat notifikasi diklik: orang tua selalu dibawa ke portal wali pada

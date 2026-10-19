@@ -20,7 +20,8 @@ const files =
         'scripts/index-usage.test.js',
         'scripts/maintenance.test.js',
         'scripts/push.test.js',
-        'scripts/wali-konfirmasi.test.js'
+        'scripts/wali-konfirmasi.test.js',
+        'scripts/wa.test.js'
       ];
 const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'siaga-test-'));
 const dbPath = path.join(tempDir, 'siaga.db');
@@ -38,7 +39,13 @@ const env = {
   // registrasi subscription (200/503/400) tetap tervalidasi.
   VAPID_PUBLIC_KEY: process.env.VAPID_PUBLIC_KEY || 'BJ/8nTtK0WTf2b5gGgh7OnPQOKaaOGvRBcQMSGozLWJJQQpJ0tC1zWInAGVdBKKqOFYgCE1RNGUHPELLvGxDkI',
   VAPID_PRIVATE_KEY: process.env.VAPID_PRIVATE_KEY || '8wqhxKfItgNLARI1ZmSNbAtUCyxOPUCzHX6xkafC3zY',
-  VAPID_SUBJECT: 'mailto:test@localhost'
+  VAPID_SUBJECT: 'mailto:test@localhost',
+  // Kanal WhatsApp diuji dengan provider 'log': tidak ada jaringan, tapi
+  // alur notifikasi -> antrean -> penandaan wa_sent_at tetap tervalidasi.
+  WA_PROVIDER: 'log',
+  WA_DELAY_MS: '0',
+  WA_TIPE_AKTIF: 'daily_published,guru_reply,payment_verified,payment_rejected,invoice_issued',
+  FRONTEND_URL: 'http://localhost:5173'
 };
 
 const initialized = spawnSync(process.execPath, ['backend/init.js'], {
