@@ -48,10 +48,14 @@ StandardError=journal
 SyslogIdentifier=siaga-wa
 
 # --- Pembatasan sumber daya ---
-# Chromium bisa memakai memori jauh lebih besar dari backend Node; kalau
-# dibiarkan, ia bisa membuat server kehabisan RAM dan membunuh backend. Batas
-# ini membuat Easy API dimatikan (dan direstart systemd) sebelum sampai di
-# titik itu. Sesuaikan dengan RAM server.
+# Chromium memakai 400-900 MB dan bisa memuncak >1,2 GB. Batas di bawah mencegah
+# Easy API menghabiskan RAM server sampai membunuh backend SIAGA.
+#
+# SESUAIKAN DENGAN RAM SERVER (lihat docs/kebutuhan-server.md):
+#   VPS 2 GB  -> MemoryMax=700M   (SIAGA + Chromium akan mepet; pertimbangkan
+#                                   memindah WA ke provider 'gateway')
+#   VPS 4 GB  -> MemoryMax=1500M  (aman untuk open-wa)
+#   > 4 GB    -> naikkan sesuai kebutuhan
 MemoryMax=1500M
 MemoryHigh=1200M
 TasksMax=500

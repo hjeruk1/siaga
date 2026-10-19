@@ -1,6 +1,7 @@
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+const { spawnSync } = require('child_process');
 
 // Resolve dotenv from backend node_modules and load backend/.env
 const dotenv = require(path.join(__dirname, '../backend/node_modules/dotenv'));
@@ -22,6 +23,15 @@ const filename = `siaga-backup-${timestamp}.db`;
 const dest = path.join(backupDir, filename);
 const retentionCount = Math.max(1, Number(process.env.BACKUP_RETENTION_COUNT) || 30);
 
+// Folder berkas unggahan pengguna: foto anak, lampiran daily record, dan —
+// yang paling penting — FOTO BUKTI PEMBAYARAN. Berkas terakhir adalah bukti
+// finansial: kalau hanya database yang dicadangkan, pasca-bencana datanya utuh
+// tetapi bukti transfer orang tua hilang semua. Karena itu uploads ikut
+// diarsipkan (lihat backupUploads()).
+const uploadsDir = path.resolve(__dirname, '../backend/uploads');
+const uploadsArchive = `siaga-uploads-${timestamp}.tar.gz`;
+const uploadsDest = path.join(backupDir, uploadsArchive);
+
 function verifyBackup() {
   fs.chmodSync(dest, 0o600);
   const checkDb = new Database(dest, { readonly: true, fileMustExist: true });
@@ -37,27 +47,82 @@ function verifyBackup() {
   }
 }
 
+/**
+ * Retensi dihitung PER JENIS berkas: N cadangan database DAN N arsip unggahan.
+ *
+ * Sengaja tidak digabung. Kalau disatukan, arsip uploads (selalu dibuat
+ * setelah database) akan dianggap "lebih baru" dan cadangan database justru
+ * terpotong lebih dulu — hasilnya folder backup berisi tar tanpa db-nya.
+ */
 function enforceRetention() {
-  const files = fs
-    .readdirSync(backupDir)
-    .filter((name) => /^siaga-backup-.*\.db$/.test(name))
-    .map((name) => ({ name, mtime: fs.statSync(path.join(backupDir, name)).mtimeMs }))
-    .sort((a, b) => b.mtime - a.mtime);
-  for (const old of files.slice(retentionCount)) {
-    const oldPath = path.join(backupDir, old.name);
-    fs.unlinkSync(oldPath);
-    for (const suffix of ['-shm', '-wal']) {
-      const sidecar = `${oldPath}${suffix}`;
-      if (fs.existsSync(sidecar)) fs.unlinkSync(sidecar);
+  const pola = [/^siaga-backup-.*\.db$/, /^siaga-uploads-.*\.tar\.gz$/];
+  for (const regex of pola) {
+    const files = fs
+      .readdirSync(backupDir)
+      .filter((name) => regex.test(name))
+      .map((name) => ({ name, mtime: fs.statSync(path.join(backupDir, name)).mtimeMs }))
+      .sort((a, b) => b.mtime - a.mtime);
+    for (const old of files.slice(retentionCount)) {
+      const oldPath = path.join(backupDir, old.name);
+      fs.unlinkSync(oldPath);
+      for (const suffix of ['-shm', '-wal']) {
+        const sidecar = `${oldPath}${suffix}`;
+        if (fs.existsSync(sidecar)) fs.unlinkSync(sidecar);
+      }
     }
   }
+}
+
+/**
+ * Arsipkan folder uploads (foto anak, lampiran, bukti pembayaran).
+ *
+ * Catatan penting:
+ * - Kegagalan di sini TIDAK membatalkan backup database. Database adalah data
+ *   inti; kalau arsip uploads gagal, itu harus terlihat sebagai peringatan
+ *   jelas ("upload gagal, database aman") alih-alih membuat seluruh backup
+ *   dianggap gagal.
+ * - tar keluar dengan kode 1 saat berkas berubah selama pengarsipan (orang tua
+ *   sedang mengunggah bukti pembayaran saat backup berjalan). Arsipnya tetap
+ *   layak dipakai, jadi kode 1 = peringatan, bukan kegagalan.
+ */
+function backupUploads() {
+  if (!fs.existsSync(uploadsDir)) {
+    console.log('[Backup Uploads] Folder uploads tidak ada, dilewati.');
+    return Promise.resolve(false);
+  }
+  // TAR_BIN bisa di-override (mis. /usr/bin/tar di server) kalau `tar` di PATH
+  // bukan GNU tar. --force-local dibutuhkan bsdtar (tar bawaan Windows): tanpanya
+  // path "C:\\..." disangka host remote dan pengarsipan gagal. Di GNU tar
+  // opsi ini diabaikan, jadi aman dipakai di kedua platform.
+  const tarBin = process.env.TAR_BIN || 'tar';
+  const tar = spawnSync(tarBin, ['--force-local', '-czf', uploadsDest, '-C', uploadsDir, '.'], {
+    encoding: 'utf8'
+  });
+  const size = fs.existsSync(uploadsDest) ? fs.statSync(uploadsDest).size : 0;
+  if (tar.status === 0) {
+    fs.chmodSync(uploadsDest, 0o600);
+    console.log(`[Backup Uploads] Sukses: ${uploadsArchive} (${(size / 1024 / 1024).toFixed(1)} MB).`);
+    return Promise.resolve(true);
+  }
+  if (tar.status === 1 && size > 0) {
+    console.warn(
+      `[Backup Uploads] SELESAI DENGAN PERINGATAN (berkas berubah saat diarsipkan): ${uploadsArchive} (${(size / 1024 / 1024).toFixed(1)} MB).`
+    );
+    return Promise.resolve(true);
+  }
+  console.error(
+    '[Backup Uploads] GAGAL mengarsipkan uploads:',
+    (tar.stderr || (tar.error && tar.error.message) || 'tar tidak tersedia').slice(0, 200)
+  );
+  console.error('[Backup Uploads] Backup database tetap valid, TAPI foto/bukti pembayaran TIDAK tercadangkan.');
+  return Promise.resolve(false);
 }
 
 function base64url(value) {
   return Buffer.from(value).toString('base64url');
 }
 
-async function uploadToGcs(filePath, bucketName, keyFilePath, objectName) {
+async function uploadToGcs(filePath, bucketName, keyFilePath, objectName, contentType) {
   const credentials = JSON.parse(fs.readFileSync(keyFilePath, 'utf8'));
   if (!credentials.client_email || !credentials.private_key) throw new Error('Service account GCS tidak valid');
   const now = Math.floor(Date.now() / 1000);
@@ -89,7 +154,7 @@ async function uploadToGcs(filePath, bucketName, keyFilePath, objectName) {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token.access_token}`,
-      'Content-Type': 'application/x-sqlite3'
+      'Content-Type': contentType || 'application/x-sqlite3'
     },
     body: fs.createReadStream(filePath),
     duplex: 'half'
@@ -102,18 +167,24 @@ console.log(`\n[Backup] Memulai pencadangan database online...`);
 console.log(`[Backup] File tujuan lokal: ${dest}`);
 
 db.backup(dest)
-  .then(() => {
+  .then(async () => {
     verifyBackup();
     enforceRetention();
     console.log(`[Backup] Sukses! Cadangan database lokal berhasil dibuat.`);
+
+    // Berkas unggahan (foto anak + bukti pembayaran) dicadangkan terpisah.
+    // Kegagalan di sini tidak membatalkan backup database.
+    const uploadsOk = await backupUploads();
+    enforceRetention();
 
     // GCS upload flow
     const bucketName = process.env.GCS_BUCKET_NAME;
     const keyFilePath = process.env.GCS_KEY_FILE_PATH;
 
     if (!bucketName || !keyFilePath) {
-      console.log(`[Backup Cloud] Konfigurasi GCS tidak lengkap (GCS_BUCKET_NAME atau GCS_KEY_FILE_PATH kosong).`);
-      console.log(`[Backup Cloud] Upload ke cloud dilewati. Backup lokal selesai.\n`);
+      console.log('[Backup Cloud] Konfigurasi GCS tidak lengkap (GCS_BUCKET_NAME atau GCS_KEY_FILE_PATH kosong).');
+      console.log('[Backup Cloud] Upload ke cloud dilewati. Backup lokal selesai.\n');
+      // Kode 0: backup LOKAL (database + arsip) berhasil; GCS hanya opsional.
       process.exit(0);
     }
 
@@ -131,20 +202,31 @@ db.backup(dest)
     console.log(`[Backup GCS] Mengunggah file ke Google Cloud Storage...`);
     console.log(`[Backup GCS] Bucket: ${bucketName}`);
     console.log(`[Backup GCS] File tujuan cloud: backups/${filename}`);
+    if (uploadsOk) console.log(`[Backup GCS] File unggahan: backups/${uploadsArchive}`);
+
+    // Database dulu (data inti), baru arsip uploads. Kegagalan mengunggah
+    // arsip tidak boleh menghapus fakta bahwa database sudah aman di cloud.
+    const unggahDb = () =>
+      uploadToGcs(dest, bucketName, resolvedKeyPath, `backups/${filename}`, 'application/x-sqlite3');
+    const unggahUploads = () =>
+      uploadToGcs(uploadsDest, bucketName, resolvedKeyPath, `backups/${uploadsArchive}`, 'application/gzip');
 
     try {
-      uploadToGcs(dest, bucketName, resolvedKeyPath, `backups/${filename}`)
-        .then(() => {
-          console.log(`[Backup GCS] Sukses! File database berhasil diunggah ke Google Cloud Storage.\n`);
-          process.exit(0);
-        })
-        .catch((uploadErr) => {
-          console.error(`[Backup GCS] GAGAL mengunggah ke GCS:`, uploadErr.message || uploadErr);
-          console.log(`[Backup GCS] Backup lokal tetap tersimpan di: ${dest}\n`);
+      await unggahDb();
+      console.log(`[Backup GCS] Sukses! Database terunggah ke cloud.`);
+      if (uploadsOk) {
+        try {
+          await unggahUploads();
+          console.log(`[Backup GCS] Sukses! Arsip unggahan terunggah ke cloud.\n`);
+        } catch (e2) {
+          console.error('[Backup GCS] GAGAL mengunggah arsip unggahan:', e2.message || e2);
+          console.error('[Backup GCS] Database aman di cloud, TAPI foto/bukti pembayaran belum.\n');
           process.exit(1);
-        });
-    } catch (err) {
-      console.error(`[Backup GCS] GAGAL inisialisasi client GCS:`, err.message || err);
+        }
+      }
+      process.exit(0);
+    } catch (uploadErr) {
+      console.error(`[Backup GCS] GAGAL mengunggah database ke GCS:`, uploadErr.message || uploadErr);
       console.log(`[Backup GCS] Backup lokal tetap tersimpan di: ${dest}\n`);
       process.exit(1);
     }
