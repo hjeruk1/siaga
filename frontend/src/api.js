@@ -97,6 +97,10 @@ export const api = {
   logout: () => req('POST', '/api/auth/logout', {}),
   me: () => req('GET', '/api/auth/me'),
   changePassword: (d) => req('POST', '/api/auth/change-password', d),
+  // Pemulihan password mandiri lewat kode OTP WhatsApp (tanpa login).
+  // Namanya dibedakan dari resetPassword milik admin (reset akun staff/wali).
+  lupaPassword: (d) => req('POST', '/api/auth/lupa-password', d),
+  resetPasswordMandiri: (d) => req('POST', '/api/auth/reset-password', d),
   cabang: () => req('GET', '/api/master/cabang'),
   createCabang: (d) => req('POST', '/api/master/cabang', d),
   updateCabang: (id, d) => req('PUT', '/api/master/cabang/' + id, d),

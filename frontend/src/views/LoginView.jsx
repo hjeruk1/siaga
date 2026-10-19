@@ -1,17 +1,21 @@
 import { useState } from 'react';
 import { api } from '../api';
-import { Eye, EyeOff, Sun, Moon, Sparkle, ShieldCheck, Building2, Users } from 'lucide-react';
+import { Eye, EyeOff, Sun, Moon, Sparkle, ShieldCheck, Building2, Users, CheckCircle2 } from 'lucide-react';
+import LupaPasswordModal from './LupaPasswordModal.jsx';
 
 export default function LoginView({ onLogin, theme, setTheme }) {
   const [tab, setTab] = useState('staff');
   const [form, setForm] = useState({ username: '', no_wa: '', password: '' });
   const [err, setErr] = useState('');
+  const [ok, setOk] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [lupaOpen, setLupaOpen] = useState(false);
 
   async function submit(e) {
     e.preventDefault();
     setErr('');
+    setOk('');
     setLoading(true);
     try {
       const d = await api.login(
@@ -47,18 +51,33 @@ export default function LoginView({ onLogin, theme, setTheme }) {
           style={{ animationDelay: '1.5s' }}
         />
         <div className="absolute bottom-[-18%] left-[20%] h-[420px] w-[420px] rounded-full bg-sky-400/10 blur-3xl dark:bg-sky-500/8" />
-        <div className="absolute inset-0" style={{ backgroundImage: 'linear-gradient(to right,rgba(148,163,184,0.07) 1px,transparent 1px),linear-gradient(to bottom,rgba(148,163,184,0.07) 1px,transparent 1px)', backgroundSize: '44px 44px' }} />
+        <div
+          className="absolute inset-0"
+          style={{
+            backgroundImage:
+              'linear-gradient(to right,rgba(148,163,184,0.07) 1px,transparent 1px),linear-gradient(to bottom,rgba(148,163,184,0.07) 1px,transparent 1px)',
+            backgroundSize: '44px 44px'
+          }}
+        />
       </div>
 
       <div className="relative mx-auto grid min-h-[100dvh] w-full max-w-7xl grid-cols-1 items-center gap-8 px-4 py-8 sm:px-6 sm:py-10 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,440px)] lg:gap-12 lg:px-10 xl:gap-16">
         <section className="hidden lg:flex flex-col justify-center">
           <div className="mb-10 flex items-center gap-4">
             <div className="rounded-2xl bg-white p-3 shadow-[0_24px_80px_rgba(15,23,42,0.35)] dark:shadow-[0_24px_80px_rgba(0,0,0,0.45)]">
-              <img src="/tp_logo.png" alt="Taruna Prima Logo" width="224" height="64" className="w-52 xl:w-60 h-auto object-contain" />
+              <img
+                src="/tp_logo.png"
+                alt="Taruna Prima Logo"
+                width="224"
+                height="64"
+                className="w-52 xl:w-60 h-auto object-contain"
+              />
             </div>
             <div className="border-l border-slate-300 dark:border-white/15 pl-5">
               <div className="text-2xl font-black tracking-wide leading-none text-slate-900 dark:text-white">SIAGA</div>
-              <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-300 uppercase font-bold tracking-[0.18em]">Sistem Informasi</div>
+              <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-300 uppercase font-bold tracking-[0.18em]">
+                Sistem Informasi
+              </div>
             </div>
           </div>
 
@@ -75,7 +94,8 @@ export default function LoginView({ onLogin, theme, setTheme }) {
             dari gerbang sampai laporan wali.
           </h1>
           <p className="mt-5 max-w-xl text-base leading-relaxed text-slate-600 dark:text-slate-300">
-            Absensi, penitipan, billing, catatan guru, dan akses wali murid dikelola dalam satu alur kerja yang konsisten untuk seluruh cabang Taruna Prima.
+            Absensi, penitipan, billing, catatan guru, dan akses wali murid dikelola dalam satu alur kerja yang
+            konsisten untuk seluruh cabang Taruna Prima.
           </p>
 
           <div className="mt-9 grid grid-cols-5 gap-2">
@@ -93,7 +113,9 @@ export default function LoginView({ onLogin, theme, setTheme }) {
           <div className="mt-10 grid grid-cols-3 gap-4 text-sm text-slate-600 dark:text-slate-300">
             <div className="border-t border-slate-300 dark:border-white/10 pt-3">
               <span className="block text-xl font-black text-slate-900 dark:text-white">7</span>
-              <span className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">Peran pengguna</span>
+              <span className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                Peran pengguna
+              </span>
             </div>
             <div className="border-t border-slate-300 dark:border-white/10 pt-3">
               <span className="block text-xl font-black text-slate-900 dark:text-white">5</span>
@@ -101,7 +123,9 @@ export default function LoginView({ onLogin, theme, setTheme }) {
             </div>
             <div className="border-t border-slate-300 dark:border-white/10 pt-3">
               <span className="block text-xl font-black text-slate-900 dark:text-white">1</span>
-              <span className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">Portal terpadu</span>
+              <span className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                Portal terpadu
+              </span>
             </div>
           </div>
         </section>
@@ -109,17 +133,28 @@ export default function LoginView({ onLogin, theme, setTheme }) {
         <section className="flex items-center justify-center lg:hidden">
           <div className="flex items-center gap-3">
             <div className="rounded-xl bg-white p-2 shadow-[0_8px_32px_rgba(15,23,42,0.25)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.45)]">
-              <img src="/tp_logo.png" alt="Taruna Prima Logo" width="152" height="44" className="h-10 w-auto object-contain" />
+              <img
+                src="/tp_logo.png"
+                alt="Taruna Prima Logo"
+                width="152"
+                height="44"
+                className="h-10 w-auto object-contain"
+              />
             </div>
             <div className="border-l border-slate-300/60 dark:border-slate-700 pl-3">
               <div className="text-xl font-black leading-none text-slate-900 dark:text-white">SIAGA</div>
-              <div className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-[0.18em]">Taruna Prima</div>
+              <div className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-[0.18em]">
+                Taruna Prima
+              </div>
             </div>
           </div>
         </section>
 
         <main className="relative flex items-center justify-center">
-          <div className="pointer-events-none absolute inset-x-10 top-10 bottom-20 rounded-3xl bg-gradient-to-br from-amber-200/30 to-indigo-200/20 blur-2xl dark:from-amber-500/10 dark:to-indigo-500/8" aria-hidden="true" />
+          <div
+            className="pointer-events-none absolute inset-x-10 top-10 bottom-20 rounded-3xl bg-gradient-to-br from-amber-200/30 to-indigo-200/20 blur-2xl dark:from-amber-500/10 dark:to-indigo-500/8"
+            aria-hidden="true"
+          />
           <div className="relative w-full max-w-md rounded-[22px] border border-white/60 bg-white/90 backdrop-blur-xl p-6 sm:p-7 shadow-[0_24px_80px_rgba(15,23,42,0.12)] dark:border-slate-800 dark:bg-slate-900/80 dark:shadow-[0_24px_80px_rgba(0,0,0,0.45)]">
             <div className="mb-6 flex flex-col gap-4">
               <div className="flex items-center justify-between gap-3">
@@ -128,8 +163,12 @@ export default function LoginView({ onLogin, theme, setTheme }) {
                     <ShieldCheck className="size-5 text-primary" />
                   </div>
                   <div>
-                    <div className="text-xl font-black text-text-main dark:text-slate-100 leading-none tracking-[-0.02em]">Masuk SIAGA</div>
-                    <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">Portal akses sekolah Taruna Prima</div>
+                    <div className="text-xl font-black text-text-main dark:text-slate-100 leading-none tracking-[-0.02em]">
+                      Masuk SIAGA
+                    </div>
+                    <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                      Portal akses sekolah Taruna Prima
+                    </div>
                   </div>
                 </div>
                 <button
@@ -147,10 +186,14 @@ export default function LoginView({ onLogin, theme, setTheme }) {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-1 rounded-xl bg-slate-100/80 dark:bg-slate-800/60 p-1 mb-5 dark:bg-slate-800/60" role="tablist" aria-label="Tipe akses">
+            <div
+              className="grid grid-cols-2 gap-1 rounded-xl bg-slate-100/80 dark:bg-slate-800/60 p-1 mb-5 dark:bg-slate-800/60"
+              role="tablist"
+              aria-label="Tipe akses"
+            >
               {[
                 ['staff', 'Staff', Building2],
-                ['wali', 'Wali Murid', Users],
+                ['wali', 'Wali Murid', Users]
               ].map(([id, label, Icon]) => (
                 <button
                   key={id}
@@ -213,6 +256,24 @@ export default function LoginView({ onLogin, theme, setTheme }) {
                   </button>
                 }
               />
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setLupaOpen(true)}
+                  className="text-[12px] font-bold text-primary transition-colors hover:text-primary-hover"
+                >
+                  Lupa password?
+                </button>
+              </div>
+              {ok && (
+                <div
+                  className="flex gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 dark:border-emerald-400/25 dark:bg-emerald-500/10 dark:text-emerald-300"
+                  role="status"
+                >
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>{ok}</span>
+                </div>
+              )}
               {err && (
                 <div
                   className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-400/30 dark:bg-red-500/10 dark:text-red-300"
@@ -226,17 +287,37 @@ export default function LoginView({ onLogin, theme, setTheme }) {
                 className="relative w-full h-12 overflow-hidden rounded-2xl bg-gradient-to-br from-amber-500 to-amber-700 px-4 text-white font-bold shadow-[0_12px_32px_rgba(245,158,11,0.35)] transition-all duration-300 hover:shadow-[0_16px_40px_rgba(245,158,11,0.45)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none disabled:hover:translate-y-0"
               >
                 <span className="relative z-10">{loading ? 'Masuk…' : 'Masuk'}</span>
-                <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full hover:translate-x-full transition-transform duration-700" aria-hidden="true" />
+                <span
+                  className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full hover:translate-x-full transition-transform duration-700"
+                  aria-hidden="true"
+                />
               </button>
             </form>
+
+            {lupaOpen && (
+              <LupaPasswordModal
+                tipe={tab}
+                identitas={tab === 'wali' ? form.no_wa : form.username}
+                onClose={() => setLupaOpen(false)}
+                onBerhasil={() => {
+                  setLupaOpen(false);
+                  setErr('');
+                  setForm((f) => ({ ...f, password: '' }));
+                  setOk('Password berhasil diubah. Silakan masuk dengan password baru Anda.');
+                }}
+              />
+            )}
 
             <div className="mt-6 grid grid-cols-3 gap-2 text-center">
               {[
                 ['Siswa', '200+'],
                 ['Cabang', '5'],
-                ['Terintegrasi', 'AI'],
+                ['Terintegrasi', 'AI']
               ].map(([label, value]) => (
-                <div key={label} className="rounded-xl border border-slate-100 bg-slate-50/60 p-2.5 dark:border-slate-800 dark:bg-slate-800/40">
+                <div
+                  key={label}
+                  className="rounded-xl border border-slate-100 bg-slate-50/60 p-2.5 dark:border-slate-800 dark:bg-slate-800/40"
+                >
                   <div className="text-base font-black text-text-main dark:text-slate-100">{value}</div>
                   <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{label}</div>
                 </div>
@@ -258,15 +339,35 @@ export default function LoginView({ onLogin, theme, setTheme }) {
   );
 }
 
-function Field({ label, value, onChange, type = 'text', autoFocus = false, autoComplete, spellCheck, trailing, name, id }) {
-  const fieldId = id || `siaga-${String(label).toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+function Field({
+  label,
+  value,
+  onChange,
+  type = 'text',
+  autoFocus = false,
+  autoComplete,
+  spellCheck,
+  trailing,
+  name,
+  id
+}) {
+  const fieldId =
+    id ||
+    `siaga-${String(label)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')}`;
   return (
     <label htmlFor={fieldId} className="block">
       <span className="text-xs font-black uppercase tracking-wide text-slate-500">{label}</span>
       <div className="mt-1.5 group flex items-center rounded-xl border border-slate-200 bg-white px-3 shadow-sm transition-all duration-200 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 focus-within:shadow-md dark:border-slate-700 dark:bg-slate-800/60 dark:focus-within:border-primary">
         <input
           id={fieldId}
-          name={name || `siaga_${String(label).toLowerCase().replace(/[^a-z0-9]+/g, '_')}`}
+          name={
+            name ||
+            `siaga_${String(label)
+              .toLowerCase()
+              .replace(/[^a-z0-9]+/g, '_')}`
+          }
           type={type}
           value={value}
           autoFocus={autoFocus}

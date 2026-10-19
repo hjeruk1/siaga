@@ -25,6 +25,22 @@ const changePasswordSchema = z.object({
   new_password: z.string().max(128).optional()
 });
 
+// Lupa password: identitas mengikuti tipe akun — wali lewat nomor WhatsApp,
+// staff lewat username (nomornya diambil dari staff_profile).
+const lupaPasswordSchema = z.object({
+  tipe: z.enum(['staff', 'wali']).optional(),
+  username: z.string().max(80).optional(),
+  no_wa: z.string().max(80).optional()
+});
+
+const resetPasswordSchema = z.object({
+  tipe: z.enum(['staff', 'wali']).optional(),
+  username: z.string().max(80).optional(),
+  no_wa: z.string().max(80).optional(),
+  kode: z.string().max(12).optional(),
+  password_baru: z.string().max(128).optional()
+});
+
 // --- absensi ---
 const absensiCheckinSchema = z.object({
   siswa_id: idLike,
@@ -85,6 +101,8 @@ const operasionalConfigSchema = z.object({
 module.exports = {
   loginSchema,
   changePasswordSchema,
+  lupaPasswordSchema,
+  resetPasswordSchema,
   absensiCheckinSchema,
   absensiKeteranganSchema,
   pembayaranSchema,

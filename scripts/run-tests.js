@@ -24,6 +24,7 @@ const files =
         'scripts/wa.test.js',
         'scripts/backup.test.js',
         'scripts/pin.test.js',
+        'scripts/reset-password.test.js',
         'scripts/guru-lintas-cabang.test.js'
       ];
 const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'siaga-test-'));
@@ -48,6 +49,10 @@ const env = {
   WA_PROVIDER: 'log',
   WA_DELAY_MS: '0',
   WA_TIPE_AKTIF: 'daily_published,guru_reply,payment_verified,payment_rejected,invoice_issued',
+  // Kode OTP ditulis ke berkas ini supaya tes bisa menyelesaikan alur pemulihan
+  // password. Hanya diset di harness — server sungguhan tidak pernah menulis
+  // kode OTP ke disk.
+  OTP_DEBUG_FILE: path.join(tempDir, 'otp-debug.txt'),
   FRONTEND_URL: 'http://localhost:5173'
 };
 

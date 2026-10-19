@@ -7,8 +7,10 @@ const db = require('../db');
 const auth = require('../middleware/auth');
 const { SECRET, loadUser, MEDIA_COOKIE } = require('../middleware/auth');
 const { validateBody } = require('../middleware/validate');
-const { loginSchema, changePasswordSchema } = require('../schemas');
+const { loginSchema, changePasswordSchema, lupaPasswordSchema, resetPasswordSchema } = require('../schemas');
 const { nowUtc, audit } = require('../utils/workflow');
+const otp = require('../utils/otp');
+const wa = require('../utils/wa');
 
 const DUMMY_HASH = '$2a$10$CwTycUXWue0Thq9StjUM0uJ8oD4P0MYu96TbKavvLWS.5o60tK4Ga';
 const loginAttempts = new Map();
@@ -142,6 +144,102 @@ router.post('/change-password', auth(), validateBody(changePasswordSchema), (req
   const token = jwt.sign({ id: loaded.id, v: Number(loaded.auth_version || 0) }, SECRET, { expiresIn: '12h' });
   setMediaCookie(res, token);
   res.json({ success: true, token, user: publicUser(loaded) });
+});
+
+// ---------------------------------------------------------------------------
+// Lupa password — kode OTP lewat WhatsApp
+// ---------------------------------------------------------------------------
+// Dua langkah, dua rute:
+//   1. POST /api/auth/lupa-password  -> kirim kode 6 angka ke nomor terdaftar
+//   2. POST /api/auth/reset-password -> kode + password baru
+//
+// Kenapa tidak satu rute dengan token: kode OTP hanya 6 angka dan berumur 5
+// menit, jadi tidak ada gunanya menukarnya dengan token perantara. Lebih
+// sedikit langkah = lebih sedikit tempat untuk salah.
+//
+// Balasan langkah 1 SELALU sama, baik akunnya ada maupun tidak. Tanpa itu,
+// formulir ini menjadi alat untuk memeriksa nomor mana yang terdaftar di
+// sekolah — informasi yang tidak boleh bocor ke publik.
+router.post('/lupa-password', validateBody(lupaPasswordSchema), async (req, res) => {
+  const { tipe = 'wali', no_wa, username } = req.body || {};
+  const jenis = tipe === 'staff' ? 'staff' : 'wali';
+
+  // Jujur kalau kanal WA belum aktif: lebih baik orang tua diarahkan ke admin
+  // daripada menunggu kode yang tidak akan pernah datang.
+  if (!otp.waSiap()) {
+    return res.status(503).json({
+      error:
+        'Pemulihan lewat WhatsApp belum diaktifkan di server ini. Hubungi admin sekolah untuk mengatur ulang password Anda.',
+      code: 'WA_NONAKTIF'
+    });
+  }
+
+  const hasil = await otp.kirimKode({ tipe: jenis, no_wa, username, ip: req.ip });
+  if (hasil.status === 'terlalu-sering') {
+    const menit = Math.max(1, Math.ceil((hasil.sisaDetik || 60) / 60));
+    return res.status(429).json({
+      error: `Terlalu banyak permintaan kode. Coba lagi dalam ${menit} menit.`,
+      code: 'TERLALU_SERING'
+    });
+  }
+  if (hasil.status === 'gagal-kirim') {
+    return res.status(502).json({
+      error: 'Kode gagal dikirim lewat WhatsApp. Coba lagi beberapa saat atau hubungi admin sekolah.',
+      code: 'GAGAL_KIRIM'
+    });
+  }
+
+  res.json({
+    success: true,
+    pesan: otp.PESAN_UMUM,
+    berlaku_detik: Math.floor(otp.TTL_MS / 1000)
+  });
+});
+
+router.post('/reset-password', validateBody(resetPasswordSchema), (req, res) => {
+  const { tipe = 'wali', no_wa, username, kode, password_baru } = req.body || {};
+  const jenis = tipe === 'staff' ? 'staff' : 'wali';
+
+  if (!validPassword(password_baru))
+    return res.status(400).json({ error: 'Password baru minimal 10 karakter serta mengandung huruf dan angka' });
+  if (!/^\d{6}$/.test(String(kode || '')))
+    return res.status(400).json({ error: 'Kode verifikasi harus 6 angka' });
+
+  const pengguna = otp.cariPengguna({ tipe: jenis, no_wa, username });
+  // Akun tidak ada tetap menjalani verifikasi (dengan id -1) supaya waktu
+  // balasannya setara dan tidak membocorkan keberadaan akun.
+  const hasil = otp.verifikasiKode(pengguna?.id ?? -1, kode);
+  if (!pengguna || !hasil.ok) {
+    return res.status(400).json({ error: hasil.error || 'Kode tidak valid atau sudah kedaluwarsa. Minta kode baru.' });
+  }
+
+  // status sengaja TIDAK diubah: akun yang dinonaktifkan sekolah tidak boleh
+  // hidup lagi lewat pemulihan mandiri. must_change_password dimatikan karena
+  // pengguna baru saja memilih passwordnya sendiri.
+  db.prepare(
+    'UPDATE pengguna SET password_hash=?,must_change_password=0,auth_version=auth_version+1,updated_at=? WHERE id=?'
+  ).run(bcrypt.hashSync(password_baru, 10), nowUtc(), pengguna.id);
+
+  audit({ id: pengguna.id }, 'password_reset_otp', 'pengguna', pengguna.id, {
+    reason: 'reset mandiri lewat OTP WhatsApp'
+  });
+
+  // Kabari pemilik nomor. Kalau ini bukan dia, satu-satunya tanda yang mungkin
+  // dilihatnya adalah pesan ini — jadi jangan dilewatkan.
+  if (pengguna.no_wa) {
+    wa.kirimWA({
+      no_wa: pengguna.no_wa,
+      pesan: [
+        '*SIAGA Taruna Prima*',
+        '',
+        'Password akun SIAGA Anda baru saja diubah lewat pemulihan WhatsApp.',
+        '',
+        'Jika ini bukan Anda, segera hubungi admin sekolah — akun Anda mungkin sedang diambil alih.'
+      ].join('\n')
+    }).catch(() => {});
+  }
+
+  res.json({ success: true });
 });
 
 // ---------------------------------------------------------------------------

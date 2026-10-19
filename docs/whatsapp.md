@@ -263,7 +263,67 @@ Harus menampilkan `aktif: true`, `provider: "openwa"`, `connected: true`,
 
 ---
 
-## 7. Pindah ke gateway resmi
+## 7. Pemulihan password lewat OTP WhatsApp
+
+Wali tidak punya email di sistem ini — satu-satunya identitas yang benar-benar
+dimiliki orang tua adalah nomor WhatsApp yang terdaftar. Jadi "lupa password"
+diselesaikan lewat kode OTP di kanal ini.
+
+**Alur di aplikasi:** halaman login → *Lupa password?* → masukkan nomor
+(wali) atau username (staff) → kode 6 angka masuk lewat WhatsApp → masukkan
+kode + password baru. Untuk staff, kode dikirim ke
+`staff_profile.no_wa_kontak`.
+
+**Syarat:** kanal WA harus aktif (`WA_PROVIDER` bukan `none`). Kalau belum,
+tombolnya menjawab jujur dengan pesan "belum diaktifkan — hubungi admin
+sekolah", bukan pura-pura mengirim kode yang tak akan pernah datang.
+
+**Batas yang dipasang (semua disengaja):**
+
+| Aturan | Nilai | Alasan |
+|---|---|---|
+| Panjang kode | 6 angka | mudah diketik di HP |
+| Masa berlaku | 5 menit | cukup untuk berpindah aplikasi, terlalu pendek untuk ditebak |
+| Percobaan per kode | 5 | kode mati setelah itu, harus minta baru |
+| Permintaan per nomor | 3 / 15 menit | mencegah spam ke satu orang tua |
+| Permintaan per IP | 30 / jam | mencegah penyalahgunaan massal |
+
+**Yang dijaga di sisi keamanan:**
+
+- Kode disimpan **bcrypt**, bukan plaintext. Kalau database bocor, kode yang
+  masih berlaku tidak bisa dipakai mengambil alih akun.
+- Balasan permintaan **selalu sama** ("jika terdaftar, kode sudah dikirim").
+  Tanpa ini, formulir lupa password menjadi alat memeriksa nomor mana yang
+  terdaftar di sekolah.
+- Reset memutus **semua sesi lama** (`auth_version` naik) dan mengirim pesan
+  konfirmasi ke nomor tersebut — kalau bukan pemiliknya yang melakukan, itu
+  satu-satunya tanda yang akan terlihat.
+- Akun berstatus **nonaktif** tidak dikirimi kode dan tidak bisa dihidupkan
+  lewat pemulihan mandiri.
+
+⚠️ **Dampak ke risiko open-wa:** OTP menambah volume pesan keluar secara
+signifikan, dan pengiriman ke nomor yang belum pernah menghubungi sekolah
+adalah pola yang paling dicurigai WhatsApp. Kalau pemulihan password dipakai
+rutin, ini alasan tambahan untuk pindah ke gateway resmi (bagian 8).
+
+📌 **`TRUST_PROXY=true` wajib di produksi.** Tanpa itu backend melihat semua
+permintaan berasal dari `127.0.0.1` (IP reverse proxy), sehingga pembatasan
+per-IP otomatis dimatikan — kalau tidak dimatikan, satu kuota 30/jam akan
+menjadi jatah seluruh sekolah.
+
+**Menguji tanpa WhatsApp sungguhan:**
+
+```bash
+# kode ditulis ke berkas, bukan dikirim; khusus pengujian
+WA_PROVIDER=log OTP_DEBUG_FILE=/tmp/otp.txt npm run dev
+```
+
+`OTP_DEBUG_FILE` tidak pernah diset di server produksi. Tes otomatisnya ada di
+`scripts/reset-password.test.js`.
+
+---
+
+## 8. Pindah ke gateway resmi
 
 Karena pemanggil hanya bergantung pada `utils/wa.js`, pindah provider cukup
 mengubah `.env`:
@@ -284,7 +344,7 @@ sesuaikan mapping di `backend/utils/wa.js` bila reseller memakai bentuk lain
 
 ---
 
-## 8. Menguji tanpa mengirim pesan
+## 9. Menguji tanpa mengirim pesan
 
 ```bash
 # tidak mengirim apa pun; alur normal & pelacakan wa_sent_at tetap teruji
@@ -296,7 +356,7 @@ gate tipe, isolasi kegagalan, kontrak HTTP Easy API via stub server).
 
 ---
 
-## 9. Yang TIDAK dilakukan kanal ini (sengaja)
+## 10. Yang TIDAK dilakukan kanal ini (sengaja)
 
 - **Tidak ada auto-reply / chatbot.** Kalau orang tua membalas pesan, balasan
   masuk ke WhatsApp nomor sekolah, bukan ke aplikasi (open-wa Easy API bisa
