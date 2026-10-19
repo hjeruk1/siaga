@@ -12,6 +12,8 @@ import Tagihan from './wali/Tagihan.jsx';
 import Laporan from './wali/Laporan.jsx';
 import { PushCard } from './wali/PushCard.jsx';
 import { InstallBanner } from './wali/InstallBanner.jsx';
+import { KeamananCard, PinPrompt } from './wali/KeamananCard.jsx';
+import { hapusPinToken } from '../utils/pin.js';
 import { SegmentedTabs, Sheet } from './wali/ui.jsx';
 import {
   bulanIni,
@@ -50,6 +52,17 @@ export default function WaliView({ user, toast }) {
     return ['catatan', 'kehadiran', 'tagihan', 'laporan'].includes(t) ? t : 'catatan';
   });
   const [billing, setBilling] = useState(null);
+  // Apakah wali memasang PIN. Dipakai untuk TIDAK menarik data tagihan saat
+  // aplikasi dibuka: kalau di-prefetch, dialog PIN langsung muncul di halaman
+  // depan hanya karena orang tua membuka catatan harian anak. Data keuangan
+  // baru diminta saat tab Tagihan benar-benar dibuka.
+  // null = belum tahu (status PIN masih dimuat). Selama belum tahu, jangan
+  // menarik data tagihan: kalau ternyata wali punya PIN, dialog akan muncul di
+  // halaman depan hanya karena orang tua membuka catatan harian.
+  const [waliPunyaPin, setWaliPunyaPin] = useState(null);
+  // Dialog PIN muncul otomatis saat server menjawab PIN_REQUIRED (wali sudah
+  // memasang PIN). Aksi asli dicoba lagi setelah PIN benar.
+  const [pinDibutuhkan, setPinDibutuhkan] = useState(false);
   const [loadingBilling, setLoadingBilling] = useState(false);
   const [rekap, setRekap] = useState(null);
   const [bulan, setBulan] = useState(bulanIni());
@@ -83,13 +96,20 @@ export default function WaliView({ user, toast }) {
   }, []);
 
   const loadBilling = useCallback(
-    async (siswaId) => {
+    async (siswaId, denganPin = true) => {
       if (!siswaId) return;
       setLoadingBilling(true);
       try {
         const data = await api.waliBilling(siswaId);
         setBilling(data);
       } catch (e) {
+        // PIN_REQUIRED: jangan tampilkan toast merah yang menakutkan. Buka
+        // dialog PIN; kalau wali memasang PIN, ia memang diminta memasukkan.
+        if (denganPin && (e.code === 'PIN_REQUIRED' || e.status === 403)) {
+          hapusPinToken();
+          setPinDibutuhkan(true);
+          return;
+        }
         toast?.('err', e.message);
       } finally {
         setLoadingBilling(false);
@@ -115,6 +135,13 @@ export default function WaliView({ user, toast }) {
   );
 
   useEffect(() => {
+    api
+      .pinStatus()
+      .then((s) => setWaliPunyaPin(!!s?.punyaPin))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
     if (!selected) return;
     setDetail(null);
     setComment('');
@@ -127,10 +154,21 @@ export default function WaliView({ user, toast }) {
         setHistoryHabis((h || []).length < 30);
       })
       .catch((e) => toast?.('err', e.message));
-    loadBilling(selected.id);
+    if (waliPunyaPin === false) loadBilling(selected.id);
     loadRekap(bulan);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected?.id]);
+  }, [selected?.id, waliPunyaPin]);
+
+  // Buka tab Tagihan tanpa data (mis. dialog PIN tadi dibatalkan, atau PIN baru
+  // dimatikan/dipasang): minta lagi. Penjaga !pinDibutuhkan mencegah loop
+  // tak berujung ketika server terus menolak dengan PIN_REQUIRED — dialog PIN
+  // yang menunggu jawaban, bukan permintaan berulang.
+  useEffect(() => {
+    if (activeTab !== 'tagihan') return;
+    if (billing || loadingBilling || pinDibutuhkan || !selected) return;
+    loadBilling(selected.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, billing, loadingBilling, pinDibutuhkan, selected?.id, waliPunyaPin]);
 
   // Muat catatan lebih lama: endpoint memakai `limit` (maks 120), jadi tambah
   // 30 per klik. Kalau hasilnya kurang dari limit, berarti sudah habis.
@@ -284,6 +322,17 @@ export default function WaliView({ user, toast }) {
 
         <InstallBanner />
 
+        <KeamananCard
+          toast={toast}
+          onPinBerubah={() => {
+            // Buang data keuangan dari memori, lalu muat ulang: kalau PIN baru
+            // dipasang, permintaan ini akan ditolak PIN_REQUIRED dan dialog PIN
+            // muncul — sesi yang sama ikut terkunci, tidak menunggu reload.
+            setBilling(null);
+            if (selected) loadBilling(selected.id);
+          }}
+        />
+
         <SegmentedTabs tabs={tabs} value={activeTab} onChange={setActiveTab} ariaLabel="Bagian portal wali" />
 
         {activeTab === 'catatan' ? (
@@ -344,10 +393,16 @@ export default function WaliView({ user, toast }) {
           <Tagihan
             siswa={selected}
             billing={billing}
-            memuat={loadingBilling}
+            // Kalau dialog PIN tadi dibatalkan, data keuangan sengaja tidak
+            // tersimpan. Buka tab lagi berarti memintanya lagi.
+            memuat={loadingBilling || (!billing && !!selected)}
             galat={null}
-            onMuatUlang={() => selected && loadBilling(selected.id)}
+            onMuatUlang={() => selected && loadBilling(selected.id, false)}
             toast={toast}
+            onPerluPin={() => {
+              hapusPinToken();
+              setPinDibutuhkan(true);
+            }}
           />
         ) : null}
 
@@ -400,6 +455,17 @@ export default function WaliView({ user, toast }) {
           )}
         </Sheet>
       </div>
+
+      {/* Dialog PIN: muncul saat server menolak karena data keuangan butuh PIN.
+          Setelah PIN benar, tagihan dimuat ulang otomatis. */}
+      <PinPrompt
+        open={pinDibutuhkan}
+        onClose={() => setPinDibutuhkan(false)}
+        onBerhasil={() => {
+          setPinDibutuhkan(false);
+          if (selected) loadBilling(selected.id, false);
+        }}
+      />
     </div>
   );
 }

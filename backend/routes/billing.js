@@ -3,6 +3,7 @@ const path = require('path');
 const router = require('express').Router();
 const db = require('../db');
 const auth = require('../middleware/auth');
+const requirePin = require('../middleware/pin');
 const { validateBody } = require('../middleware/validate');
 const { pembayaranSchema } = require('../schemas');
 const {
@@ -1991,7 +1992,9 @@ function parseTagihanIds(raw) {
   return v.map(Number).filter((n) => Number.isInteger(n) && n > 0);
 }
 
-router.post('/wali/konfirmasi', auth(['wali']), uploadImage.single('bukti'), async (req, res) => {
+// Konfirmasi pembayaran menyentuh data uang: wajib PIN kalau wali sudah
+// memasangnya (lihat middleware/pin.js).
+router.post('/wali/konfirmasi', auth(['wali']), requirePin, uploadImage.single('bukti'), async (req, res) => {
   const d = req.body || {};
   const siswaId = Number(d.siswa_id);
   if (!siswaId || !canWaliAccessSiswa(req.user, siswaId))
@@ -2127,7 +2130,8 @@ router.post('/wali/konfirmasi', auth(['wali']), uploadImage.single('bukti'), asy
   }
 });
 
-router.get('/wali/siswa/:siswaId', auth(['wali']), (req, res) => {
+// Rincian tagihan + riwayat bayar: bagian paling sensitif di portal wali.
+router.get('/wali/siswa/:siswaId', auth(['wali']), requirePin, (req, res) => {
   const siswaId = Number(req.params.siswaId);
   const linked = db
     .prepare('SELECT 1 FROM wali_siswa WHERE wali_pengguna_id=? AND siswa_id=? AND aktif=1')

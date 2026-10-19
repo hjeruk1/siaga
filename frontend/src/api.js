@@ -1,3 +1,7 @@
+// Token PIN (step-up auth) dilampirkan ke SETIAP permintaan yang memegangnya.
+// Route yang tidak dilindungi PIN mengabaikannya, jadi aman dikirim menyeluruh.
+import { pinToken } from './utils/pin.js';
+
 let tokenCache = null;
 function token() {
   if (tokenCache === null) {
@@ -20,9 +24,14 @@ if (typeof window !== 'undefined') {
 }
 
 async function req(method, url, body) {
+  const pin = pinToken();
   const r = await fetch(url, {
     method,
-    headers: { 'Content-Type': 'application/json', ...(token() ? { Authorization: 'Bearer ' + token() } : {}) },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token() ? { Authorization: 'Bearer ' + token() } : {}),
+      ...(pin ? { 'X-Pin-Token': pin } : {})
+    },
     body: body !== undefined ? JSON.stringify(body) : undefined
   });
   const d = await r.json().catch(() => ({}));
@@ -217,13 +226,22 @@ export const api = {
   dashboard: (p) => req('GET', '/api/rekap/dashboard' + qs(p || {})),
   rekapBulanan: (p) => req('GET', '/api/rekap' + qs(p || {})),
   waliBilling: (siswaId) => req('GET', '/api/billing/wali/siswa/' + siswaId),
+  // PIN (step-up auth) untuk data keuangan wali
+  pinStatus: () => req('GET', '/api/auth/pin/status'),
+  setPin: (pin, password) => req('POST', '/api/auth/pin', { pin, password }),
+  verifyPin: (pin) => req('POST', '/api/auth/pin/verify', { pin }),
+  deletePin: (password) => req('DELETE', '/api/auth/pin', { password }),
   konfirmasiBayar: (fd) => {
     // FormData: Content-Type dibiarkan ke browser agar batas multipart ikut.
     // Pakai token() (bukan localStorage langsung) supaya cache token modul ini
     // tetap dipakai dan event "sesi berakhir" konsisten dengan request lain.
+    const pin = pinToken();
     return fetch('/api/billing/wali/konfirmasi', {
       method: 'POST',
-      headers: token() ? { Authorization: 'Bearer ' + token() } : {},
+      headers: {
+        ...(token() ? { Authorization: 'Bearer ' + token() } : {}),
+        ...(pin ? { 'X-Pin-Token': pin } : {})
+      },
       body: fd
     }).then(async (r) => {
       const d = await r.json().catch(() => null);

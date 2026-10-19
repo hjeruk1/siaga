@@ -1,4 +1,5 @@
 require('dotenv').config();
+const crypto = require('crypto');
 const router = require('express').Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
@@ -143,4 +144,153 @@ router.post('/change-password', auth(), validateBody(changePasswordSchema), (req
   res.json({ success: true, token, user: publicUser(loaded) });
 });
 
+// ---------------------------------------------------------------------------
+// PIN 6 angka — gerbang tambahan untuk aksi finansial wali
+// ---------------------------------------------------------------------------
+// Yang dilindungi: konfirmasi pembayaran dan membaca rincian tagihan/riwayat
+// bayar. Tujuannya skenario "HP dipinjam keluarga": tetap bisa lihat kabar
+// anak, tapi tidak bisa mengajukan pembayaran atau membuka data uang.
+//
+// Aturan main (semua disengaja):
+// - PIN hanya 6 angka -> WAJIB dibatasi percobaan. 5 kali salah -> terkunci
+//   15 menit. Tanpa ini, 6 angka bisa ditebak habis.
+// - PIN disimpan bcrypt, BUKAN hash biasa. SHA-256 atas 6 angka bisa diuji
+//   jutaan kali per detik pada GPU; bcrypt memperlambat itu secara drastis.
+// - Verifikasi menghasilkan token HMAC berumur 10 menit (pinToken), dikirim
+//   sebagai header X-Pin-Token pada permintaan yang dilindungi. Server tidak
+//   menyimpan sesi; token kedaluwarsa sendiri.
+// - Status akun 'undangan' (belum aktif) tidak boleh punya PIN: akun itu baru
+//   setengah jadi.
+
+const PIN_MAX_COBA = 5;
+const PIN_KUNCI_MS = 15 * 60 * 1000;
+const PIN_TOKEN_MS = 10 * 60 * 1000;
+
+function pinValid(value) {
+  return /^\d{6}$/.test(String(value || ''));
+}
+
+// Token pin mirip konsep kunci publik invoice/kuitansi: HMAC, tanpa database.
+function pinTokenUntuk(userId) {
+  const exp = Math.floor((Date.now() + PIN_TOKEN_MS) / 1000);
+  const isi = `pin:${userId}:${exp}`;
+  const sig = crypto.createHmac('sha256', SECRET).update(isi).digest('hex');
+  return `${exp}.${sig}`;
+}
+
+function pinTokenValid(userId, token) {
+  const [expRaw, sig] = String(token || '').split('.');
+  const exp = Number(expRaw);
+  if (!Number.isInteger(exp) || exp < Math.floor(Date.now() / 1000)) return false;
+  if (!/^[a-f0-9]{64}$/.test(sig || '')) return false;
+  const isi = `pin:${userId}:${exp}`;
+  const expected = crypto.createHmac('sha256', SECRET).update(isi).digest('hex');
+  const a = Buffer.from(sig, 'hex');
+  const b = Buffer.from(expected, 'hex');
+  // timingSafeEqual mencegah kebocoran lewat waktu eksekusi.
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+// Status lengkap + kunci; dipakai middleware requirePin.
+function pinStatus(userId) {
+  const row = db
+    .prepare('SELECT pin_hash, pin_failed_count, pin_locked_until FROM pengguna WHERE id=?')
+    .get(userId);
+  if (!row || !row.pin_hash) return { punyaPin: false, terkunci: false, sisaCoba: PIN_MAX_COBA };
+  const locked = row.pin_locked_until && new Date(row.pin_locked_until).getTime() > Date.now();
+  return {
+    punyaPin: true,
+    terkunci: !!locked,
+    kunciSampai: locked ? row.pin_locked_until : null,
+    sisaCoba: Math.max(0, PIN_MAX_COBA - (row.pin_failed_count || 0))
+  };
+}
+
+// Verifikasi PIN. Mengembalikan { ok, token?, error?, status? }.
+function verifikasiPin(userId, pin) {
+  const status = pinStatus(userId);
+  if (status.terkunci) return { ok: false, error: 'PIN terkunci sementara. Coba lagi beberapa menit.', status };
+  const row = db.prepare('SELECT pin_hash FROM pengguna WHERE id=?').get(userId);
+  if (!row || !bcrypt.compareSync(String(pin || ''), row.pin_hash)) {
+    const gagal = (db.prepare('SELECT pin_failed_count c FROM pengguna WHERE id=?').get(userId).c || 0) + 1;
+    const kunciSampai =
+      gagal >= PIN_MAX_COBA ? new Date(Date.now() + PIN_KUNCI_MS).toISOString() : null;
+    db.prepare('UPDATE pengguna SET pin_failed_count=?, pin_locked_until=?, updated_at=? WHERE id=?').run(
+      gagal,
+      kunciSampai,
+      nowUtc(),
+      userId
+    );
+    return {
+      ok: false,
+      error: kunciSampai ? 'PIN salah 5 kali. Dikunci 15 menit.' : `PIN salah. Sisa ${PIN_MAX_COBA - gagal} percobaan.`,
+      status: pinStatus(userId)
+    };
+  }
+  db.prepare('UPDATE pengguna SET pin_failed_count=0, pin_locked_until=NULL, updated_at=? WHERE id=?').run(
+    nowUtc(),
+    userId
+  );
+  return { ok: true, token: pinTokenUntuk(userId), status: pinStatus(userId) };
+}
+
+router.get('/pin/status', auth(), (req, res) => {
+  res.json(pinStatus(req.user.id));
+});
+
+router.post('/pin', auth(), (req, res) => {
+  const { pin, password } = req.body || {};
+  if (req.user.status !== 'aktif')
+    return res.status(403).json({ error: 'Ganti password akun terlebih dahulu sebelum mengatur PIN' });
+  if (!pinValid(pin)) return res.status(400).json({ error: 'PIN harus 6 angka' });
+  const pinStr = String(pin);
+  if (pinStr === '123456' || /^(\d)\1{5}$/.test(pinStr) || pinStr === '654321')
+    return res.status(400).json({ error: 'Pilih PIN yang tidak mudah ditebak' });
+  // Membuat ATAU mengganti PIN selalu wajib password. Alasannya sederhana:
+  // kalau ganti PIN hanya butuh sesi yang sudah login, siapa pun yang memegang
+  // HP orang tua bisa memasang PIN baru dan mengambil alih akun. Password
+  // adalah bukti kepemilikan; PIN lama tidak perlu ditanya karena password
+  // lebih kuat dari PIN 6 angka.
+  const row = db.prepare('SELECT password_hash FROM pengguna WHERE id=?').get(req.user.id);
+  if (!row) return res.status(404).json({ error: 'Akun tidak ditemukan' });
+  if (!bcrypt.compareSync(String(password || ''), row.password_hash))
+    return res.status(400).json({ error: 'Password salah' });
+  db.prepare(
+    'UPDATE pengguna SET pin_hash=?, pin_failed_count=0, pin_locked_until=NULL, pin_updated_at=?, updated_at=? WHERE id=?'
+  ).run(bcrypt.hashSync(pinStr, 10), nowUtc(), nowUtc(), req.user.id);
+  audit(req.user, 'pin_set', 'pengguna', req.user.id);
+  res.json({ success: true, status: pinStatus(req.user.id) });
+});
+
+router.post('/pin/verify', auth(), (req, res) => {
+  const { pin } = req.body || {};
+  if (!pinValid(pin)) return res.status(400).json({ error: 'PIN harus 6 angka' });
+  const hasil = verifikasiPin(req.user.id, pin);
+  if (!hasil.ok) {
+    const code = hasil.status?.terkunci ? 'PIN_LOCKED' : 'PIN_SALAH';
+    return res.status(429).json({ error: hasil.error, code, status: hasil.status });
+  }
+  audit(req.user, 'pin_verify', 'pengguna', req.user.id);
+  res.json({ success: true, pin_token: hasil.token, berlaku_detik: Math.floor(PIN_TOKEN_MS / 1000) });
+});
+
+router.delete('/pin', auth(), (req, res) => {
+  const { password } = req.body || {};
+  const row = db.prepare('SELECT password_hash, pin_hash FROM pengguna WHERE id=?').get(req.user.id);
+  if (!row) return res.status(404).json({ error: 'Akun tidak ditemukan' });
+  if (!row.pin_hash) return res.status(400).json({ error: 'Belum ada PIN' });
+  if (!bcrypt.compareSync(String(password || ''), row.password_hash))
+    return res.status(400).json({ error: 'Password salah' });
+  db.prepare('UPDATE pengguna SET pin_hash=NULL, pin_failed_count=0, pin_locked_until=NULL, pin_updated_at=NULL, updated_at=? WHERE id=?').run(
+    nowUtc(),
+    req.user.id
+  );
+  audit(req.user, 'pin_delete', 'pengguna', req.user.id);
+  res.json({ success: true });
+});
+
 module.exports = router;
+// Dipakai middleware/pin.js. Sengaja diekspor: logika validasi token harus
+// hidup di SATU tempat. Kalau diduplikasi, perubahan kebijakan (mis. durasi
+// token) gampang hanya diterapkan di salah satu berkas.
+module.exports.pinTokenValid = pinTokenValid;

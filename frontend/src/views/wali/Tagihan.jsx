@@ -17,17 +17,25 @@ import {
   waUrl
 } from './portalHelpers.js';
 
-export default function Tagihan({ siswa, billing, memuat = false, galat, onMuatUlang, toast }) {
+export default function Tagihan({ siswa, billing, memuat = false, galat, onMuatUlang, toast, onPerluPin }) {
   const [tab, setTab] = useState('tagihan');
   const [konfirmasiOpen, setKonfirmasiOpen] = useState(false);
   const ringkas = ringkasTagihan(billing?.tagihan || []);
   const terbayar = totalTerbayar(billing?.pembayaran || []);
 
-  if (galat) return <Card className="p-4"><ErrorState desc={galat} onRetry={onMuatUlang} /></Card>;
+  if (galat)
+    return (
+      <Card className="p-4">
+        <ErrorState desc={galat} onRetry={onMuatUlang} />
+      </Card>
+    );
   if (memuat && !billing) {
     return (
       <div className="space-y-3">
-        <Card className="space-y-2 p-4"><Skeleton className="h-20 w-full" /><Skeleton className="h-20 w-full" /></Card>
+        <Card className="space-y-2 p-4">
+          <Skeleton className="h-20 w-full" />
+          <Skeleton className="h-20 w-full" />
+        </Card>
       </div>
     );
   }
@@ -37,7 +45,10 @@ export default function Tagihan({ siswa, billing, memuat = false, galat, onMuatU
     <div className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-2">
         <Card className="relative overflow-hidden p-4">
-          <div className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full bg-amber-100/60 blur-2xl" aria-hidden="true" />
+          <div
+            className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full bg-amber-100/60 blur-2xl"
+            aria-hidden="true"
+          />
           <div className="relative flex items-center gap-3">
             <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-amber-50 text-amber-600">
               <Receipt className="h-5 w-5" aria-hidden="true" />
@@ -63,7 +74,10 @@ export default function Tagihan({ siswa, billing, memuat = false, galat, onMuatU
           </div>
         </Card>
         <Card className="relative overflow-hidden p-4">
-          <div className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full bg-emerald-100/60 blur-2xl" aria-hidden="true" />
+          <div
+            className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full bg-emerald-100/60 blur-2xl"
+            aria-hidden="true"
+          />
           <div className="relative flex items-center gap-3">
             <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-emerald-50 text-emerald-600">
               <CreditCard className="h-5 w-5" aria-hidden="true" />
@@ -79,7 +93,11 @@ export default function Tagihan({ siswa, billing, memuat = false, galat, onMuatU
         </Card>
       </div>
 
-      <div className="flex gap-1.5 rounded-2xl border border-slate-200 bg-white p-1.5" role="tablist" aria-label="Bagian tagihan">
+      <div
+        className="flex gap-1.5 rounded-2xl border border-slate-200 bg-white p-1.5"
+        role="tablist"
+        aria-label="Bagian tagihan"
+      >
         {[
           { id: 'tagihan', label: 'Tagihan' },
           { id: 'invoice', label: 'Invoice' },
@@ -189,7 +207,10 @@ export default function Tagihan({ siswa, billing, memuat = false, galat, onMuatU
               {(billing.invoices || []).map((inv) => {
                 const tautan = tautanInvoice(inv);
                 return (
-                  <li key={inv.id} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50/60 p-3.5">
+                  <li
+                    key={inv.id}
+                    className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50/60 p-3.5"
+                  >
                     <div className="min-w-0">
                       <div className="font-mono text-xs font-black text-text-main">{inv.invoice_no}</div>
                       <div className="mt-0.5 text-[11px] font-semibold text-slate-500">
@@ -218,7 +239,11 @@ export default function Tagihan({ siswa, billing, memuat = false, galat, onMuatU
         <Card className="space-y-3 p-4">
           <SectionTitle icon={CreditCard}>Riwayat pembayaran</SectionTitle>
           {(billing.pembayaran || []).length === 0 ? (
-            <EmptyState icon={CreditCard} title="Belum ada pembayaran" desc="Pembayaran yang tercatat akan tampil di sini." />
+            <EmptyState
+              icon={CreditCard}
+              title="Belum ada pembayaran"
+              desc="Pembayaran yang tercatat akan tampil di sini."
+            />
           ) : (
             <ul className="space-y-2.5">
               {(billing.pembayaran || []).map((p) => {
@@ -228,12 +253,20 @@ export default function Tagihan({ siswa, billing, memuat = false, galat, onMuatU
                   <li key={p.id} className="rounded-2xl border border-slate-200 bg-slate-50/60 p-3.5">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <div className="font-mono text-xs font-black text-text-main">{p.receipt_no || 'Menunggu verifikasi'}</div>
+                        <div className="font-mono text-xs font-black text-text-main">
+                          {p.receipt_no || 'Menunggu verifikasi'}
+                        </div>
                         <div className="mt-0.5 text-[11px] font-semibold text-slate-500">
                           {p.tanggal_bayar} • {String(p.metode || '').toUpperCase()}
                         </div>
                         <div className="mt-1">
-                          <Pill tone={p.status === 'confirmed' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}>
+                          <Pill
+                            tone={
+                              p.status === 'confirmed'
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                : 'bg-amber-50 text-amber-700 border-amber-200'
+                            }
+                          >
                             {p.status === 'confirmed' ? 'Dikonfirmasi' : 'Verifikasi'}
                           </Pill>
                         </div>
@@ -272,7 +305,8 @@ export default function Tagihan({ siswa, billing, memuat = false, galat, onMuatU
       ) : null}
 
       <InfoNote>
-        Nomor WhatsApp guru kelas ada di hero. Kuitansi yang sudah terverifikasi dapat diunduh dan dibagikan ke keluarga.
+        Nomor WhatsApp guru kelas ada di hero. Kuitansi yang sudah terverifikasi dapat diunduh dan dibagikan ke
+        keluarga.
       </InfoNote>
 
       <StatusKlaim pembayaran={billing?.pembayaran} />
@@ -286,6 +320,7 @@ export default function Tagihan({ siswa, billing, memuat = false, galat, onMuatU
           toast?.('ok', 'Konfirmasi terkirim. Anda akan dinotifikasi setelah diverifikasi.');
           onMuatUlang?.();
         }}
+        onPerluPin={onPerluPin}
       />
     </div>
   );

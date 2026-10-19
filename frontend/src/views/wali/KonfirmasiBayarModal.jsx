@@ -10,11 +10,8 @@ import { rupiah } from './portalHelpers.js';
 // Bukti bersifat wajib: tanpa foto, bendahara tidak bisa memverifikasi dan
 // pengajuan hampir pasti ditolak. Pesan error dari server ditampilkan apa
 // adanya supaya orang tua tahu apa yang harus diperbaiki.
-export function KonfirmasiBayarModal({ open, onClose, siswaId, billing, onSukses }) {
-  const tagihan = useMemo(
-    () => (billing?.tagihan || []).filter((t) => t.nominal_final - t.paid_amount > 0),
-    [billing]
-  );
+export function KonfirmasiBayarModal({ open, onClose, siswaId, billing, onSukses, onPerluPin }) {
+  const tagihan = useMemo(() => (billing?.tagihan || []).filter((t) => t.nominal_final - t.paid_amount > 0), [billing]);
   const [pilihan, setPilihan] = useState([]);
   const [nominal, setNominal] = useState('');
   const [metode, setMetode] = useState('transfer');
@@ -86,6 +83,13 @@ export function KonfirmasiBayarModal({ open, onClose, siswaId, billing, onSukses
       setPratinjau(null);
       onClose();
     } catch (e) {
+      // PIN kedaluwarsa (10 menit) atau belum dimasukkan: jangan tampilkan
+      // pesan server yang membingungkan di dalam formulir. Tutup dan minta PIN.
+      if (e.code === 'PIN_REQUIRED') {
+        onPerluPin?.();
+        onClose();
+        return;
+      }
       setGalat(e.message);
     } finally {
       setKirim(false);
@@ -97,8 +101,8 @@ export function KonfirmasiBayarModal({ open, onClose, siswaId, billing, onSukses
     <Modal onClose={tutup} title="Konfirmasi Pembayaran">
       <div className="space-y-4">
         <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-[11px] leading-relaxed text-slate-500">
-          Pilih tagihan, isi nominal yang Anda bayar, lalu unggah <b>foto bukti transfer</b>. Bendahara akan
-          memeriksa dan mengonfirmasi — Anda mendapat notifikasi begitu diterima atau perlu diperbaiki.
+          Pilih tagihan, isi nominal yang Anda bayar, lalu unggah <b>foto bukti transfer</b>. Bendahara akan memeriksa
+          dan mengonfirmasi — Anda mendapat notifikasi begitu diterima atau perlu diperbaiki.
         </div>
 
         <div>
@@ -175,7 +179,9 @@ export function KonfirmasiBayarModal({ open, onClose, siswaId, billing, onSukses
                   type="button"
                   onClick={() => setMetode(m.v)}
                   className={`h-10 flex-1 rounded-xl border text-xs font-black transition-colors ${
-                    metode === m.v ? 'border-primary bg-primary-container text-primary' : 'border-slate-200 text-slate-500'
+                    metode === m.v
+                      ? 'border-primary bg-primary-container text-primary'
+                      : 'border-slate-200 text-slate-500'
                   }`}
                 >
                   {m.l}
