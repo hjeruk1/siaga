@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../../api';
 import {
   ArrowLeft,
+  ArrowRight,
   BookOpen,
   Camera,
   CheckCircle2,
@@ -28,7 +29,7 @@ import {
   completeness
 } from './helpers';
 
-export function Editor({ row, detail, setDetail, onClose, user, toast }) {
+export function Editor({ row, detail, setDetail, onClose, onLanjut, user, toast }) {
   const [comment, setComment] = useState('');
   const [busy, setBusy] = useState(false);
   const [tersimpanField, setTersimpanField] = useState(null);
@@ -268,6 +269,22 @@ export function Editor({ row, detail, setDetail, onClose, user, toast }) {
         const d = await api.dailyDetail(r.id).catch(() => null);
         if (d) setDetail((prev) => ({ ...prev, ...d }));
       }
+    } catch (e) {
+      toast('err', e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Simpan isian yang belum tersimpan (mis. catatan yang masih diketik), lalu
+  // buka siswa berikutnya. Field lain sudah auto-save saat diketuk, jadi yang
+  // perlu dipastikan hanya teks yang belum "blur".
+  async function lanjut() {
+    if (!onLanjut) return;
+    setBusy(true);
+    try {
+      await api.saveDaily(buildDailyPayload());
+      onLanjut();
     } catch (e) {
       toast('err', e.message);
     } finally {
@@ -680,6 +697,17 @@ export function Editor({ row, detail, setDetail, onClose, user, toast }) {
                           onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])}
                         />
                       </label>
+                      {onLanjut ? (
+                        <button
+                          onClick={lanjut}
+                          disabled={busy}
+                          title="Simpan lalu buka siswa berikutnya"
+                          className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-primary/30 bg-primary-container px-3 text-sm font-bold text-primary-active transition-all hover:bg-primary-container/80 active:scale-[0.98] disabled:opacity-50"
+                        >
+                          Lanjut
+                          <ArrowRight className="h-4 w-4" strokeWidth={2.4} />
+                        </button>
+                      ) : null}
                       <button
                         onClick={onClose}
                         className="hidden h-9 items-center gap-2 rounded-lg bg-slate-100 px-3 text-sm font-bold text-slate-600 transition-all hover:bg-slate-200 active:scale-[0.98] lg:inline-flex"
@@ -1286,7 +1314,13 @@ export function Editor({ row, detail, setDetail, onClose, user, toast }) {
         </div>
       </div>
 
-      <div className="flex flex-shrink-0 gap-2 border-t border-slate-200/80 bg-white/95 p-3 backdrop-blur-md lg:hidden">
+      {/* Bar aksi bawah (mobile). paddingBottom ditambah safe-area-inset-bottom
+          karena iPhone dengan home indicator punya area gestur ~34px; tanpa itu
+          tombol paling bawah separuh tertutup gestur sistem. */}
+      <div
+        className="flex flex-shrink-0 gap-2 border-t border-slate-200/80 bg-white/95 p-3 backdrop-blur-md lg:hidden"
+        style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom, 0px))' }}
+      >
         <button
           onClick={publish}
           disabled={missingCount > 0 || busy}
@@ -1309,6 +1343,19 @@ export function Editor({ row, detail, setDetail, onClose, user, toast }) {
             onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])}
           />
         </label>
+        {/* Ikon saja: bar bawah di HP sudah dipakai Kirim/Preview/Foto, dan
+            label teks akan mendorong tombol utama jadi terlalu sempit. */}
+        {onLanjut ? (
+          <button
+            onClick={lanjut}
+            disabled={busy}
+            aria-label="Simpan dan lanjut ke siswa berikutnya"
+            title="Simpan lalu buka siswa berikutnya"
+            className="btn-secondary h-10 gap-1 px-3 text-[11px] font-bold disabled:opacity-50"
+          >
+            <ArrowRight className="h-4 w-4" strokeWidth={2.4} />
+          </button>
+        ) : null}
       </div>
     </section>
   );

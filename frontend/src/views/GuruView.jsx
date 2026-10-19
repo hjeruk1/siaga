@@ -30,7 +30,28 @@ export default function GuruView({ user, toast, tab }) {
   const [isSchoolDay, setIsSchoolDay] = useState(null);
   const [absensi, setAbsensi] = useState([]);
   const [absenMode, setAbsenMode] = useState('masuk');
-  const [absenView, setAbsenView] = useState('card');
+  // Default tampilan absensi mengikuti lebar layar: di HP guru mengabsen
+  // belasan siswa, dan kartu (dengan foto besar) memaksa scroll jauh lebih
+  // panjang daripada daftar. Pilihan manual pengguna diingat supaya tidak
+  // "berubah sendiri" saat ia sudah terbiasa dengan satu mode.
+  const [absenView, setAbsenView] = useState(() => {
+    try {
+      const tersimpan = localStorage.getItem('siaga_absen_view');
+      if (tersimpan === 'card' || tersimpan === 'list') return tersimpan;
+    } catch {
+      /* storage diblokir: jatuh ke default */
+    }
+    if (typeof window === 'undefined') return 'card';
+    return window.matchMedia('(max-width: 639px)').matches ? 'list' : 'card';
+  });
+  function ubahAbsenView(v) {
+    setAbsenView(v);
+    try {
+      localStorage.setItem('siaga_absen_view', v);
+    } catch {
+      /* diabaikan */
+    }
+  }
   const [absenSearch, setAbsenSearch] = useState('');
   const [absenStatus, setAbsenStatus] = useState('all');
   const [dailySearch, setDailySearch] = useState('');
@@ -823,6 +844,14 @@ export default function GuruView({ user, toast, tab }) {
                     setDetail(null);
                     load();
                   }}
+                  // "Lanjut" mengisi kelas tanpa bolak-balik ke daftar: simpan
+                  // isian siswa ini, lalu buka siswa berikutnya sesuai urutan
+                  // daftar yang sedang tampil (termasuk filter/pencarian).
+                  onLanjut={(() => {
+                    const idx = filteredDaily.findIndex((r) => r.siswa_id === selected?.siswa_id);
+                    const berikut = idx >= 0 ? filteredDaily[idx + 1] : null;
+                    return berikut ? () => open(berikut) : null;
+                  })()}
                   user={user}
                   toast={toast}
                 />
@@ -941,7 +970,7 @@ export default function GuruView({ user, toast, tab }) {
                   ].map((v) => (
                     <button
                       key={v.id}
-                      onClick={() => setAbsenView(v.id)}
+                      onClick={() => ubahAbsenView(v.id)}
                       aria-pressed={absenView === v.id}
                       aria-label={v.label}
                       title={v.label}

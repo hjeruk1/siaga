@@ -23,7 +23,8 @@ const files =
         'scripts/wali-konfirmasi.test.js',
         'scripts/wa.test.js',
         'scripts/backup.test.js',
-        'scripts/pin.test.js'
+        'scripts/pin.test.js',
+        'scripts/guru-lintas-cabang.test.js'
       ];
 const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'siaga-test-'));
 const dbPath = path.join(tempDir, 'siaga.db');

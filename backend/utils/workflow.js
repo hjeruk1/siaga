@@ -49,6 +49,23 @@ function canAccessCabang(user, cabangId) {
       )
       .get(user.id, cabangId);
   }
+  // Guru bisa ditugaskan ke rombel di cabang lain (guru spesialis yang
+  // berkeliling, atau guru yang baru dimutasi). Tanpa aturan ini terjadi
+  // kontradiksi: canAccessSiswa MENGIZINKAN guru membuka siswa (berdasarkan
+  // penugasan rombel), tetapi requireActiveCabang MENOLAK simpan karena cabang
+  // profilnya berbeda — guru mengisi formulir lalu ditolak "Akses cabang
+  // ditolak" setiap kali menyimpan.
+  if (user.role === 'guru') {
+    return !!db
+      .prepare(
+        `SELECT 1
+         FROM guru_rombel gr
+         JOIN rombel r ON r.id=gr.rombel_id
+         WHERE gr.pengguna_id=? AND r.cabang_id=?
+         LIMIT 1`
+      )
+      .get(user.id, cabangId);
+  }
   return false;
 }
 
