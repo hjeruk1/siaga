@@ -11,7 +11,6 @@ import Kehadiran from './wali/Kehadiran.jsx';
 import Tagihan from './wali/Tagihan.jsx';
 import Laporan from './wali/Laporan.jsx';
 import { PushCard } from './wali/PushCard.jsx';
-import { InstallBanner } from './wali/InstallBanner.jsx';
 import { KeamananCard, PinPrompt } from './wali/KeamananCard.jsx';
 import { hapusPinToken } from '../utils/pin.js';
 import { SegmentedTabs, Sheet } from './wali/ui.jsx';
@@ -319,8 +318,6 @@ export default function WaliView({ user, toast }) {
           tagihanRingkas={ringkasTag}
           catatanTerakhir={catatanTerakhir}
         />
-
-        <InstallBanner />
 
         <KeamananCard
           toast={toast}

@@ -46,6 +46,7 @@ const GuruView = lazy(() => import('./views/GuruView'));
 const KepsekView = lazy(() => import('./views/KepsekView'));
 const GerbangView = lazy(() => import('./views/GerbangView'));
 const WaliView = lazy(() => import('./views/WaliView'));
+import { InstallBanner } from './components/InstallBanner';
 
 const iconMap = {
   admin: Shield,
@@ -569,6 +570,11 @@ export default function App() {
 
         {/* Main Content Area */}
         <main className="flex-1 bg-slate-100">
+          {/* Tawaran memasang aplikasi berlaku untuk semua peran, bukan hanya
+              wali: guru memakai ini tiap hari di kelas. */}
+          <div className="mx-auto w-full max-w-6xl px-4 pt-3 sm:px-6">
+            <InstallBanner />
+          </div>
           <Suspense
             fallback={
               <div className="grid min-h-[50vh] place-items-center">

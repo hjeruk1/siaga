@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Download, Share, X } from 'lucide-react';
 
-// Banner "Pasang aplikasi" di portal wali.
+// Banner "Pasang aplikasi" — tampil untuk SEMUA peran yang login (guru,
+// kepsek, admin, gerbang, wali). Guru memakai aplikasi ini setiap hari di
+// kelas; kalau tombol pasang hanya ada di portal wali, mereka tidak pernah
+// ditawari memasangnya.
 //
 // Chrome/Edge menembakkan `beforeinstallprompt` (hanya sekali per halaman) —
 // event-nya disimpan lalu dipakai saat pengguna menekan tombol. Memanggil
