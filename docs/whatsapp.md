@@ -204,6 +204,45 @@ muat; pakai gateway untuk sebagian/semua cabang, atau sediakan ≥4 GB.
 Setiap nomor diperiksa terpisah oleh pemantau (bagian 5): satu cabang bisa
 putus sementara cabang lain sehat, dan alarmnya menyebut cabang mana.
 
+### Multi-sesi: satu proses open-wa, banyak nomor
+
+Sebagian build open-wa (yang punya dashboard **Sessions** dengan tombol "New
+Session") menangangi **beberapa nomor dalam satu proses**: tiap nomor adalah
+satu sesi dengan Session ID sendiri. Ini lebih sederhana daripada menjalankan
+satu Easy API per cabang — satu proses, satu port, satu API key, N sesi.
+
+Cara memakainya di SIAGA: isi kolom **Session ID** pada akun open-wa
+(Admin → Konfigurasi → Nomor WhatsApp per cabang). URL dan API key boleh sama
+untuk beberapa akun; yang membedakan adalah Session ID-nya. Pesan cabang A
+otomatis keluar lewat sesi A, cabang B lewat sesi B.
+
+Dialek dipilih **per baris akun**, bukan per server:
+
+| Session ID | Endpoint yang dipakai |
+| --- | --- |
+| kosong | `POST {url}/api/messages/sendText` — Easy API satu nomor |
+| terisi | `POST {url}/api/sessions/{sessionId}/messages/send-text` |
+
+Status sesi dibaca dari `GET {url}/api/sessions/{sessionId}`: `connected` →
+siap, `qr_ready`/`disconnected` → terputus (alarm), layanan tak terjangkau →
+terputus. Alarm multi-sesi mengarahkan perbaikan ke dashboard OpenWA
+(hubungkan ulang sesi atau minta kode pairing), bukan ke Easy API satu nomor.
+
+Alur setup satu cabang:
+
+1. Di dashboard OpenWA, buat sesi baru (mis. "godean") — catat Session ID-nya.
+2. Hubungkan nomor: pindai QR di dashboard, **atau** minta kode pairing
+   (`POST /api/sessions/{id}/pairing-code` dengan nomor cabang) lalu masukkan
+   kode itu di HP cabang (Perangkat Tertaut → Tautkan dengan nomor telepon).
+   Jalur kedua tidak perlu menyambar screenshot QR.
+3. Di SIAGA, tambah akun open-wa untuk cabang itu dengan URL & API key
+   instance tersebut, lalu isi Session ID dari langkah 1.
+4. Tekan tombol uji (ikon ↻) di baris akun: status harus menjadi "Siap".
+
+Catatan yang tetap berlaku: folder sesi open-wa berisi kredensial WhatsApp
+(backup seperti database, jangan di-commit), dan **setiap sesi tetap memuat
+engine sendiri** — RAM per sesi masih timbul walau prosesnya satu.
+
 ---
 
 ## 7. Deploy di server sendiri (bukan komputer pengembangan)

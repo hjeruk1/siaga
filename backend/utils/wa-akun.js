@@ -104,6 +104,13 @@ function simpan(data, id = null) {
     throw new Error('Cabang tidak ditemukan');
   }
 
+  // Session ID: penanda dialek multi-sesi. Diisi -> pesan dikirim lewat
+  // /api/sessions/{sid}/messages/send-text; kosong -> Easy API satu-nomor.
+  // Bukan rahasia (terlihat di dashboard OpenWA), jadi tidak dienkripsi.
+  const sessionId = String(data.session_id || '').trim() || null;
+  if (sessionId && sessionId.length > 64) throw new Error('Session ID maksimal 64 karakter');
+  if (sessionId && provider !== 'openwa') throw new Error('Session ID hanya untuk provider open-wa (nomor multi-sesi)');
+
   const isi = {
     cabang_id: cabangId,
     label,
@@ -128,7 +135,7 @@ function simpan(data, id = null) {
         ? lama.gateway_token
         : null;
     db.prepare(
-      `UPDATE wa_akun SET cabang_id=?,label=?,provider=?,nomor=?,api_url=?,api_key=?,gateway_url=?,gateway_token=?,aktif=?,updated_at=? WHERE id=?`
+      `UPDATE wa_akun SET cabang_id=?,label=?,provider=?,nomor=?,api_url=?,api_key=?,session_id=?,gateway_url=?,gateway_token=?,aktif=?,updated_at=? WHERE id=?`
     ).run(
       isi.cabang_id,
       isi.label,
@@ -136,6 +143,7 @@ function simpan(data, id = null) {
       isi.nomor,
       isi.api_url,
       apiKey,
+      sessionId,
       isi.gateway_url,
       token,
       isi.aktif,
@@ -147,8 +155,8 @@ function simpan(data, id = null) {
 
   const r = db
     .prepare(
-      `INSERT INTO wa_akun(cabang_id,label,provider,nomor,api_url,api_key,gateway_url,gateway_token,aktif,created_at,updated_at)
-       VALUES(?,?,?,?,?,?,?,?,?,?,?)`
+      `INSERT INTO wa_akun(cabang_id,label,provider,nomor,api_url,api_key,session_id,gateway_url,gateway_token,aktif,created_at,updated_at)
+       VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`
     )
     .run(
       isi.cabang_id,
@@ -157,6 +165,7 @@ function simpan(data, id = null) {
       isi.nomor,
       isi.api_url,
       data.api_key ? enkripsiKredensial(data.api_key) : null,
+      sessionId,
       isi.gateway_url,
       data.gateway_token ? enkripsiKredensial(data.gateway_token) : null,
       isi.aktif,

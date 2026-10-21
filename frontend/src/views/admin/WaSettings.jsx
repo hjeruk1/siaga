@@ -41,10 +41,18 @@ const FORM_KOSONG = {
   nomor: '',
   api_url: 'http://127.0.0.1:8080',
   api_key: '',
+  session_id: '',
   gateway_url: '',
   gateway_token: '',
   aktif: true
 };
+
+// Label provider singkat untuk tabel & daftar. Session ID terisi = open-wa
+// multi-sesi (satu proses, banyak nomor); kosong = Easy API satu nomor.
+function labelProvider(a) {
+  if (a.provider === 'gateway') return 'gateway';
+  return a.session_id ? 'open-wa · multi-sesi' : 'open-wa';
+}
 
 export default function WaSettings({ user, toast }) {
   const { cabang } = useMaster(user);
@@ -207,7 +215,7 @@ export default function WaSettings({ user, toast }) {
                       {a.cabang_nama || 'Pusat'}
                     </span>
                     <span className="text-[11px] font-bold text-slate-400">
-                      {a.provider === 'gateway' ? 'gateway' : 'open-wa'}
+                      {labelProvider(a)}
                       {a.nomor ? ` · ${a.nomor}` : ''}
                     </span>
                     {!a.aktif && (
@@ -311,7 +319,7 @@ export default function WaSettings({ user, toast }) {
                     <tr key={a.id} className="border-b border-slate-50">
                       <td className="py-2 pr-2 font-bold text-slate-600">{a.cabang_nama || 'Pusat (cadangan)'}</td>
                       <td className="py-2 pr-2 font-black text-text-main">{a.label}</td>
-                      <td className="py-2 pr-2 text-slate-500">{a.provider === 'gateway' ? 'gateway' : 'open-wa'}</td>
+                      <td className="py-2 pr-2 text-slate-500">{labelProvider(a)}</td>
                       <td className="py-2 pr-2 text-slate-500">{a.nomor || '-'}</td>
                       <td className="py-2 pr-2">
                         {a.kredensial_terbaca ? (
@@ -450,6 +458,23 @@ export default function WaSettings({ user, toast }) {
                     className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
                   />
                 </label>
+                <label htmlFor="wa-sesi" className="block">
+                  <span className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                    Session ID <span className="font-semibold normal-case text-slate-400">(opsional — multi-sesi)</span>
+                  </span>
+                  <input
+                    id="wa-sesi"
+                    value={form.session_id || ''}
+                    onChange={(e) => setForm((f) => ({ ...f, session_id: e.target.value.trim() }))}
+                    placeholder="Kosongkan untuk Easy API satu nomor"
+                    className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-mono outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                  />
+                </label>
+                <p className="text-[11px] leading-relaxed text-slate-400">
+                  Isi Session ID kalau satu proses open-wa menangangi beberapa nomor: pesan cabang ini akan dikirim
+                  lewat sesi tersebut. Session ID terlihat di dashboard OpenWA (bagian Sessions). Bila dikosongkan,
+                  pesan dikirim lewat endpoint Easy API satu nomor.
+                </p>
               </>
             ) : (
               <>

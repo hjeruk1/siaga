@@ -93,16 +93,30 @@ function formatPesan({ title, body, link }) {
 // Sengaja lewat HTTP, bukan library @open-wa di dalam proses ini: Easy API
 // adalah proses terpisah (menjalankan Chromium + sesi), jadi backend tetap
 // ringan dan bisa restart tanpa memutus sesi WhatsApp.
+//
+// Dua dialek open-wa, dipilih per akun oleh adanya session_id:
+//   - tanpa session_id : Easy API satu nomor -> POST /api/messages/sendText
+//   - dengan session_id: open-wa multi-sesi -> POST /api/sessions/{sid}/messages/send-text
+// Dialek TIDAK bisa ditebak dari URL: satu instance multi-sesi dipakai banyak
+// cabang sekaligus (URL sama, session-id beda). Karena itu penentunya adalah
+// kolom session_id di wa_akun.
 function openwaKirim({ no_wa, pesan, cfg }) {
   const url = cfg?.url || env('WA_API_URL', 'http://127.0.0.1:8080');
   const apiKey = cfg?.key || env('WA_API_KEY');
+  const sid = cfg?.sid || env('WA_SESSION_ID');
   const to = chatIdDari(no_wa);
   if (!to) return Promise.reject(new Error(`Nomor tidak valid: ${no_wa}`));
   if (!apiKey) return Promise.reject(new Error('WA_API_KEY belum diset'));
-  return fetch(`${url}/api/messages/sendText`, {
+  const multi = !!sid;
+  if (multi && !url) return Promise.reject(new Error('URL OpenWA belum diset'));
+  const endpoint = multi
+    ? `${url}/api/sessions/${encodeURIComponent(sid)}/messages/send-text`
+    : `${url}/api/messages/sendText`;
+  const body = multi ? { chatId: to, text: pesan } : { to, content: pesan, options: {} };
+  return fetch(endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey },
-    body: JSON.stringify({ to, content: pesan, options: {} }),
+    body: JSON.stringify(body),
     // Timeout pendek: kalau Easy API mati, jangan menahan antrean lama.
     signal: AbortSignal.timeout(10000)
   }).then(async (r) => {
@@ -111,8 +125,39 @@ function openwaKirim({ no_wa, pesan, cfg }) {
   });
 }
 
+// Status sesi multi-sesi: GET /api/sessions/{id} mengembalikan status
+// ('connected' | 'qr_ready' | 'disconnected'), phone, pushName, lastActive.
+// Diterjemahkan ke bentuk yang dipakai pemantau (connected/ready).
+async function openwaMultiStatus({ url, key, sid }) {
+  const dasar = { provider: 'openwa', multi: true };
+  try {
+    const r = await fetch(`${url}/api/sessions/${encodeURIComponent(sid)}`, {
+      headers: { 'X-API-Key': key },
+      signal: AbortSignal.timeout(5000)
+    });
+    if (!r.ok) return { ...dasar, reachable: false, error: `OpenWA ${r.status}` };
+    const d = await r.json();
+    const terhubung = d.status === 'connected';
+    return {
+      ...dasar,
+      reachable: true,
+      // qr_ready (perlu pindai) dan disconnected sama-sama belum bisa dipakai.
+      connected: terhubung,
+      ready: terhubung,
+      detail: { state: d.status, phone: d.phone, pushName: d.pushName, lastActive: d.lastActive }
+    };
+  } catch (e) {
+    return { ...dasar, reachable: false, error: e.message };
+  }
+}
+
 async function openwaStatus(cfg) {
   const url = cfg?.url || env('WA_API_URL', 'http://127.0.0.1:8080');
+  if (cfg?.sid || env('WA_SESSION_ID')) {
+    const key = cfg?.key || env('WA_API_KEY');
+    if (!key) return { provider: 'openwa', multi: true, reachable: false, error: 'WA_API_KEY belum diset' };
+    return openwaMultiStatus({ url, key, sid: cfg?.sid || env('WA_SESSION_ID') });
+  }
   try {
     const r = await fetch(`${url}/health`, { signal: AbortSignal.timeout(5000) });
     if (!r.ok) return { provider: 'openwa', reachable: false };
@@ -180,7 +225,7 @@ function providerDariAkun(akun) {
       status: () => gatewayStatus(cfg)
     };
   }
-  const cfg = { url: akun.api_url, key: akunWa.dekripsi(akun.api_key) };
+  const cfg = { url: akun.api_url, key: akunWa.dekripsi(akun.api_key), sid: akun.session_id || null };
   return {
     nama: 'openwa',
     akunId: akun.id,

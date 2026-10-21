@@ -65,6 +65,13 @@ function adminAktif() {
 function pesanUntuk(status, hasil, label) {
   if (status !== 'down') return null;
   const awalan = label ? `${label}: ` : '';
+  // Dialek multi-sesi: perbaikan dilakukan di dashboard OpenWA (hubungkan
+  // ulang sesi), bukan di Easy API satu nomor.
+  if (hasil.multi) {
+    if (hasil.reachable === false)
+      return `${awalan}layanan OpenWA tidak dapat dihubungi. Periksa proses open-wa di server.`;
+    return `${awalan}sesi WhatsApp belum terhubung. Buka dashboard OpenWA untuk memindai QR, atau minta kode pairing untuk nomor ini.`;
+  }
   if (hasil.provider === 'openwa' && hasil.reachable === false) {
     return `${awalan}Easy API WhatsApp tidak dapat dihubungi. Periksa layanan siaga-wa di server.`;
   }
