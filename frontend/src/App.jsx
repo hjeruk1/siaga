@@ -66,6 +66,7 @@ const submenuMap = {
     { id: 'rombel', label: 'Rombel' },
     { id: 'billing', label: 'Billing' },
     { id: 'laporan', label: 'Laporan' },
+    { id: 'izin', label: 'Izin & Sakit' },
     { id: 'rekap', label: 'Rekap Absensi' },
     { id: 'config', label: 'Konfigurasi' },
     { id: 'kalender', label: 'Kalender' },
@@ -76,12 +77,14 @@ const submenuMap = {
     { id: 'laporan', label: 'Laporan Harian' },
     { id: 'rekap', label: 'Rekap Absensi' },
     { id: 'keuangan', label: 'Keuangan' },
+    { id: 'izin', label: 'Izin & Sakit' },
     { id: 'notifikasi', label: 'Notifikasi' }
   ],
   guru: [
     { id: 'daily', label: 'Daily Record' },
     { id: 'absensi', label: 'Absensi' },
-    { id: 'modulAjar', label: 'Focus Theme' }
+    { id: 'modulAjar', label: 'Focus Theme' },
+    { id: 'izin', label: 'Izin & Sakit' }
   ]
 };
 

@@ -23,6 +23,7 @@ const {
   insertPickupLog,
   notifyKepsek
 } = require('../utils/workflow');
+const { tambahKlien, hapusKlien, broadcastAbsensi } = require('../utils/absensi-stream');
 
 function configFor(e) {
   return (
@@ -98,21 +99,6 @@ function logNfc({
   );
 }
 
-const sseClients = new Set();
-
-function broadcastAbsensi(cabangId) {
-  const payload = JSON.stringify({ type: 'absensi_changed' });
-  for (const client of sseClients) {
-    if (Number(client.cabangId) === Number(cabangId)) {
-      try {
-        client.res.write(`data: ${payload}\n\n`);
-      } catch (e) {
-        sseClients.delete(client);
-      }
-    }
-  }
-}
-
 router.get('/stream', auth.media(['admin', 'admin_cabang', 'kepsek', 'guru', 'gerbang']), (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
@@ -123,10 +109,10 @@ router.get('/stream', auth.media(['admin', 'admin_cabang', 'kepsek', 'guru', 'ge
 
   const cabangId = req.user.role === 'admin' ? Number(req.query.cabang_id) || null : req.user.cabang_id;
   const client = { res, cabangId };
-  sseClients.add(client);
+  tambahKlien(client);
 
   req.on('close', () => {
-    sseClients.delete(client);
+    hapusKlien(client);
   });
 });
 

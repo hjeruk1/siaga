@@ -12,6 +12,7 @@ import {
 } from '../components/Shared';
 import { todayWIB } from '../utils/date';
 import RekapAbsensiBulanan from './shared/RekapAbsensiBulanan';
+import IzinPanel from './shared/IzinPanel';
 import { ChevronRight, DoorClosed, Plus, Save, X } from 'lucide-react';
 const TABS = [
   { id: 'monitoring', label: 'Monitoring' },
@@ -198,6 +199,7 @@ export default function KepsekView({ user, toast, tab, syncNotif }) {
       {activeTab === 'rekap' && <RekapAbsensiBulanan user={user} toast={toast} />}
       {activeTab === 'keuangan' && <KeuanganPanel laporan={laporan} cabangId={cabangId} />}
       {activeTab === 'notifikasi' && <NotifikasiPanel notif={notif} syncNotif={syncNotif} />}
+      {activeTab === 'izin' && <IzinPanel user={user} toast={toast} />}
       {earlyOpen && (
         <Modal title="Buat Izin Pulang Dini" onClose={() => setEarlyOpen(false)} maxWidth="max-w-lg">
           <div className="space-y-3">

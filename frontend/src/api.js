@@ -235,6 +235,27 @@ export const api = {
   setPin: (pin, password) => req('POST', '/api/auth/pin', { pin, password }),
   verifyPin: (pin) => req('POST', '/api/auth/pin/verify', { pin }),
   deletePin: (password) => req('DELETE', '/api/auth/pin', { password }),
+  // Izin/sakit online: pengajuan dari wali, keputusan dari sekolah.
+  izinSaya: (siswaId) => req('GET', '/api/izin/wali/' + siswaId),
+  izinSekolah: (params) => req('GET', '/api/izin' + qs(params || {})),
+  setujuiIzin: (id, catatan) => req('POST', '/api/izin/' + id + '/setujui', { catatan }),
+  tolakIzin: (id, alasan) => req('POST', '/api/izin/' + id + '/tolak', { alasan }),
+  batalIzin: (id) => req('POST', '/api/izin/' + id + '/batal', {}),
+  ajukanIzin: (fd) => {
+    // FormData: biarkan browser menetapkan Content-Type multipart.
+    return fetch('/api/izin', {
+      method: 'POST',
+      headers: token() ? { Authorization: 'Bearer ' + token() } : {},
+      body: fd
+    }).then(async (r) => {
+      const d = await r.json().catch(() => null);
+      if (!r.ok) {
+        if (r.status === 401 && token()) handleUnauthorized();
+        throw new Error((d && d.error) || 'Pengajuan izin gagal');
+      }
+      return d;
+    });
+  },
   konfirmasiBayar: (fd) => {
     // FormData: Content-Type dibiarkan ke browser agar batas multipart ikut.
     // Pakai token() (bukan localStorage langsung) supaya cache token modul ini

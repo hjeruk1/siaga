@@ -41,6 +41,14 @@ const resetPasswordSchema = z.object({
   password_baru: z.string().max(128).optional()
 });
 
+// Izin/sakit: field teks dibiarkan longgar di schema karena validasi bisnis
+// (rentang tanggal, panjang alasan, jenis) ada di handler dengan pesan berbahasa
+// Indonesia. Schema ini menangkap tipe yang salah dan panjang yang keterlaluan.
+const izinVerifikasiSchema = z.object({
+  catatan: z.string().max(500).optional(),
+  alasan: z.string().max(500).optional()
+});
+
 // --- absensi ---
 const absensiCheckinSchema = z.object({
   siswa_id: idLike,
@@ -103,6 +111,7 @@ module.exports = {
   changePasswordSchema,
   lupaPasswordSchema,
   resetPasswordSchema,
+  izinVerifikasiSchema,
   absensiCheckinSchema,
   absensiKeteranganSchema,
   pembayaranSchema,

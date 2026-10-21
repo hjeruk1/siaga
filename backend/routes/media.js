@@ -84,8 +84,20 @@ router.get('/:folder/:filename', auth.media(), (req, res) => {
       `
           )
           .get(url);
-        if (!report || !canAccessReport(req.user, report)) {
-          return res.status(403).json({ error: 'Akses media ditolak' });
+        if (report && canAccessReport(req.user, report)) {
+          // lolos: lanjut kirim berkas
+        } else {
+          // Lampiran izin/sakit (surat dokter): hanya wali pemilik anak, guru
+          // pengampu, dan staff satu cabang. Sama ketatnya dengan bukti bayar.
+          const izin = db.prepare('SELECT siswa_id,cabang_id FROM izin_request WHERE lampiran_url=?').get(url);
+          const bolehIzin =
+            izin &&
+            (req.user.role === 'wali'
+              ? canWaliAccessSiswa(req.user, izin.siswa_id)
+              : req.user.role === 'admin'
+                ? true
+                : Number(req.user.cabang_id) === Number(izin.cabang_id) || !!canAccessSiswa(req.user, izin.siswa_id));
+          if (!bolehIzin) return res.status(403).json({ error: 'Akses media ditolak' });
         }
       }
     }

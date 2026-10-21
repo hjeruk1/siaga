@@ -5,6 +5,7 @@ import WaliTab from './admin/WaliTab';
 import RombelTab from './admin/RombelTab';
 import BillingTab from './admin/BillingTab';
 import LaporanTab from './admin/LaporanTab';
+import IzinPanel from './shared/IzinPanel';
 import ConfigTab from './admin/ConfigTab';
 import KalenderTab from './admin/KalenderTab';
 import AuditTab from './admin/AuditTab';
@@ -19,6 +20,7 @@ export default function AdminView({ user, toast, tab }) {
     'rombel',
     'billing',
     'laporan',
+    'izin',
     'rekap',
     'config',
     'kalender',
@@ -34,6 +36,7 @@ export default function AdminView({ user, toast, tab }) {
       {activeTab === 'rombel' && <RombelTab user={user} toast={toast} />}
       {activeTab === 'billing' && <BillingTab user={user} toast={toast} />}
       {activeTab === 'laporan' && <LaporanTab user={user} toast={toast} />}
+      {activeTab === 'izin' && <IzinPanel user={user} toast={toast} />}
       {activeTab === 'rekap' && <RekapAbsensiBulanan user={user} toast={toast} />}
       {activeTab === 'config' && <ConfigTab user={user} toast={toast} />}
       {activeTab === 'kalender' && <KalenderTab user={user} toast={toast} />}

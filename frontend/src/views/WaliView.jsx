@@ -3,13 +3,14 @@
 // (anak yang terhubung) dijaga oleh backend.
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
-import { CalendarDays, FileText, Receipt } from 'lucide-react';
+import { CalendarCheck2, CalendarDays, FileText, Receipt } from 'lucide-react';
 import HeroAnak from './wali/HeroAnak.jsx';
 import HariIni from './wali/HariIni.jsx';
 import CatatanTimeline from './wali/CatatanTimeline.jsx';
 import Kehadiran from './wali/Kehadiran.jsx';
 import Tagihan from './wali/Tagihan.jsx';
 import Laporan from './wali/Laporan.jsx';
+import Izin from './wali/Izin.jsx';
 import { PushCard } from './wali/PushCard.jsx';
 import { KeamananCard, PinPrompt } from './wali/KeamananCard.jsx';
 import { hapusPinToken } from '../utils/pin.js';
@@ -29,6 +30,7 @@ import {
 const TABS = [
   { id: 'catatan', label: 'Catatan', icon: FileText },
   { id: 'kehadiran', label: 'Kehadiran', icon: CalendarDays },
+  { id: 'izin', label: 'Izin', icon: CalendarCheck2 },
   { id: 'tagihan', label: 'Tagihan', icon: Receipt },
   { id: 'laporan', label: 'Laporan', icon: FileText }
 ];
@@ -51,6 +53,9 @@ export default function WaliView({ user, toast }) {
     return ['catatan', 'kehadiran', 'tagihan', 'laporan'].includes(t) ? t : 'catatan';
   });
   const [billing, setBilling] = useState(null);
+  // Izin/sakit: pengajuan milik anak yang sedang dipilih.
+  const [daftarIzin, setDaftarIzin] = useState([]);
+  const [loadingIzin, setLoadingIzin] = useState(false);
   // Apakah wali memasang PIN. Dipakai untuk TIDAK menarik data tagihan saat
   // aplikasi dibuka: kalau di-prefetch, dialog PIN langsung muncul di halaman
   // depan hanya karena orang tua membuka catatan harian anak. Data keuangan
@@ -117,6 +122,22 @@ export default function WaliView({ user, toast }) {
     [toast]
   );
 
+  const loadIzin = useCallback(
+    async (siswaId) => {
+      if (!siswaId) return;
+      setLoadingIzin(true);
+      try {
+        const d = await api.izinSaya(siswaId);
+        setDaftarIzin(d?.rows || []);
+      } catch (e) {
+        toast?.('err', e.message);
+      } finally {
+        setLoadingIzin(false);
+      }
+    },
+    [toast]
+  );
+
   const loadRekap = useCallback(
     async (b) => {
       const [y, m] = String(b).split('-');
@@ -155,6 +176,7 @@ export default function WaliView({ user, toast }) {
       .catch((e) => toast?.('err', e.message));
     if (waliPunyaPin === false) loadBilling(selected.id);
     loadRekap(bulan);
+    loadIzin(selected.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected?.id, waliPunyaPin]);
 
@@ -262,6 +284,8 @@ export default function WaliView({ user, toast }) {
     return [...history].sort((a, b) => String(b.tanggal).localeCompare(String(a.tanggal)))[0];
   }, [history]);
 
+  const izinMenunggu = useMemo(() => (daftarIzin || []).filter((x) => x.status === 'menunggu').length, [daftarIzin]);
+
   const tabs = useMemo(
     () =>
       TABS.map((t) => ({
@@ -271,9 +295,11 @@ export default function WaliView({ user, toast }) {
             ? ringkasTag.jumlahBelum
             : t.id === 'catatan' && unread > 0
               ? unread
-              : undefined
+              : t.id === 'izin' && izinMenunggu > 0
+                ? izinMenunggu
+                : undefined
       })),
-    [ringkasTag.jumlahBelum, unread]
+    [ringkasTag.jumlahBelum, unread, izinMenunggu]
   );
 
   if (memuat) {
@@ -383,6 +409,16 @@ export default function WaliView({ user, toast }) {
             galat={null}
             onMuatUlang={() => loadRekap(bulan)}
             onBukaLaporan={() => setActiveTab('laporan')}
+          />
+        ) : null}
+
+        {activeTab === 'izin' ? (
+          <Izin
+            siswa={selected}
+            daftar={daftarIzin}
+            memuat={loadingIzin}
+            onMuatUlang={() => selected && loadIzin(selected.id)}
+            toast={toast}
           />
         ) : null}
 
