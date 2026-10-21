@@ -171,7 +171,42 @@ GROUP BY tipe ORDER BY total DESC;
 
 ---
 
-## 6. Deploy di server sendiri (bukan komputer pengembangan)
+## 6. Nomor WhatsApp per cabang
+
+Bawaannya satu nomor untuk semua cabang (dari `.env`). Kalau tiap cabang punya
+nomornya sendiri, tambahkan di **Admin → Konfigurasi → Nomor WhatsApp per
+cabang**. Setelah ada minimal satu akun, aplikasi otomatis beralih ke mode
+per-cabang:
+
+- pesan untuk orang tua cabang Godean keluar dari nomor Godean;
+- pengumuman "semua cabang" dikirim dari nomor **masing-masing** cabang, bukan
+  satu nomor pusat;
+- cabang yang belum punya nomor memakai **nomor pusat** (akun dengan tujuan
+  "Pusat (cadangan)"). Kalau cadangan tidak ada, pesan untuk cabang itu **tidak
+  dikirim** dan tercatat sebagai `dilewati` — lebih baik diam daripada mengirim
+  dari nomor yang tidak dikenal orang tua.
+
+**Provider dipilih per akun**, bukan global: satu cabang boleh memakai open-wa
+sementara cabang lain memakai gateway resmi. Kalau nanti satu nomor kena
+blokir, pindah provider cukup mengubah satu baris — tidak ada kode yang
+disentuh.
+
+**Kredensial disimpan terenkripsi** (AES-256-GCM). Kuncinya berasal dari
+`WA_SECRET_KEY`, atau diturunkan dari `JWT_SECRET` bila variabel itu kosong.
+Kunci hidup di environment, jadi berkas backup database **tidak** memuat token
+yang bisa dipakai langsung. Kalau `JWT_SECRET` diganti, kredensial harus diisi
+ulang — kolom "Kredensial" di layar admin akan menandainya.
+
+⚠️ **Biaya sumber daya open-wa berlipat.** Satu Easy API menjalankan Chromium
+dan memakai 400–900 MB RAM. Lima cabang = lima proses. Di VPS 2 GB ini tidak
+muat; pakai gateway untuk sebagian/semua cabang, atau sediakan ≥4 GB.
+
+Setiap nomor diperiksa terpisah oleh pemantau (bagian 5): satu cabang bisa
+putus sementara cabang lain sehat, dan alarmnya menyebut cabang mana.
+
+---
+
+## 7. Deploy di server sendiri (bukan komputer pengembangan)
 
 **Repo ini tidak punya dependensi ke open-wa.** Tidak ada paket `@open-wa` di
 `package.json`, tidak ada Chromium yang diunduh saat `npm install`, dan tidak
@@ -293,7 +328,7 @@ Harus menampilkan `aktif: true`, `provider: "openwa"`, `connected: true`,
 
 ---
 
-## 7. Pemulihan password lewat OTP WhatsApp
+## 8. Pemulihan password lewat OTP WhatsApp
 
 Wali tidak punya email di sistem ini — satu-satunya identitas yang benar-benar
 dimiliki orang tua adalah nomor WhatsApp yang terdaftar. Jadi "lupa password"
@@ -334,7 +369,7 @@ sekolah", bukan pura-pura mengirim kode yang tak akan pernah datang.
 ⚠️ **Dampak ke risiko open-wa:** OTP menambah volume pesan keluar secara
 signifikan, dan pengiriman ke nomor yang belum pernah menghubungi sekolah
 adalah pola yang paling dicurigai WhatsApp. Kalau pemulihan password dipakai
-rutin, ini alasan tambahan untuk pindah ke gateway resmi (bagian 8).
+rutin, ini alasan tambahan untuk pindah ke gateway resmi (bagian 9).
 
 📌 **`TRUST_PROXY=true` wajib di produksi.** Tanpa itu backend melihat semua
 permintaan berasal dari `127.0.0.1` (IP reverse proxy), sehingga pembatasan
@@ -353,7 +388,7 @@ WA_PROVIDER=log OTP_DEBUG_FILE=/tmp/otp.txt npm run dev
 
 ---
 
-## 8. Pindah ke gateway resmi
+## 9. Pindah ke gateway resmi
 
 Karena pemanggil hanya bergantung pada `utils/wa.js`, pindah provider cukup
 mengubah `.env`:
@@ -374,7 +409,7 @@ sesuaikan mapping di `backend/utils/wa.js` bila reseller memakai bentuk lain
 
 ---
 
-## 9. Menguji tanpa mengirim pesan
+## 10. Menguji tanpa mengirim pesan
 
 ```bash
 # tidak mengirim apa pun; alur normal & pelacakan wa_sent_at tetap teruji
@@ -386,7 +421,7 @@ gate tipe, isolasi kegagalan, kontrak HTTP Easy API via stub server).
 
 ---
 
-## 10. Yang TIDAK dilakukan kanal ini (sengaja)
+## 11. Yang TIDAK dilakukan kanal ini (sengaja)
 
 - **Tidak ada auto-reply / chatbot.** Kalau orang tua membalas pesan, balasan
   masuk ke WhatsApp nomor sekolah, bukan ke aplikasi (open-wa Easy API bisa

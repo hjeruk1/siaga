@@ -39,6 +39,8 @@
 const WA_TIPE_DEFAULT =
   'daily_published,guru_reply,payment_verified,payment_rejected,invoice_issued,payment_claim,izin_disetujui,izin_ditolak,pengumuman';
 
+const akunWa = require('./wa-akun');
+
 function env(nama, bawaan = '') {
   return String(process.env[nama] || bawaan).trim();
 }
@@ -91,9 +93,9 @@ function formatPesan({ title, body, link }) {
 // Sengaja lewat HTTP, bukan library @open-wa di dalam proses ini: Easy API
 // adalah proses terpisah (menjalankan Chromium + sesi), jadi backend tetap
 // ringan dan bisa restart tanpa memutus sesi WhatsApp.
-function openwaKirim({ no_wa, pesan }) {
-  const url = env('WA_API_URL', 'http://127.0.0.1:8080');
-  const apiKey = env('WA_API_KEY');
+function openwaKirim({ no_wa, pesan, cfg }) {
+  const url = cfg?.url || env('WA_API_URL', 'http://127.0.0.1:8080');
+  const apiKey = cfg?.key || env('WA_API_KEY');
   const to = chatIdDari(no_wa);
   if (!to) return Promise.reject(new Error(`Nomor tidak valid: ${no_wa}`));
   if (!apiKey) return Promise.reject(new Error('WA_API_KEY belum diset'));
@@ -109,8 +111,8 @@ function openwaKirim({ no_wa, pesan }) {
   });
 }
 
-async function openwaStatus() {
-  const url = env('WA_API_URL', 'http://127.0.0.1:8080');
+async function openwaStatus(cfg) {
+  const url = cfg?.url || env('WA_API_URL', 'http://127.0.0.1:8080');
   try {
     const r = await fetch(`${url}/health`, { signal: AbortSignal.timeout(5000) });
     if (!r.ok) return { provider: 'openwa', reachable: false };
@@ -130,9 +132,9 @@ async function openwaStatus() {
 // ---------------------------------------------------------------------------
 // Provider gateway generik (Fonnte/Wablas dan sejenisnya) — cadangan resmi
 // ---------------------------------------------------------------------------
-function gatewayKirim({ no_wa, pesan }) {
-  const url = env('WA_GATEWAY_URL');
-  const token = env('WA_GATEWAY_TOKEN');
+function gatewayKirim({ no_wa, pesan, cfg }) {
+  const url = cfg?.url || env('WA_GATEWAY_URL');
+  const token = cfg?.token || env('WA_GATEWAY_TOKEN');
   const to = chatIdDari(no_wa)?.replace('@c.us', '');
   if (!url) return Promise.reject(new Error('WA_GATEWAY_URL belum diset'));
   if (!to) return Promise.reject(new Error(`Nomor tidak valid: ${no_wa}`));
@@ -147,8 +149,9 @@ function gatewayKirim({ no_wa, pesan }) {
   });
 }
 
-async function gatewayStatus() {
-  if (!env('WA_GATEWAY_URL')) return { provider: 'gateway', reachable: false, error: 'WA_GATEWAY_URL belum diset' };
+async function gatewayStatus(cfg) {
+  if (!(cfg?.url || env('WA_GATEWAY_URL')))
+    return { provider: 'gateway', reachable: false, error: 'URL gateway belum diset' };
   return { provider: 'gateway', reachable: true };
 }
 
@@ -164,6 +167,29 @@ function logKirim({ no_wa, pesan }) {
 // ---------------------------------------------------------------------------
 // Pemilihan provider + gate aktif
 // ---------------------------------------------------------------------------
+// Provider yang dibangun dari baris wa_akun (satu nomor per cabang).
+function providerDariAkun(akun) {
+  if (!akun) return null;
+  if (akun.provider === 'gateway') {
+    const cfg = { url: akun.gateway_url, token: akunWa.dekripsi(akun.gateway_token) };
+    return {
+      nama: 'gateway',
+      akunId: akun.id,
+      label: akun.label,
+      kirim: (arg) => gatewayKirim({ ...arg, cfg }),
+      status: () => gatewayStatus(cfg)
+    };
+  }
+  const cfg = { url: akun.api_url, key: akunWa.dekripsi(akun.api_key) };
+  return {
+    nama: 'openwa',
+    akunId: akun.id,
+    label: akun.label,
+    kirim: (arg) => openwaKirim({ ...arg, cfg }),
+    status: () => openwaStatus(cfg)
+  };
+}
+
 function providerAktif() {
   const p = env('WA_PROVIDER', 'none').toLowerCase();
   if (p === 'openwa') return { nama: 'openwa', kirim: openwaKirim, status: openwaStatus };
@@ -201,12 +227,32 @@ let kedalaman = 0;
 const statistik = { terkirim: 0, gagal: 0, dilewati: 0 };
 
 /**
+ * Pilih pengirim untuk satu cabang.
+ *
+ * Kalau ada akun terdaftar tetapi cabang ini tidak punya nomor sendiri dan
+ * tidak ada akun pusat, hasilnya `tanpa-akun`: pesan TIDAK dikirim. Mengirim
+ * dari nomor cabang lain akan membuat orang tua menerima kabar dari nomor yang
+ * tidak mereka kenal — lebih baik terlihat "dilewati" di statistik.
+ */
+function pilihProvider(cabangId) {
+  if (!akunWa.adaAkunAktif()) return { provider: providerAktif(), alasan: null };
+  const akun = akunWa.akunUntukCabang(cabangId);
+  if (!akun) return { provider: null, alasan: 'tanpa-akun' };
+  return { provider: providerDariAkun(akun), alasan: null };
+}
+
+/**
  * Kirim satu pesan WA. Fungsi ini aman dipanggil dari jalur request utama:
  * tidak pernah throw, hasilnya tercermin di promise yang dikembalikan (untuk
  * tes) dan di log.
  */
-function kirimWA({ no_wa, pesan }) {
-  const provider = providerAktif();
+function kirimWA({ no_wa, pesan, cabangId }) {
+  const { provider, alasan } = pilihProvider(cabangId);
+  if (alasan === 'tanpa-akun') {
+    statistik.dilewati++;
+    console.warn(`[wa] cabang ${cabangId ?? '-'} belum punya nomor WhatsApp; pesan tidak dikirim`);
+    return Promise.resolve({ status: 'tanpa-akun' });
+  }
   if (!provider) {
     statistik.dilewati++;
     return Promise.resolve({ status: 'dimati' });
@@ -240,26 +286,35 @@ function kirimWA({ no_wa, pesan }) {
  * Dipakai pemantau sesi: tanpa ini, sesi yang putus tidak pernah ketahuan
  * sampai ada orang tua bertanya "kenapa saya tidak menerima kabar?".
  */
-async function cekStatus() {
-  const p = providerAktif();
+async function cekStatus(cabangId) {
+  const { provider: p, alasan } = pilihProvider(cabangId);
+  if (alasan === 'tanpa-akun')
+    return { aktif: true, provider: 'none', reachable: false, error: 'Cabang ini belum punya nomor WhatsApp' };
   if (!p) return { aktif: false, provider: 'none', reachable: false };
   try {
     const detail = await p.status();
-    return { aktif: true, ...detail };
+    return { aktif: true, ...detail, akun: p.label || null };
   } catch (e) {
-    return { aktif: true, provider: p.nama, reachable: false, error: e.message };
+    return { aktif: true, provider: p.nama, reachable: false, error: e.message, akun: p.label || null };
   }
 }
 
 function statusWA() {
   const p = providerAktif();
+  const pakaiAkun = akunWa.adaAkunAktif();
   return {
-    aktif: !!p,
-    provider: p ? p.nama : 'none',
+    // Mode 'akun' = nomor per cabang dari tabel wa_akun. Mode 'env' = satu
+    // nomor dari .env (perilaku lama). Mode 'none' = kanal mati.
+    mode: pakaiAkun ? 'akun' : p ? 'env' : 'none',
+    aktif: pakaiAkun || !!p,
+    provider: pakaiAkun ? 'per-cabang' : p ? p.nama : 'none',
+    akunAktif: pakaiAkun,
     tipeAktif: [...tipeAktif()],
     antrean: kedalaman,
     statistik,
-    ...(p ? undefined : { catatan: 'Set WA_PROVIDER=openwa (atau gateway) untuk mengaktifkan' })
+    ...(pakaiAkun || p
+      ? undefined
+      : { catatan: 'Tambahkan nomor di Admin > Konfigurasi, atau set WA_PROVIDER=openwa (gateway)' })
   };
 }
 
@@ -268,6 +323,8 @@ module.exports = {
   formatPesan,
   kirimWA,
   cekStatus,
+  pilihProvider,
+  providerDariAkun,
   statusWA,
   tipeAktif,
   // ekspor untuk tes saja

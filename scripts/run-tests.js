@@ -26,6 +26,7 @@ const files =
         'scripts/restore.test.js',
         'scripts/pengumuman.test.js',
         'scripts/wa-monitor.test.js',
+        'scripts/wa-akun.test.js',
         'scripts/pin.test.js',
         'scripts/reset-password.test.js',
         'scripts/izin.test.js',

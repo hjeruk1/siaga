@@ -24,17 +24,23 @@ const MAKS_PENERIMA_SINKRON = 2000;
  */
 function penerima(cabangId) {
   const filterCabang = cabangId ? 'AND se.cabang_id=?' : '';
-  return db
+  const rows = db
     .prepare(
-      `SELECT DISTINCT p.id
+      `SELECT DISTINCT p.id, se.cabang_id
        FROM pengguna p
        JOIN wali_siswa ws ON ws.wali_pengguna_id=p.id AND ws.aktif=1
        JOIN siswa s ON s.id=ws.siswa_id AND s.status='aktif'
        JOIN siswa_enrollment se ON se.siswa_id=ws.siswa_id AND se.status='aktif'
        WHERE p.tipe='wali' AND p.status='aktif' ${filterCabang}`
     )
-    .all(...(cabangId ? [cabangId] : []))
-    .map((r) => r.id);
+    .all(...(cabangId ? [cabangId] : []));
+
+  // Satu wali bisa punya anak di dua cabang. Notifikasinya tetap satu, dan
+  // cabang yang dipakai adalah cabang pertama yang ditemukan — supaya pesan
+  // tidak dikirim dua kali hanya karena anaknya dua.
+  const unik = new Map();
+  for (const r of rows) if (!unik.has(r.id)) unik.set(r.id, { id: r.id, cabang_id: r.cabang_id });
+  return [...unik.values()];
 }
 
 // Batas lingkup: admin boleh semua cabang; admin_cabang & kepsek hanya cabangnya.
@@ -94,8 +100,10 @@ router.post('/', auth(['admin', 'admin_cabang', 'kepsek']), validateBody(pengumu
       .run(cabangId, lingkup, judul, isi, penting ? 1 : 0, daftar.length, req.user.id, now);
     const id = r.lastInsertRowid;
 
-    for (const penggunaId of daftar) {
-      notify(penggunaId, 'pengumuman', judul, isi.slice(0, 300), 'pengumuman', id, cabangId);
+    for (const wali of daftar) {
+      // cabangId per penerima: pada pengumuman "semua cabang", pesan harus
+      // keluar dari nomor cabang masing-masing — bukan satu nomor pusat.
+      notify(wali.id, 'pengumuman', judul, isi.slice(0, 300), 'pengumuman', id, wali.cabang_id ?? cabangId);
     }
     db.prepare("UPDATE pengumuman SET status='terkirim',sent_at=? WHERE id=?").run(nowUtc(), id);
     return id;

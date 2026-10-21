@@ -235,7 +235,7 @@ function notify(recipientId, tipe, title, body, entityType, entityId, cabangId) 
     // push.js opsional; kalau modul bermasalah, notifikasi in-app tetap jalan.
   }
   try {
-    kirimWaJikaPerlu({ notifId, recipientId, tipe, title, body });
+    kirimWaJikaPerlu({ notifId, recipientId, tipe, title, body, cabangId });
   } catch {
     // kanal WA tidak boleh menjatuhkan alur utama
   }
@@ -247,7 +247,7 @@ function notify(recipientId, tipe, title, body, entityType, entityId, cabangId) 
  * wali dengan nomor WA terisi. Hasil (sukses/gagal) ditulis balik ke baris
  * notifikasi supaya bisa ditelusuri.
  */
-function kirimWaJikaPerlu({ notifId, recipientId, tipe, title, body }) {
+function kirimWaJikaPerlu({ notifId, recipientId, tipe, title, body, cabangId }) {
   const wa = require('./wa');
   const penerima = db.prepare('SELECT role,no_wa FROM pengguna WHERE id=?').get(recipientId);
   if (!penerima || penerima.role !== 'wali') return;
@@ -261,7 +261,8 @@ function kirimWaJikaPerlu({ notifId, recipientId, tipe, title, body }) {
     link: link ? `${link}/` : null
   });
 
-  wa.kirimWA({ no_wa: penerima.no_wa, pesan }).then((hasil) => {
+  // cabangId menentukan NOMOR PENGIRIM kalau sekolah memakai nomor per cabang.
+  wa.kirimWA({ no_wa: penerima.no_wa, pesan, cabangId }).then((hasil) => {
     if (hasil.status === 'terkirim') {
       db.prepare('UPDATE notifikasi SET wa_sent_at=? WHERE id=?').run(nowUtc(), notifId);
     } else if (hasil.status === 'gagal') {

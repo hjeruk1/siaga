@@ -15,6 +15,7 @@ backups/
 .superpowers/
 .interface-design/
 scratch/
+sketches/
 modul-ajar/
 backend/gcs-key.json
 backend/*-key.json

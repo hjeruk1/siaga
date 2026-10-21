@@ -238,6 +238,10 @@ export const api = {
   // Status kanal WhatsApp (admin): sesi hidup, antrean, kegagalan.
   waStatus: () => req('GET', '/api/wa/status'),
   waCheck: () => req('POST', '/api/wa/check', {}),
+  waAkun: () => req('GET', '/api/wa/akun'),
+  simpanWaAkun: (d, id) => (id ? req('PUT', '/api/wa/akun/' + id, d) : req('POST', '/api/wa/akun', d)),
+  hapusWaAkun: (id) => req('DELETE', '/api/wa/akun/' + id),
+  ujiWaAkun: (id) => req('POST', '/api/wa/akun/' + id + '/uji', {}),
 
   // Pengumuman sekolah ke orang tua (satu pesan, banyak penerima).
   pengumumanPreview: (params) => req('GET', '/api/pengumuman/preview' + qs(params || {})),
