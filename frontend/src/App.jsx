@@ -67,6 +67,7 @@ const submenuMap = {
     { id: 'billing', label: 'Billing' },
     { id: 'laporan', label: 'Laporan' },
     { id: 'izin', label: 'Izin & Sakit' },
+    { id: 'pengumuman', label: 'Pengumuman' },
     { id: 'rekap', label: 'Rekap Absensi' },
     { id: 'config', label: 'Konfigurasi' },
     { id: 'kalender', label: 'Kalender' },
@@ -78,6 +79,7 @@ const submenuMap = {
     { id: 'rekap', label: 'Rekap Absensi' },
     { id: 'keuangan', label: 'Keuangan' },
     { id: 'izin', label: 'Izin & Sakit' },
+    { id: 'pengumuman', label: 'Pengumuman' },
     { id: 'notifikasi', label: 'Notifikasi' }
   ],
   guru: [

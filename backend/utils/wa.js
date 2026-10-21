@@ -37,7 +37,7 @@
 // Keputusan izin ikut dikirim ke WhatsApp: orang tua perlu tahu cepat apakah
 // izinnya diterima, terutama kalau anak tidak masuk hari itu juga.
 const WA_TIPE_DEFAULT =
-  'daily_published,guru_reply,payment_verified,payment_rejected,invoice_issued,payment_claim,izin_disetujui,izin_ditolak';
+  'daily_published,guru_reply,payment_verified,payment_rejected,invoice_issued,payment_claim,izin_disetujui,izin_ditolak,pengumuman';
 
 function env(nama, bawaan = '') {
   return String(process.env[nama] || bawaan).trim();

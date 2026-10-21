@@ -187,6 +187,7 @@ app.use('/api/pengguna', require('./routes/pengguna'));
 app.use('/api/siswa', require('./routes/siswa'));
 app.use('/api/absensi', require('./routes/absensi'));
 app.use('/api/izin', require('./routes/izin'));
+app.use('/api/pengumuman', require('./routes/pengumuman'));
 app.use('/api/penjemputan', require('./routes/penjemputan'));
 app.use('/api/daily-record', require('./routes/daily-record'));
 app.use('/api/notifikasi', require('./routes/notifikasi'));

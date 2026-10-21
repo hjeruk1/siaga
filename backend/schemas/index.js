@@ -44,6 +44,16 @@ const resetPasswordSchema = z.object({
 // Izin/sakit: field teks dibiarkan longgar di schema karena validasi bisnis
 // (rentang tanggal, panjang alasan, jenis) ada di handler dengan pesan berbahasa
 // Indonesia. Schema ini menangkap tipe yang salah dan panjang yang keterlaluan.
+// Pengumuman: validasi panjang ada di handler (pesan berbahasa Indonesia);
+// schema ini menangkap tipe yang salah.
+const pengumumanSchema = z.object({
+  judul: z.string().max(120).optional(),
+  isi: z.string().max(2000).optional(),
+  lingkup: z.enum(['cabang', 'semua']).optional(),
+  cabang_id: z.union([z.number().int().positive(), z.string().regex(/^\d+$/)]).optional(),
+  penting: z.union([z.boolean(), z.string(), z.number()]).optional()
+});
+
 const izinVerifikasiSchema = z.object({
   catatan: z.string().max(500).optional(),
   alasan: z.string().max(500).optional()
@@ -112,6 +122,7 @@ module.exports = {
   lupaPasswordSchema,
   resetPasswordSchema,
   izinVerifikasiSchema,
+  pengumumanSchema,
   absensiCheckinSchema,
   absensiKeteranganSchema,
   pembayaranSchema,

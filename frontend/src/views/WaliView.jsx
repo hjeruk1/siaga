@@ -11,6 +11,7 @@ import Kehadiran from './wali/Kehadiran.jsx';
 import Tagihan from './wali/Tagihan.jsx';
 import Laporan from './wali/Laporan.jsx';
 import Izin from './wali/Izin.jsx';
+import Pengumuman from './wali/Pengumuman.jsx';
 import { PushCard } from './wali/PushCard.jsx';
 import { KeamananCard, PinPrompt } from './wali/KeamananCard.jsx';
 import { hapusPinToken } from '../utils/pin.js';
@@ -344,6 +345,10 @@ export default function WaliView({ user, toast }) {
           tagihanRingkas={ringkasTag}
           catatanTerakhir={catatanTerakhir}
         />
+
+        {/* Pengumuman sekolah tampil di semua tab: orang tua yang hanya
+            membuka catatan harian tetap melihat informasi penting. */}
+        <Pengumuman />
 
         <KeamananCard
           toast={toast}
