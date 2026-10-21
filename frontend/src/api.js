@@ -235,6 +235,15 @@ export const api = {
   setPin: (pin, password) => req('POST', '/api/auth/pin', { pin, password }),
   verifyPin: (pin) => req('POST', '/api/auth/pin/verify', { pin }),
   deletePin: (password) => req('DELETE', '/api/auth/pin', { password }),
+  // Verifikasi dua faktor (TOTP) untuk akun staff. verify/recovery dipakai
+  // di langkah kedua login (belum punya token, jadi tanpa Authorization).
+  statusDuaFaktor: () => req('GET', '/api/auth/2fa/status'),
+  setupDuaFaktor: (password) => req('POST', '/api/auth/2fa/setup', { password }),
+  aktifkanDuaFaktor: (kode) => req('POST', '/api/auth/2fa/enable', { kode }),
+  verifikasiDuaFaktor: (challenge_token, kode) => req('POST', '/api/auth/2fa/verify', { challenge_token, kode }),
+  pemulihanDuaFaktor: (challenge_token, kode) => req('POST', '/api/auth/2fa/recovery', { challenge_token, kode }),
+  matikanDuaFaktor: (password) => req('DELETE', '/api/auth/2fa', { password }),
+  kodePemulihanBaru: (password) => req('POST', '/api/auth/2fa/recovery/regenerate', { password }),
   // Status kanal WhatsApp (admin): sesi hidup, antrean, kegagalan.
   waStatus: () => req('GET', '/api/wa/status'),
   waCheck: () => req('POST', '/api/wa/check', {}),

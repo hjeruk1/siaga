@@ -41,6 +41,16 @@ const resetPasswordSchema = z.object({
   password_baru: z.string().max(128).optional()
 });
 
+// Verifikasi dua faktor: kode authenticator (6 digit) ATAU kode pemulihan
+// (10 karakter A-Z0-9), plus token tantangan dari langkah login pertama.
+// Semua opsional di schema — aturan mainnya ada di handler dengan pesan
+// berbahasa Indonesia; schema hanya menangkap tipe & panjang yang keterlaluan.
+const duaFaktorSchema = z.object({
+  kode: z.string().max(64).optional(),
+  challenge_token: z.string().max(256).optional(),
+  password: z.string().max(128).optional()
+});
+
 // Izin/sakit: field teks dibiarkan longgar di schema karena validasi bisnis
 // (rentang tanggal, panjang alasan, jenis) ada di handler dengan pesan berbahasa
 // Indonesia. Schema ini menangkap tipe yang salah dan panjang yang keterlaluan.
@@ -121,6 +131,7 @@ module.exports = {
   changePasswordSchema,
   lupaPasswordSchema,
   resetPasswordSchema,
+  duaFaktorSchema,
   izinVerifikasiSchema,
   pengumumanSchema,
   absensiCheckinSchema,

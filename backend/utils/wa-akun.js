@@ -5,47 +5,24 @@
 // plaintext, satu berkas backup yang bocor berarti semua nomor sekolah bisa
 // dipakai orang lain. Kunci enkripsi hidup di environment (WA_SECRET_KEY, atau
 // diturunkan dari JWT_SECRET), jadi TIDAK ikut ke dalam backup.
-const crypto = require('crypto');
+//
+// Enkripsi sendiri hidup di utils/rahasia.js bersama dengan TOTP, supaya aturan
+// mainnya (format simpanan, penanganan kunci hilang) hanya ditulis sekali.
+const { enkripsi, dekripsi } = require('./rahasia');
 const db = require('../db');
+
+const LABEL_KUNCI = 'siaga-wa-akun';
+
+function enkripsiKredensial(teks) {
+  return enkripsi(teks, LABEL_KUNCI);
+}
+
+function dekripsiKredensial(simpanan) {
+  return dekripsi(simpanan, LABEL_KUNCI);
+}
 
 function tabelAda() {
   return !!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='wa_akun'").get();
-}
-
-function kunci() {
-  const bahan = process.env.WA_SECRET_KEY || process.env.JWT_SECRET;
-  if (!bahan) return null;
-  // Diturunkan dengan label terpisah: JWT_SECRET dan kunci enkripsi tidak boleh
-  // memakai byte yang sama untuk dua tujuan berbeda.
-  return crypto.createHash('sha256').update(`siaga-wa-akun:${bahan}`).digest();
-}
-
-function enkripsi(teks) {
-  if (!teks) return null;
-  const k = kunci();
-  if (!k) return `plain:${teks}`;
-  const iv = crypto.randomBytes(12);
-  const c = crypto.createCipheriv('aes-256-gcm', k, iv);
-  const isi = Buffer.concat([c.update(String(teks), 'utf8'), c.final()]);
-  return `enc:v1:${iv.toString('hex')}:${c.getAuthTag().toString('hex')}:${isi.toString('hex')}`;
-}
-
-function dekripsi(simpanan) {
-  if (!simpanan) return null;
-  if (String(simpanan).startsWith('plain:')) return String(simpanan).slice(6);
-  if (!String(simpanan).startsWith('enc:v1:')) return simpanan; // data lama
-  const k = kunci();
-  // Kunci berubah (mis. JWT_SECRET diganti): kredensial harus diisi ulang.
-  if (!k) return null;
-  const bagian = String(simpanan).split(':');
-  if (bagian.length !== 5) return null;
-  try {
-    const d = crypto.createDecipheriv('aes-256-gcm', k, Buffer.from(bagian[2], 'hex'));
-    d.setAuthTag(Buffer.from(bagian[3], 'hex'));
-    return Buffer.concat([d.update(Buffer.from(bagian[4], 'hex')), d.final()]).toString('utf8');
-  } catch {
-    return null;
-  }
 }
 
 // Bentuk yang aman dikirim ke klien: tanpa nilai rahasia, hanya penanda ada/tidak.
@@ -56,7 +33,7 @@ function aman(row) {
     ...sisa,
     punya_api_key: !!api_key,
     punya_gateway_token: !!gateway_token,
-    kredensial_terbaca: row.provider === 'openwa' ? !!dekripsi(api_key) : !!dekripsi(gateway_token)
+    kredensial_terbaca: row.provider === 'openwa' ? !!dekripsiKredensial(api_key) : !!dekripsiKredensial(gateway_token)
   };
 }
 
@@ -144,9 +121,9 @@ function simpan(data, id = null) {
     const lama = ambil(id);
     if (!lama) throw new Error('Akun tidak ditemukan');
     // Kunci hanya ditimpa kalau diisi; form edit tidak menampilkan nilai lama.
-    const apiKey = data.api_key ? enkripsi(data.api_key) : provider === 'openwa' ? lama.api_key : null;
+    const apiKey = data.api_key ? enkripsiKredensial(data.api_key) : provider === 'openwa' ? lama.api_key : null;
     const token = data.gateway_token
-      ? enkripsi(data.gateway_token)
+      ? enkripsiKredensial(data.gateway_token)
       : provider === 'gateway'
         ? lama.gateway_token
         : null;
@@ -179,9 +156,9 @@ function simpan(data, id = null) {
       isi.provider,
       isi.nomor,
       isi.api_url,
-      data.api_key ? enkripsi(data.api_key) : null,
+      data.api_key ? enkripsiKredensial(data.api_key) : null,
       isi.gateway_url,
-      data.gateway_token ? enkripsi(data.gateway_token) : null,
+      data.gateway_token ? enkripsiKredensial(data.gateway_token) : null,
       isi.aktif,
       now,
       now
@@ -196,8 +173,8 @@ function hapus(id) {
 
 module.exports = {
   tabelAda,
-  enkripsi,
-  dekripsi,
+  enkripsi: enkripsiKredensial,
+  dekripsi: dekripsiKredensial,
   aman,
   daftar,
   daftarMentah,

@@ -1,7 +1,8 @@
 import { Suspense, lazy, useEffect, useState, useRef } from 'react';
 import { api } from './api';
 import LoginView from './views/LoginView';
-import { ActionButton, IconButton } from './components/Shared';
+import { ActionButton, IconButton, Modal } from './components/Shared';
+import KeamananStaffCard from './views/shared/KeamananStaffCard';
 import {
   Bell,
   CheckCheck,
@@ -9,6 +10,7 @@ import {
   Save,
   Menu,
   Shield,
+  ShieldCheck,
   GraduationCap,
   BookOpen,
   KeyRound,
@@ -98,6 +100,7 @@ export default function App() {
   const [notif, setNotif] = useState([]);
   const [showNotif, setShowNotif] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [keamananOpen, setKeamananOpen] = useState(false);
   const [desktopCollapsed, setDesktopCollapsed] = useState(() => {
     try {
       return localStorage.getItem('sidebar_collapsed') === 'true';
@@ -442,6 +445,21 @@ export default function App() {
 
         {/* Sidebar Footer */}
         <div className="p-3 border-t border-slate-200/70 flex flex-col gap-2">
+          {/* Keamanan akun hanya untuk staff: wali sudah punya kartu PIN di
+              portalnya. Ditaruh di footer agar tidak mengubah tata letak nav. */}
+          {user.tipe === 'staff' && (
+            <button
+              type="button"
+              onClick={() => setKeamananOpen(true)}
+              title="Keamanan akun"
+              className={`w-full flex items-center rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 border border-slate-200/70 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 ${
+                desktopCollapsed ? 'md:justify-center md:p-2 gap-3 px-3 py-2' : 'gap-3 px-3 py-2'
+              }`}
+            >
+              <ShieldCheck className="w-4 h-4 flex-shrink-0" />
+              <span className={desktopCollapsed ? 'md:hidden' : ''}>Keamanan akun</span>
+            </button>
+          )}
           <button
             onClick={logout}
             className={`w-full flex items-center rounded-xl text-xs font-bold text-red-600 hover:bg-red-50 border border-transparent transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-200 ${
@@ -599,6 +617,13 @@ export default function App() {
           </Suspense>
         </main>
       </div>
+
+      {/* Keamanan akun staff (verifikasi dua faktor TOTP) */}
+      {keamananOpen && user.tipe === 'staff' && (
+        <Modal onClose={() => setKeamananOpen(false)} title="Keamanan Akun" maxWidth="max-w-lg">
+          <KeamananStaffCard toast={toast} onClose={() => setKeamananOpen(false)} />
+        </Modal>
+      )}
 
       {/* Toasts */}
       <div

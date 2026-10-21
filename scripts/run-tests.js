@@ -29,6 +29,7 @@ const files =
         'scripts/wa-akun.test.js',
         'scripts/pin.test.js',
         'scripts/reset-password.test.js',
+        'scripts/totp.test.js',
         'scripts/izin.test.js',
         'scripts/guru-lintas-cabang.test.js'
       ];

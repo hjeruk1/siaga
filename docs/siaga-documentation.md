@@ -102,6 +102,7 @@ Variabel penting:
 
 - `PORT`
 - `JWT_SECRET`
+- `WA_SECRET_KEY` (opsional; kalau tidak diset, kunci enkripsi rahasia — kredensial WhatsApp & secret TOTP — diturunkan dari `JWT_SECRET`. Menyetelnya memisahkan kunci enkripsi dari kunci JWT.)
 - `NODE_ENV`
 - `FRONTEND_URL`
 - `DB_PATH`
@@ -125,6 +126,9 @@ Catatan:
 - Semua login memakai JWT bearer token.
 - Scope role dan cabang ditegakkan melalui middleware auth dan helper workflow.
 - `pengguna` adalah tabel akun umum untuk staff dan wali.
+- Verifikasi dua faktor (2FA) untuk akun staff memakai TOTP (RFC 6238): setelah password benar, server menerbitkan token tantangan (HMAC, 5 menit, tanpa state); penukaran ke JWT butuh kode 6 angka dari aplikasi authenticator. Endpoint: `/api/auth/2fa/{status,setup,enable,verify,recovery,recovery/regenerate}` dan `DELETE /api/auth/2fa`.
+- Secret TOTP disimpan terenkripsi AES-256-GCM; kunci diturunkan dari `WA_SECRET_KEY`/`JWT_SECRET` dan tidak ikut backup cloud. Klien tidak pernah menerima nilai rahasia, hanya penanda ada/tidak.
+- Kode pemulihan: 8 kode sekali pakai, disimpan sebagai hash SHA-256, ditampilkan sekali saat pengaktifan (dapat disalin/diunduh sebagai .txt).
 
 ### 3.2 Master Data
 
@@ -258,6 +262,17 @@ Catatan:
 - Staff historis tidak dihapus permanen, gunakan nonaktif.
 - Staff yang baru dibuat karena salah input dapat dihapus permanen jika belum punya histori operasional. Backend menolak hard delete jika staff sudah muncul di daily record, modul ajar, absensi, billing, audit tindakan, atau creator/verifier field lain.
 - Akun wali tetap dapat aktif untuk histori walaupun anak sudah keluar/lulus, kecuali dinonaktifkan manual.
+
+### 4.3a Verifikasi Dua Faktor (2FA) dan PIN
+
+- 2FA TOTP opsional untuk semua akun staff; `admin`, `admin_cabang`, dan `kepsek` mendapat pengingat di kartu Keamanan akun sampai diaktifkan.
+- Wali tidak memakai 2FA: gerbang kedua mereka adalah PIN 6 angka (bcrypt, kunci 5x salah/15 menit) untuk aksi finansial.
+- Mengaktifkan 2FA butuh kode valid dari aplikasi authenticator (membuktikan HP benar-benar bekerja); kode pemulihan diterbitkan sekali saat pengaktifan.
+- Mengganti secret saat 2FA sudah aktif, mematikan 2FA, dan menerbitkan ulang kode pemulihan selalu wajib password akun.
+- 5 kode salah (authenticator maupun pemulihan) mengunci verifikasi 15 menit.
+- Kode TOTP tidak bisa dipakai ulang dalam langkah 30 detik yang sudah diterima (replay protection).
+- Peristiwa keamanan (2FA aktif/dimati, kode pemulihan dipakai) dicatat di audit log dan dikabarkan lewat WhatsApp ke nomor pemilik.
+- Aplikasi authenticator apa pun yang membaca `otpauth://totp/` bisa dipakai (Google Authenticator, Authy, 1Password, Aegis); bekerja offline.
 
 ### 4.4 Hak Kelola Akun
 

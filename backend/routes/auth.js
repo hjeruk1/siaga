@@ -11,6 +11,7 @@ const { loginSchema, changePasswordSchema, lupaPasswordSchema, resetPasswordSche
 const { nowUtc, audit } = require('../utils/workflow');
 const otp = require('../utils/otp');
 const wa = require('../utils/wa');
+const duaFaktor = require('./dua-faktor');
 
 const DUMMY_HASH = '$2a$10$CwTycUXWue0Thq9StjUM0uJ8oD4P0MYu96TbKavvLWS.5o60tK4Ga';
 const loginAttempts = new Map();
@@ -111,6 +112,17 @@ router.post('/login', validateBody(loginSchema), (req, res) => {
   clearLoginFailures(key);
   if (user.status === 'nonaktif') return res.status(403).json({ error: 'Akun nonaktif' });
   const loaded = loadUser(user.id);
+  // Gerbang kedua: akun staff dengan 2FA aktif belum boleh menerima JWT.
+  // Password benar saja tidak cukup — pemegang aplikasi authenticator harus
+  // juga hadir. user di sini SELECT *, jadi totp_aktif sudah tersedia.
+  if (loginType === 'staff' && user.totp_aktif) {
+    return res.json({
+      perlu_2fa: true,
+      challenge_token: duaFaktor.buatChallenge(user.id),
+      berlaku_detik: Math.floor(duaFaktor.TANTANGAN_MS / 1000),
+      nama: loaded.display_name
+    });
+  }
   const token = jwt.sign({ id: user.id, v: Number(user.auth_version || 0) }, SECRET, { expiresIn: '12h' });
   setMediaCookie(res, token);
   res.json({ token, user: publicUser(loaded) });

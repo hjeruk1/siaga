@@ -181,6 +181,11 @@ app.get('/api/health/ready', (_req, res) => {
 });
 
 app.use('/api/auth', require('./routes/auth'));
+// Dipasang di bawah /api/auth (bukan /api/auth/2fa) supaya req.baseUrl tetap
+// '/api/auth': middleware auth mengecualikan jalur itu dari blok
+// must_change_password, dan pengguna wajib-ganti-password tetap boleh
+// mengelola 2FA-nya.
+app.use('/api/auth', require('./routes/dua-faktor'));
 app.use('/api/master', require('./routes/master'));
 app.use('/api/modul-ajar', require('./routes/modul-ajar'));
 app.use('/api/pengguna', require('./routes/pengguna'));

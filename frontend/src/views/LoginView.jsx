@@ -1,6 +1,19 @@
 import { useState } from 'react';
 import { api } from '../api';
-import { Eye, EyeOff, Sun, Moon, Sparkle, ShieldCheck, Building2, Users, CheckCircle2 } from 'lucide-react';
+import {
+  Eye,
+  EyeOff,
+  Sun,
+  Moon,
+  Sparkle,
+  ShieldCheck,
+  Building2,
+  Users,
+  CheckCircle2,
+  ArrowLeft,
+  KeyRound,
+  LifeBuoy
+} from 'lucide-react';
 import LupaPasswordModal from './LupaPasswordModal.jsx';
 
 export default function LoginView({ onLogin, theme, setTheme }) {
@@ -11,6 +24,19 @@ export default function LoginView({ onLogin, theme, setTheme }) {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [lupaOpen, setLupaOpen] = useState(false);
+  // Langkah kedua login staff: password benar, tapi akun punya verifikasi dua
+  // faktor. Server mengirim tantangan (berlaku 5 menit) — belum ada token.
+  const [tantangan, setTantangan] = useState(null);
+  const [kode2fa, setKode2fa] = useState('');
+  const [pakaiPemulihan, setPakaiPemulihan] = useState(false);
+
+  function pilihTab(id) {
+    setTab(id);
+    setTantangan(null);
+    setKode2fa('');
+    setPakaiPemulihan(false);
+    setErr('');
+  }
 
   async function submit(e) {
     e.preventDefault();
@@ -23,10 +49,32 @@ export default function LoginView({ onLogin, theme, setTheme }) {
           ? { tipe: 'wali', no_wa: form.no_wa.trim(), password: form.password }
           : { tipe: 'staff', username: form.username.trim(), password: form.password }
       );
+      if (d.perlu_2fa) {
+        setTantangan({ token: d.challenge_token, nama: d.nama, berlaku: d.berlaku_detik });
+        return;
+      }
       api.setToken(d.token);
       onLogin(d.user);
     } catch (e2) {
       setErr(e2.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function submit2fa(e) {
+    e.preventDefault();
+    setErr('');
+    setLoading(true);
+    try {
+      const d = pakaiPemulihan
+        ? await api.pemulihanDuaFaktor(tantangan.token, kode2fa.trim().toUpperCase())
+        : await api.verifikasiDuaFaktor(tantangan.token, kode2fa.trim());
+      api.setToken(d.token);
+      onLogin(d.user);
+    } catch (e2) {
+      setErr(e2.message);
+      setKode2fa('');
     } finally {
       setLoading(false);
     }
@@ -200,7 +248,7 @@ export default function LoginView({ onLogin, theme, setTheme }) {
                   type="button"
                   role="tab"
                   aria-selected={tab === id}
-                  onClick={() => setTab(id)}
+                  onClick={() => pilihTab(id)}
                   className={`relative flex items-center justify-center gap-2 py-2 text-sm font-bold rounded-lg transition-all duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 ${
                     tab === id
                       ? 'bg-white text-primary shadow-sm dark:bg-slate-700 dark:text-amber-300'
@@ -213,88 +261,192 @@ export default function LoginView({ onLogin, theme, setTheme }) {
               ))}
             </div>
 
-            <form onSubmit={submit} className="space-y-4">
-              {tab === 'staff' ? (
+            {!tantangan && (
+              <form onSubmit={submit} className="space-y-4">
+                {tab === 'staff' ? (
+                  <Field
+                    label="Username"
+                    name="username"
+                    id="siaga-username"
+                    value={form.username}
+                    onChange={(v) => setForm((f) => ({ ...f, username: v }))}
+                    autoComplete="username"
+                    spellCheck={false}
+                    autoFocus
+                  />
+                ) : (
+                  <Field
+                    label="Nomor WhatsApp"
+                    name="no_wa"
+                    id="siaga-no-wa"
+                    value={form.no_wa}
+                    onChange={(v) => setForm((f) => ({ ...f, no_wa: v }))}
+                    autoComplete="username"
+                    spellCheck={false}
+                    autoFocus
+                  />
+                )}
                 <Field
-                  label="Username"
-                  name="username"
-                  id="siaga-username"
-                  value={form.username}
-                  onChange={(v) => setForm((f) => ({ ...f, username: v }))}
-                  autoComplete="username"
-                  spellCheck={false}
-                  autoFocus
+                  label="Password"
+                  name="password"
+                  id="siaga-password"
+                  type={showPassword ? 'text' : 'password'}
+                  value={form.password}
+                  onChange={(v) => setForm((f) => ({ ...f, password: v }))}
+                  autoComplete="current-password"
+                  trailing={
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((v) => !v)}
+                      className="rounded-lg p-1.5 text-slate-400 transition-colors duration-200 hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 dark:hover:bg-slate-700 dark:hover:text-slate-200"
+                      aria-label={showPassword ? 'Sembunyikan password' : 'Lihat password'}
+                    >
+                      {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                    </button>
+                  }
                 />
-              ) : (
-                <Field
-                  label="Nomor WhatsApp"
-                  name="no_wa"
-                  id="siaga-no-wa"
-                  value={form.no_wa}
-                  onChange={(v) => setForm((f) => ({ ...f, no_wa: v }))}
-                  autoComplete="username"
-                  spellCheck={false}
-                  autoFocus
-                />
-              )}
-              <Field
-                label="Password"
-                name="password"
-                id="siaga-password"
-                type={showPassword ? 'text' : 'password'}
-                value={form.password}
-                onChange={(v) => setForm((f) => ({ ...f, password: v }))}
-                autoComplete="current-password"
-                trailing={
+                <div className="flex justify-end">
                   <button
                     type="button"
-                    onClick={() => setShowPassword((v) => !v)}
-                    className="rounded-lg p-1.5 text-slate-400 transition-colors duration-200 hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 dark:hover:bg-slate-700 dark:hover:text-slate-200"
-                    aria-label={showPassword ? 'Sembunyikan password' : 'Lihat password'}
+                    onClick={() => setLupaOpen(true)}
+                    className="text-[12px] font-bold text-primary transition-colors hover:text-primary-hover"
                   >
-                    {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                    Lupa password?
                   </button>
-                }
-              />
-              <div className="flex justify-end">
+                </div>
+                {ok && (
+                  <div
+                    className="flex gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 dark:border-emerald-400/25 dark:bg-emerald-500/10 dark:text-emerald-300"
+                    role="status"
+                  >
+                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+                    <span>{ok}</span>
+                  </div>
+                )}
+                {err && (
+                  <div
+                    className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-400/30 dark:bg-red-500/10 dark:text-red-300"
+                    role="alert"
+                  >
+                    {err}
+                  </div>
+                )}
                 <button
-                  type="button"
-                  onClick={() => setLupaOpen(true)}
-                  className="text-[12px] font-bold text-primary transition-colors hover:text-primary-hover"
+                  disabled={loading || !canSubmit}
+                  className="relative w-full h-12 overflow-hidden rounded-2xl bg-gradient-to-br from-amber-500 to-amber-700 px-4 text-white font-bold shadow-[0_12px_32px_rgba(245,158,11,0.35)] transition-all duration-300 hover:shadow-[0_16px_40px_rgba(245,158,11,0.45)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none disabled:hover:translate-y-0"
                 >
-                  Lupa password?
+                  <span className="relative z-10">{loading ? 'Masuk…' : 'Masuk'}</span>
+                  <span
+                    className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full hover:translate-x-full transition-transform duration-700"
+                    aria-hidden="true"
+                  />
                 </button>
-              </div>
-              {ok && (
-                <div
-                  className="flex gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 dark:border-emerald-400/25 dark:bg-emerald-500/10 dark:text-emerald-300"
-                  role="status"
-                >
-                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
-                  <span>{ok}</span>
-                </div>
-              )}
-              {err && (
-                <div
-                  className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-400/30 dark:bg-red-500/10 dark:text-red-300"
-                  role="alert"
-                >
-                  {err}
-                </div>
-              )}
-              <button
-                disabled={loading || !canSubmit}
-                className="relative w-full h-12 overflow-hidden rounded-2xl bg-gradient-to-br from-amber-500 to-amber-700 px-4 text-white font-bold shadow-[0_12px_32px_rgba(245,158,11,0.35)] transition-all duration-300 hover:shadow-[0_16px_40px_rgba(245,158,11,0.45)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none disabled:hover:translate-y-0"
-              >
-                <span className="relative z-10">{loading ? 'Masuk…' : 'Masuk'}</span>
-                <span
-                  className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full hover:translate-x-full transition-transform duration-700"
-                  aria-hidden="true"
-                />
-              </button>
-            </form>
+              </form>
+            )}
 
-            {lupaOpen && (
+            {tantangan && (
+              <form onSubmit={submit2fa} className="space-y-4">
+                <div className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 p-3 text-[11px] leading-relaxed text-amber-700 dark:border-amber-400/25 dark:bg-amber-500/10 dark:text-amber-300">
+                  <KeyRound className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                  <span>
+                    Password <b>{tantangan.nama}</b> benar. Akun ini memakai verifikasi dua faktor — masukkan kode 6
+                    angka dari aplikasi authenticator Anda.
+                  </span>
+                </div>
+
+                {pakaiPemulihan ? (
+                  <label className="block" htmlFor="siaga-recovery">
+                    <span className="text-xs font-black uppercase tracking-wide text-slate-500">Kode pemulihan</span>
+                    <div className="mt-1.5 flex items-center rounded-xl border border-slate-200 bg-white px-3 shadow-sm transition-all duration-200 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 dark:border-slate-700 dark:bg-slate-800/60">
+                      <LifeBuoy className="mr-2 h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />
+                      <input
+                        id="siaga-recovery"
+                        type="text"
+                        inputMode="text"
+                        autoComplete="off"
+                        maxLength={10}
+                        autoFocus
+                        value={kode2fa}
+                        onChange={(e) => setKode2fa(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+                        placeholder="CONTOH5XY"
+                        className="min-w-0 flex-1 border-0 bg-transparent py-3 text-center text-sm font-black tracking-[0.2em] outline-none dark:text-white"
+                      />
+                    </div>
+                    <span className="mt-1 block text-[10px] text-slate-400">
+                      Satu dari delapan kode yang Anda simpan saat mengaktifkan 2FA. Kode sekali pakai.
+                    </span>
+                  </label>
+                ) : (
+                  <label className="block" htmlFor="siaga-kode-2fa">
+                    <span className="text-xs font-black uppercase tracking-wide text-slate-500">
+                      Kode authenticator
+                    </span>
+                    <div className="mt-1.5 flex items-center rounded-xl border border-slate-200 bg-white px-3 shadow-sm transition-all duration-200 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 dark:border-slate-700 dark:bg-slate-800/60">
+                      <input
+                        id="siaga-kode-2fa"
+                        type="text"
+                        inputMode="numeric"
+                        autoComplete="one-time-code"
+                        maxLength={6}
+                        autoFocus
+                        value={kode2fa}
+                        onChange={(e) => setKode2fa(e.target.value.replace(/\D/g, ''))}
+                        placeholder="000000"
+                        className="min-w-0 flex-1 border-0 bg-transparent py-3 text-center text-2xl font-black tabular-nums tracking-[0.5em] outline-none dark:text-white"
+                      />
+                    </div>
+                  </label>
+                )}
+
+                {err && (
+                  <div
+                    className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-400/30 dark:bg-red-500/10 dark:text-red-300"
+                    role="alert"
+                  >
+                    {err}
+                  </div>
+                )}
+
+                <button
+                  disabled={loading || kode2fa.length < (pakaiPemulihan ? 10 : 6)}
+                  className="relative w-full h-12 overflow-hidden rounded-2xl bg-gradient-to-br from-amber-500 to-amber-700 px-4 text-white font-bold shadow-[0_12px_32px_rgba(245,158,11,0.35)] transition-all duration-300 hover:shadow-[0_16px_40px_rgba(245,158,11,0.45)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none disabled:hover:translate-y-0"
+                >
+                  <span className="relative z-10">{loading ? 'Memeriksa…' : 'Verifikasi & Masuk'}</span>
+                  <span
+                    className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full hover:translate-x-full transition-transform duration-700"
+                    aria-hidden="true"
+                  />
+                </button>
+
+                <div className="flex items-center justify-between text-[12px] font-bold">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPakaiPemulihan((v) => !v);
+                      setKode2fa('');
+                      setErr('');
+                    }}
+                    className="text-primary transition-colors hover:text-primary-hover"
+                  >
+                    {pakaiPemulihan ? 'Pakai kode authenticator' : 'Masuk pakai kode pemulihan'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTantangan(null);
+                      setKode2fa('');
+                      setPakaiPemulihan(false);
+                      setErr('');
+                    }}
+                    className="inline-flex items-center gap-1 text-slate-400 transition-colors hover:text-slate-600"
+                  >
+                    <ArrowLeft className="h-3.5 w-3.5" /> Kembali
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {!tantangan && lupaOpen && (
               <LupaPasswordModal
                 tipe={tab}
                 identitas={tab === 'wali' ? form.no_wa : form.username}
