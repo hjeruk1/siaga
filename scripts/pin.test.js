@@ -39,9 +39,11 @@ async function buatKeluarga(nama) {
   const jenjang = db.prepare('SELECT id FROM jenjang ORDER BY urutan LIMIT 1').get();
   const rombel = db.prepare('SELECT id FROM rombel WHERE cabang_id=? ORDER BY id LIMIT 1').get(cabang.id);
   const s = db
-    .prepare(`INSERT INTO siswa(nama,status,foto,catatan_khusus,created_at,updated_at) VALUES(?,'aktif',NULL,'fixture',?,?)`)
+    .prepare(
+      `INSERT INTO siswa(nama,status,foto,catatan_khusus,created_at,updated_at) VALUES(?,'aktif',NULL,'fixture',?,?)`
+    )
     .run(nama, new Date().toISOString(), new Date().toISOString());
-  db.prepare('INSERT INTO wali_siswa(wali_pengguna_id,siswa_id,relasi,aktif,created_at) VALUES(?,?,\'Ayah\',1,?)').run(
+  db.prepare("INSERT INTO wali_siswa(wali_pengguna_id,siswa_id,relasi,aktif,created_at) VALUES(?,?,'Ayah',1,?)").run(
     waliId,
     s.lastInsertRowid,
     new Date().toISOString()
@@ -66,8 +68,16 @@ function buatTagihan(siswaId, nominal) {
         nominal_awal,prorata_amount,koreksi_amount,diskon_amount,nominal_final,status,created_at,updated_at)
        VALUES(?,?,?,?,'reguler','2026/2027','2026-10','spp','SPP Uji',?,0,0,0,?,'open',?,?)`
     )
-    .run(siswaId, e.cabang_id, e.jenjang_id, e.rombel_id, nominal, nominal, new Date().toISOString(), new Date().toISOString())
-    .lastInsertRowid;
+    .run(
+      siswaId,
+      e.cabang_id,
+      e.jenjang_id,
+      e.rombel_id,
+      nominal,
+      nominal,
+      new Date().toISOString(),
+      new Date().toISOString()
+    ).lastInsertRowid;
 }
 
 describe('PIN keuangan wali', () => {
@@ -117,7 +127,9 @@ describe('PIN keuangan wali', () => {
     const benarSaatKunci = await req('POST', '/api/auth/pin/verify', { pin: '135790' }, wali.token);
     assert.equal(benarSaatKunci.status, 429);
     // Buka kembali (uji, tanpa menunggu 15 menit): hapus kunci langsung.
-    db.prepare('UPDATE pengguna SET pin_failed_count=0, pin_locked_until=NULL WHERE id=(SELECT wali_pengguna_id FROM wali_siswa WHERE siswa_id=?)').run(wali.siswaId);
+    db.prepare(
+      'UPDATE pengguna SET pin_failed_count=0, pin_locked_until=NULL WHERE id=(SELECT wali_pengguna_id FROM wali_siswa WHERE siswa_id=?)'
+    ).run(wali.siswaId);
   });
 
   it('PIN benar menghasilkan token yang membuka data keuangan', async () => {

@@ -138,7 +138,9 @@ export default function AuditTab({ user, toast }) {
     if (!q) return rows;
     return rows.filter((a) =>
       [a.actor_name || 'Sistem', a.action, a.entity_type, a.reason].some((v) =>
-        String(v || '').toLowerCase().includes(q)
+        String(v || '')
+          .toLowerCase()
+          .includes(q)
       )
     );
   }, [rows, searchQuery]);
@@ -251,7 +253,9 @@ export default function AuditTab({ user, toast }) {
             <div key={g.dateKey}>
               <div className="flex items-baseline gap-2 border-t border-slate-100 bg-slate-50/80 px-3 py-1.5 first:border-t-0">
                 <span className="text-xs font-black text-text-main">{g.label}</span>
-                <span className="text-[10px] font-semibold tabular-nums text-slate-400">{g.items.length} aktivitas</span>
+                <span className="text-[10px] font-semibold tabular-nums text-slate-400">
+                  {g.items.length} aktivitas
+                </span>
               </div>
               {g.items.map(({ a, time }) => (
                 <AuditRow key={a.id} item={a} time={time} />

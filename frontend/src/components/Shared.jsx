@@ -127,7 +127,9 @@ export function ActionButton({
       disabled={disabled}
       aria-label={typeof text === 'string' ? text : undefined}
       title={typeof text === 'string' ? text : undefined}
-      className={`${displayClass} items-center justify-center gap-2 h-9 px-4 rounded-xl text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${variants[variant] || variants.primary} ${className}`.replace(/\s+/g, ' ').trim()}
+      className={`${displayClass} items-center justify-center gap-2 h-9 px-4 rounded-xl text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${variants[variant] || variants.primary} ${className}`
+        .replace(/\s+/g, ' ')
+        .trim()}
     >
       {Icon && <Icon className="w-4 h-4" strokeWidth={2.4} />}
       <span>{children}</span>

@@ -140,9 +140,7 @@ export function HistoryModal({ siswa, onClose, onOpenDate }) {
                             <div className="flex items-start justify-between gap-2">
                               <div className="min-w-0">
                                 <div className="flex flex-wrap items-center gap-2">
-                                  <span className="text-xs font-black text-text-main">
-                                    {tanggalPanjang(l.tanggal)}
-                                  </span>
+                                  <span className="text-xs font-black text-text-main">{tanggalPanjang(l.tanggal)}</span>
                                   {l.status === 'published' ? (
                                     <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-black text-emerald-700">
                                       <CheckCircle2 className="h-3 w-3" aria-hidden="true" /> Terkirim
@@ -177,7 +175,9 @@ export function HistoryModal({ siswa, onClose, onOpenDate }) {
                                 </span>
                               ) : null}
                               {makan ? (
-                                <span className={`rounded-full border px-2 py-0.5 text-[10px] font-black ${makan.tone}`}>
+                                <span
+                                  className={`rounded-full border px-2 py-0.5 text-[10px] font-black ${makan.tone}`}
+                                >
                                   Makan: {makan.label}
                                 </span>
                               ) : null}
@@ -198,9 +198,7 @@ export function HistoryModal({ siswa, onClose, onOpenDate }) {
                             </div>
 
                             {Array.isArray(l.aktivitas) && l.aktivitas.length ? (
-                              <div className="mt-2 truncate text-[11px] text-slate-500">
-                                {l.aktivitas.join(' · ')}
-                              </div>
+                              <div className="mt-2 truncate text-[11px] text-slate-500">{l.aktivitas.join(' · ')}</div>
                             ) : null}
                             {l.observation_note ? (
                               <p className="mt-1.5 line-clamp-2 text-[11px] leading-relaxed text-slate-600">

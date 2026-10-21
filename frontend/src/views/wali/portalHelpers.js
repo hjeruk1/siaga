@@ -325,7 +325,9 @@ export function tautanInvoice(invoice) {
 }
 
 export function waUrl(nomor, teks) {
-  const angka = String(nomor || '').replace(/\D/g, '').replace(/^0/, '62');
+  const angka = String(nomor || '')
+    .replace(/\D/g, '')
+    .replace(/^0/, '62');
   const dasar = angka ? `https://wa.me/${angka}` : 'https://wa.me/';
   return teks ? `${dasar}?text=${encodeURIComponent(teks)}` : dasar;
 }
@@ -398,7 +400,11 @@ export const PILLAR_LABEL = {
 export const RATING_UI = {
   BB: { label: 'Belum Berkembang', singkat: 'BB', tone: 'bg-red-50 text-red-700 border-red-200' },
   MB: { label: 'Mulai Berkembang', singkat: 'MB', tone: 'bg-amber-50 text-amber-700 border-amber-200' },
-  BSH: { label: 'Berkembang Sesuai Harapan', singkat: 'BSH', tone: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  BSH: {
+    label: 'Berkembang Sesuai Harapan',
+    singkat: 'BSH',
+    tone: 'bg-emerald-50 text-emerald-700 border-emerald-200'
+  },
   BSB: { label: 'Berkembang Sangat Baik', singkat: 'BSB', tone: 'bg-sky-50 text-sky-700 border-sky-200' }
 };
 

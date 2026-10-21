@@ -176,7 +176,12 @@ function providerAktif() {
  */
 function tipeAktif() {
   const daftar = env('WA_TIPE_AKTIF', WA_TIPE_DEFAULT);
-  return new Set(daftar.split(',').map((s) => s.trim()).filter(Boolean));
+  return new Set(
+    daftar
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+  );
 }
 
 function jedaAntrean() {

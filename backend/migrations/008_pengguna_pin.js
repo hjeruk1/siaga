@@ -7,7 +7,10 @@
 //
 // Semua kolom aditif: tidak ada tabel anak yang mereferensikannya.
 module.exports.up = (db) => {
-  const kolom = db.prepare('PRAGMA table_info(pengguna)').all().map((c) => c.name);
+  const kolom = db
+    .prepare('PRAGMA table_info(pengguna)')
+    .all()
+    .map((c) => c.name);
   if (!kolom.includes('pin_hash')) db.exec('ALTER TABLE pengguna ADD COLUMN pin_hash TEXT');
   if (!kolom.includes('pin_failed_count'))
     db.exec('ALTER TABLE pengguna ADD COLUMN pin_failed_count INTEGER NOT NULL DEFAULT 0');

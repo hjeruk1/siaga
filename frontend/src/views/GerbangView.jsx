@@ -57,7 +57,9 @@ export default function GerbangView({ toast }) {
     return () => clearInterval(id);
   }, []);
   function toMinutes(hhmm) {
-    const [h, m] = String(hhmm || '').split(':').map(Number);
+    const [h, m] = String(hhmm || '')
+      .split(':')
+      .map(Number);
     if ([h, m].some(Number.isNaN)) return null;
     return h * 60 + m;
   }
@@ -342,11 +344,16 @@ export default function GerbangView({ toast }) {
               { l: 'Rata-rata tunggu', ls: 'Rata-rata', v: waitAvg === null ? '–' : `${waitAvg}m`, c: 'text-white' }
             ].map((s) => (
               <div key={s.l} className="bg-slate-950 px-2 py-1.5 sm:px-4 sm:py-2.5">
-                <div className="truncate text-[9px] font-black uppercase leading-[1.25] tracking-[0.04em] text-slate-500" title={s.l}>
+                <div
+                  className="truncate text-[9px] font-black uppercase leading-[1.25] tracking-[0.04em] text-slate-500"
+                  title={s.l}
+                >
                   <span className="sm:hidden">{s.ls}</span>
                   <span className="hidden sm:inline">{s.l}</span>
                 </div>
-                <div className={`mt-0.5 text-[17px] font-black leading-none tabular-nums sm:mt-1 sm:text-2xl ${s.c}`}>{s.v}</div>
+                <div className={`mt-0.5 text-[17px] font-black leading-none tabular-nums sm:mt-1 sm:text-2xl ${s.c}`}>
+                  {s.v}
+                </div>
               </div>
             ))}
           </div>
@@ -449,7 +456,9 @@ export default function GerbangView({ toast }) {
               {log.length ? (
                 log.map((l, i) => (
                   <li key={i} className="flex items-center justify-between gap-3 py-1.5 text-[13px]">
-                    <span className={`truncate ${l.type === 'ok' ? 'text-emerald-300' : 'text-red-300'}`}>{l.text}</span>
+                    <span className={`truncate ${l.type === 'ok' ? 'text-emerald-300' : 'text-red-300'}`}>
+                      {l.text}
+                    </span>
                     <span className="shrink-0 tabular-nums text-slate-500">{l.time}</span>
                   </li>
                 ))

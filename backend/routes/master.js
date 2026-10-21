@@ -323,26 +323,31 @@ router.get('/operasional-config', auth(), (req, res) => {
   );
 });
 
-router.put('/operasional-config/:id', auth(['admin', 'admin_cabang']), validateBody(operasionalConfigSchema), (req, res) => {
-  const row = db.prepare('SELECT * FROM operasional_config WHERE id=?').get(req.params.id);
-  if (!row) return res.status(404).json({ error: 'Konfigurasi tidak ditemukan' });
-  if (!requireCabang(req, res, row.cabang_id)) return;
-  const d = req.body || {};
-  db.prepare(
-    `UPDATE operasional_config SET jam_masuk=?,jam_pulang=?,hitung_terlambat=?,pakai_kalender=?,daily_record_wajib=?,daily_record_due_time=?,pickup_fleksibel=? WHERE id=?`
-  ).run(
-    d.jam_masuk || row.jam_masuk,
-    d.jam_pulang || row.jam_pulang,
-    d.hitung_terlambat ? 1 : 0,
-    d.pakai_kalender ? 1 : 0,
-    d.daily_record_wajib ? 1 : 0,
-    d.daily_record_due_time || row.daily_record_due_time,
-    d.pickup_fleksibel ? 1 : 0,
-    req.params.id
-  );
-  audit(req.user, 'update', 'operasional_config', req.params.id, { cabang_id: row.cabang_id, before: row, after: d });
-  res.json({ success: true });
-});
+router.put(
+  '/operasional-config/:id',
+  auth(['admin', 'admin_cabang']),
+  validateBody(operasionalConfigSchema),
+  (req, res) => {
+    const row = db.prepare('SELECT * FROM operasional_config WHERE id=?').get(req.params.id);
+    if (!row) return res.status(404).json({ error: 'Konfigurasi tidak ditemukan' });
+    if (!requireCabang(req, res, row.cabang_id)) return;
+    const d = req.body || {};
+    db.prepare(
+      `UPDATE operasional_config SET jam_masuk=?,jam_pulang=?,hitung_terlambat=?,pakai_kalender=?,daily_record_wajib=?,daily_record_due_time=?,pickup_fleksibel=? WHERE id=?`
+    ).run(
+      d.jam_masuk || row.jam_masuk,
+      d.jam_pulang || row.jam_pulang,
+      d.hitung_terlambat ? 1 : 0,
+      d.pakai_kalender ? 1 : 0,
+      d.daily_record_wajib ? 1 : 0,
+      d.daily_record_due_time || row.daily_record_due_time,
+      d.pickup_fleksibel ? 1 : 0,
+      req.params.id
+    );
+    audit(req.user, 'update', 'operasional_config', req.params.id, { cabang_id: row.cabang_id, before: row, after: d });
+    res.json({ success: true });
+  }
+);
 
 router.get('/audit-log', auth(['admin', 'admin_cabang', 'kepsek']), (req, res) => {
   const limit = Math.min(Number(req.query.limit) || 100, 300);

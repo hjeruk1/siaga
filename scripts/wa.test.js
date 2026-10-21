@@ -11,7 +11,8 @@ function setEnv(nilai) {
   process.env.WA_PROVIDER = nilai.provider;
   process.env.WA_API_URL = nilai.apiUrl || '';
   process.env.WA_API_KEY = nilai.apiKey || '';
-  process.env.WA_TIPE_AKTIF = nilai.tipe || 'daily_published,guru_reply,payment_verified,payment_rejected,invoice_issued,payment_claim';
+  process.env.WA_TIPE_AKTIF =
+    nilai.tipe || 'daily_published,guru_reply,payment_verified,payment_rejected,invoice_issued,payment_claim';
   process.env.WA_DELAY_MS = '0';
   if (nilai.gatewayUrl === undefined) delete process.env.WA_GATEWAY_URL;
   else process.env.WA_GATEWAY_URL = nilai.gatewayUrl;

@@ -47,14 +47,18 @@ const BULAN_NAMA = [
 ];
 
 export function monthLabel(bulan) {
-  const [y, m] = String(bulan || '').split('-').map(Number);
+  const [y, m] = String(bulan || '')
+    .split('-')
+    .map(Number);
   if (!y || !m) return '';
   return `${BULAN_NAMA[m - 1]} ${y}`;
 }
 
 // 'YYYY-MM' -> rentang tanggal untuk ekspor (hari terakhir bulan itu).
 export function monthRange(bulan) {
-  const [y, m] = String(bulan || '').split('-').map(Number);
+  const [y, m] = String(bulan || '')
+    .split('-')
+    .map(Number);
   if (!y || !m) return null;
   const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
   return {
@@ -122,7 +126,13 @@ export function filterRows(rows = [], q = '') {
     .toLowerCase();
   if (!key) return rows;
   return rows.filter(
-    (r) => String(r.nama || '').toLowerCase().includes(key) || String(r.kelas_nama || '').toLowerCase().includes(key)
+    (r) =>
+      String(r.nama || '')
+        .toLowerCase()
+        .includes(key) ||
+      String(r.kelas_nama || '')
+        .toLowerCase()
+        .includes(key)
   );
 }
 

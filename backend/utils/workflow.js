@@ -380,9 +380,7 @@ function isFutureTanggal(tanggal) {
 
 function rejectFutureTanggal(req, res, tanggal) {
   if (isFutureTanggal(tanggal)) {
-    res
-      .status(400)
-      .json({ error: 'Tanggal tidak boleh melewati hari ini', tanggal, today: todayWIB() });
+    res.status(400).json({ error: 'Tanggal tidak boleh melewati hari ini', tanggal, today: todayWIB() });
     return false;
   }
   return true;

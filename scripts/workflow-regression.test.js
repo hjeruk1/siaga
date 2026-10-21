@@ -709,12 +709,7 @@ describe('workflow regressions', () => {
   it('rejects future dates on attendance writes and blocks guru from closing the day', async () => {
     const siswa = await createSiswa(adminToken, 'future-date');
     const future = '2100-01-04';
-    const checkin = await req(
-      'POST',
-      '/api/absensi/checkin',
-      { siswa_id: siswa.id, tanggal: future },
-      adminToken
-    );
+    const checkin = await req('POST', '/api/absensi/checkin', { siswa_id: siswa.id, tanggal: future }, adminToken);
     assert.equal(checkin.status, 400, JSON.stringify(checkin.body));
     assert.match(checkin.body.error, /melewati hari ini/i);
 
@@ -747,19 +742,9 @@ describe('workflow regressions', () => {
     assert.equal(list.status, 200);
     const row = list.body[0];
     assert.ok(row, 'operational config row is required');
-    const bad = await req(
-      'PUT',
-      `/api/master/operasional-config/${row.id}`,
-      { jam_masuk: '8:00' },
-      adminToken
-    );
+    const bad = await req('PUT', `/api/master/operasional-config/${row.id}`, { jam_masuk: '8:00' }, adminToken);
     assert.equal(bad.status, 400, JSON.stringify(bad.body));
-    const good = await req(
-      'PUT',
-      `/api/master/operasional-config/${row.id}`,
-      { jam_masuk: '07:30' },
-      adminToken
-    );
+    const good = await req('PUT', `/api/master/operasional-config/${row.id}`, { jam_masuk: '07:30' }, adminToken);
     assert.equal(good.status, 200, JSON.stringify(good.body));
   });
 
@@ -788,12 +773,7 @@ describe('workflow regressions', () => {
     );
     assert.equal(early.status, 200, JSON.stringify(early.body));
 
-    const checkin = await req(
-      'POST',
-      '/api/absensi/checkin',
-      { siswa_id: siswa.id, tanggal },
-      adminToken
-    );
+    const checkin = await req('POST', '/api/absensi/checkin', { siswa_id: siswa.id, tanggal }, adminToken);
     assert.equal(checkin.status, 200, JSON.stringify(checkin.body));
 
     const tanpaAlasan = await req(
@@ -838,12 +818,7 @@ describe('workflow regressions', () => {
       .get(absen.id);
     assert.ok(auditRow, 'pickup_scan_manual audit trail is required');
 
-    const pulang = await req(
-      'POST',
-      '/api/penjemputan/pulang',
-      { siswa_ids: [siswa.id], tanggal },
-      gerbangToken
-    );
+    const pulang = await req('POST', '/api/penjemputan/pulang', { siswa_ids: [siswa.id], tanggal }, gerbangToken);
     assert.equal(pulang.status, 200, JSON.stringify(pulang.body));
     assert.equal(pulang.body.count, 1);
 
@@ -858,5 +833,4 @@ describe('workflow regressions', () => {
     assert.notEqual(rekap.body.rata2_menit, null);
     assert.ok(rekap.body.terlama.length >= 1, 'rekap detail is required');
   });
-
 });

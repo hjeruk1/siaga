@@ -293,10 +293,7 @@ const seed = db.transaction(() => {
             const tipe = t.jenis === 'spp' ? 'persen' : 'nominal';
             const nilai = t.jenis === 'spp' ? 10 : 50000;
             insDiskon.run(s.id, s.cabang, TAHUN, t.jenis, tipe, nilai, 'Beasiswa prestasi', NOW);
-            diskonPerJenis.set(
-              t.jenis,
-              tipe === 'persen' ? Math.round((t.nominal * nilai) / 100) : nilai
-            );
+            diskonPerJenis.set(t.jenis, tipe === 'persen' ? Math.round((t.nominal * nilai) / 100) : nilai);
           });
       }
 

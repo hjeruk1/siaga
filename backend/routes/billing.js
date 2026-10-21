@@ -1997,8 +1997,7 @@ function parseTagihanIds(raw) {
 router.post('/wali/konfirmasi', auth(['wali']), requirePin, uploadImage.single('bukti'), async (req, res) => {
   const d = req.body || {};
   const siswaId = Number(d.siswa_id);
-  if (!siswaId || !canWaliAccessSiswa(req.user, siswaId))
-    return res.status(403).json({ error: 'Akses siswa ditolak' });
+  if (!siswaId || !canWaliAccessSiswa(req.user, siswaId)) return res.status(403).json({ error: 'Akses siswa ditolak' });
 
   const siswa = db.prepare('SELECT id,nama,status FROM siswa WHERE id=?').get(siswaId);
   if (!siswa || siswa.status !== 'aktif')
@@ -2041,8 +2040,7 @@ router.post('/wali/konfirmasi', auth(['wali']), requirePin, uploadImage.single('
 
   // total sisa tagihan terpilih (pakai paidAmount yang sudah ada di modul)
   const sisaTotal = bills.reduce((sum, b) => sum + (b.nominal_final - paidAmount(b.id)), 0);
-  if (nominal > sisaTotal)
-    return res.status(400).json({ error: 'Nominal melebihi sisa tagihan yang dipilih' });
+  if (nominal > sisaTotal) return res.status(400).json({ error: 'Nominal melebihi sisa tagihan yang dipilih' });
 
   ensureDir(BUKTI_DIR);
   // Struk sering berukuran A4: resize lebar 1400px (bukan crop kotak) supaya
@@ -2054,7 +2052,10 @@ router.post('/wali/konfirmasi', auth(['wali']), requirePin, uploadImage.single('
     .toFile(path.join(BUKTI_DIR, filename));
   const buktiPath = `/uploads/bukti/${filename}`;
 
-  const catatan = String(d.catatan || '').trim().slice(0, 500) || null;
+  const catatan =
+    String(d.catatan || '')
+      .trim()
+      .slice(0, 500) || null;
   const tx = db.transaction(() => {
     const r = db
       .prepare(
@@ -2083,9 +2084,12 @@ router.post('/wali/konfirmasi', auth(['wali']), requirePin, uploadImage.single('
       const unpaid = b.nominal_final - paidAmount(b.id);
       const pakai = Math.min(remaining, unpaid);
       if (pakai > 0) {
-        db.prepare(
-          'INSERT INTO pembayaran_alokasi(pembayaran_id,tagihan_id,nominal,created_at) VALUES(?,?,?,?)'
-        ).run(r.lastInsertRowid, b.id, pakai, nowUtc());
+        db.prepare('INSERT INTO pembayaran_alokasi(pembayaran_id,tagihan_id,nominal,created_at) VALUES(?,?,?,?)').run(
+          r.lastInsertRowid,
+          b.id,
+          pakai,
+          nowUtc()
+        );
         remaining -= pakai;
       }
     }

@@ -61,7 +61,12 @@ const REKAP = {
       absensi: { '01': 'Hadir', '02': 'Terlambat', '05': 'Pulang', '06': 'Menunggu' },
       counts: { H: 1, T: 1, P: 1, M: 1, I: 0, S: 0, A: 0, L: 0 }
     },
-    { id: 12, nama: 'Umar Faruq', absensi: { '01': 'Hadir' }, counts: { H: 1, T: 0, P: 0, M: 0, I: 0, S: 0, A: 0, L: 0 } }
+    {
+      id: 12,
+      nama: 'Umar Faruq',
+      absensi: { '01': 'Hadir' },
+      counts: { H: 1, T: 0, P: 0, M: 0, I: 0, S: 0, A: 0, L: 0 }
+    }
   ]
 };
 
@@ -115,7 +120,10 @@ describe('tanggal', () => {
     const isi = cells.filter((c) => !c.kosong);
     assert.equal(isi.length, 31);
     // 1 Oktober 2026 = Kamis -> 3 sel kosong (Sen, Sel, Rab).
-    assert.equal(cells.findIndex((c) => c.kosong), 0);
+    assert.equal(
+      cells.findIndex((c) => c.kosong),
+      0
+    );
     assert.equal(cells[3].hari, 1);
     assert.equal(isi.find((c) => c.hari === 17).libur, true);
     assert.equal(isi.find((c) => c.hari === 17).akhirPekan, true);

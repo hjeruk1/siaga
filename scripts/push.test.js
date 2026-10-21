@@ -58,27 +58,33 @@ describe('push notification', () => {
 
   it('subscribe menyimpan subscription milik pengguna yang login', async () => {
     if (!waliToken) return; // server uji tidak menyediakan wali1
-    const r = await req('POST', '/api/push/subscribe', {
-      endpoint: endpointUji,
-      keys: { p256dh: 'kunci-uji-p256dh', auth: 'kunci-uji-auth' }
-    }, waliToken);
+    const r = await req(
+      'POST',
+      '/api/push/subscribe',
+      {
+        endpoint: endpointUji,
+        keys: { p256dh: 'kunci-uji-p256dh', auth: 'kunci-uji-auth' }
+      },
+      waliToken
+    );
     assert.equal(r.status, 200, JSON.stringify(r.body));
-    const row = db
-      .prepare('SELECT pengguna_id, endpoint FROM push_subscription WHERE endpoint=?')
-      .get(endpointUji);
+    const row = db.prepare('SELECT pengguna_id, endpoint FROM push_subscription WHERE endpoint=?').get(endpointUji);
     assert.ok(row, 'baris subscription harus ada di DB');
     assert.ok(row.pengguna_id, 'harus terhubung ke pengguna');
   });
 
   it('resubscribe endpoint yang sama tidak membuat baris kembar', async () => {
     if (!waliToken) return;
-    await req('POST', '/api/push/subscribe', {
-      endpoint: endpointUji,
-      keys: { p256dh: 'kunci-uji-p256dh-2', auth: 'kunci-uji-auth-2' }
-    }, waliToken);
-    const jumlah = db
-      .prepare('SELECT COUNT(*) c FROM push_subscription WHERE endpoint=?')
-      .get(endpointUji).c;
+    await req(
+      'POST',
+      '/api/push/subscribe',
+      {
+        endpoint: endpointUji,
+        keys: { p256dh: 'kunci-uji-p256dh-2', auth: 'kunci-uji-auth-2' }
+      },
+      waliToken
+    );
+    const jumlah = db.prepare('SELECT COUNT(*) c FROM push_subscription WHERE endpoint=?').get(endpointUji).c;
     assert.equal(jumlah, 1);
   });
 
@@ -87,9 +93,7 @@ describe('push notification', () => {
     const r = await req('POST', '/api/push/unsubscribe', { endpoint: endpointUji }, waliToken);
     assert.equal(r.status, 200);
     assert.equal(r.body.removed, 1);
-    const sisa = db
-      .prepare('SELECT COUNT(*) c FROM push_subscription WHERE endpoint=?')
-      .get(endpointUji).c;
+    const sisa = db.prepare('SELECT COUNT(*) c FROM push_subscription WHERE endpoint=?').get(endpointUji).c;
     assert.equal(sisa, 0);
   });
 
@@ -133,9 +137,7 @@ describe('push notification', () => {
     const r = await req('POST', '/api/push/unsubscribe', { endpoint: endpointUji }, guruToken);
     assert.equal(r.status, 200);
     assert.equal(r.body.removed, 0, 'guru tidak boleh mencabut milik wali');
-    const masih = db
-      .prepare('SELECT COUNT(*) c FROM push_subscription WHERE endpoint=?')
-      .get(endpointUji).c;
+    const masih = db.prepare('SELECT COUNT(*) c FROM push_subscription WHERE endpoint=?').get(endpointUji).c;
     assert.equal(masih, 1);
     // bersihkan
     db.prepare('DELETE FROM push_subscription WHERE endpoint=?').run(endpointUji);

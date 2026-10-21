@@ -39,8 +39,14 @@ describe('backup: database + arsip unggahan', () => {
 
   it('menghasilkan cadangan database dan arsip uploads', () => {
     const berkas = isiDir(dir);
-    assert.ok(berkas.some((f) => /^siaga-backup-.*\.db$/.test(f)), `db tidak ada: ${berkas}`);
-    assert.ok(berkas.some((f) => /^siaga-uploads-.*\.tar\.gz$/.test(f)), `arsip uploads tidak ada: ${berkas}`);
+    assert.ok(
+      berkas.some((f) => /^siaga-backup-.*\.db$/.test(f)),
+      `db tidak ada: ${berkas}`
+    );
+    assert.ok(
+      berkas.some((f) => /^siaga-uploads-.*\.tar\.gz$/.test(f)),
+      `arsip uploads tidak ada: ${berkas}`
+    );
   });
 
   it('melaporkan keberhasilan arsip uploads di output', () => {

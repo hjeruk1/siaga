@@ -52,7 +52,9 @@ describe('guru lintas cabang', () => {
     );
 
     const s = db
-      .prepare(`INSERT INTO siswa(nama,status,foto,catatan_khusus,created_at,updated_at) VALUES(?,'aktif',NULL,'fixture',?,?)`)
+      .prepare(
+        `INSERT INTO siswa(nama,status,foto,catatan_khusus,created_at,updated_at) VALUES(?,'aktif',NULL,'fixture',?,?)`
+      )
       .run(`Siswa Lintas ${NYAWA}`, nowIso(), nowIso());
     siswaId = s.lastInsertRowid;
     db.prepare(
@@ -90,7 +92,9 @@ describe('guru lintas cabang', () => {
     const jenjang = db.prepare('SELECT id FROM jenjang ORDER BY urutan LIMIT 1').get();
     const rombelLain = db.prepare('SELECT id FROM rombel WHERE cabang_id=? ORDER BY id DESC LIMIT 1').get(cabangB);
     const s2 = db
-      .prepare(`INSERT INTO siswa(nama,status,foto,catatan_khusus,created_at,updated_at) VALUES(?,'aktif',NULL,'fixture',?,?)`)
+      .prepare(
+        `INSERT INTO siswa(nama,status,foto,catatan_khusus,created_at,updated_at) VALUES(?,'aktif',NULL,'fixture',?,?)`
+      )
       .run(`Siswa Lain ${NYAWA}`, nowIso(), nowIso()).lastInsertRowid;
     db.prepare(
       `INSERT INTO siswa_enrollment(siswa_id,cabang_id,jenjang_id,rombel_id,paket,tanggal_mulai,status,created_at,created_by)

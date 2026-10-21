@@ -202,8 +202,7 @@ router.post('/reset-password', validateBody(resetPasswordSchema), (req, res) => 
 
   if (!validPassword(password_baru))
     return res.status(400).json({ error: 'Password baru minimal 10 karakter serta mengandung huruf dan angka' });
-  if (!/^\d{6}$/.test(String(kode || '')))
-    return res.status(400).json({ error: 'Kode verifikasi harus 6 angka' });
+  if (!/^\d{6}$/.test(String(kode || ''))) return res.status(400).json({ error: 'Kode verifikasi harus 6 angka' });
 
   const pengguna = otp.cariPengguna({ tipe: jenis, no_wa, username });
   // Akun tidak ada tetap menjalani verifikasi (dengan id -1) supaya waktu
@@ -291,9 +290,7 @@ function pinTokenValid(userId, token) {
 
 // Status lengkap + kunci; dipakai middleware requirePin.
 function pinStatus(userId) {
-  const row = db
-    .prepare('SELECT pin_hash, pin_failed_count, pin_locked_until FROM pengguna WHERE id=?')
-    .get(userId);
+  const row = db.prepare('SELECT pin_hash, pin_failed_count, pin_locked_until FROM pengguna WHERE id=?').get(userId);
   if (!row || !row.pin_hash) return { punyaPin: false, terkunci: false, sisaCoba: PIN_MAX_COBA };
   const locked = row.pin_locked_until && new Date(row.pin_locked_until).getTime() > Date.now();
   return {
@@ -311,8 +308,7 @@ function verifikasiPin(userId, pin) {
   const row = db.prepare('SELECT pin_hash FROM pengguna WHERE id=?').get(userId);
   if (!row || !bcrypt.compareSync(String(pin || ''), row.pin_hash)) {
     const gagal = (db.prepare('SELECT pin_failed_count c FROM pengguna WHERE id=?').get(userId).c || 0) + 1;
-    const kunciSampai =
-      gagal >= PIN_MAX_COBA ? new Date(Date.now() + PIN_KUNCI_MS).toISOString() : null;
+    const kunciSampai = gagal >= PIN_MAX_COBA ? new Date(Date.now() + PIN_KUNCI_MS).toISOString() : null;
     db.prepare('UPDATE pengguna SET pin_failed_count=?, pin_locked_until=?, updated_at=? WHERE id=?').run(
       gagal,
       kunciSampai,
@@ -379,10 +375,9 @@ router.delete('/pin', auth(), (req, res) => {
   if (!row.pin_hash) return res.status(400).json({ error: 'Belum ada PIN' });
   if (!bcrypt.compareSync(String(password || ''), row.password_hash))
     return res.status(400).json({ error: 'Password salah' });
-  db.prepare('UPDATE pengguna SET pin_hash=NULL, pin_failed_count=0, pin_locked_until=NULL, pin_updated_at=NULL, updated_at=? WHERE id=?').run(
-    nowUtc(),
-    req.user.id
-  );
+  db.prepare(
+    'UPDATE pengguna SET pin_hash=NULL, pin_failed_count=0, pin_locked_until=NULL, pin_updated_at=NULL, updated_at=? WHERE id=?'
+  ).run(nowUtc(), req.user.id);
   audit(req.user, 'pin_delete', 'pengguna', req.user.id);
   res.json({ success: true });
 });

@@ -29,9 +29,7 @@ function ios() {
 
 export function InstallBanner() {
   const [event, setEvent] = useState(null);
-  const [dihapus, setDihapus] = useState(
-    () => standalone() || Boolean(localStorage.getItem(SUDAH_DITUTUP))
-  );
+  const [dihapus, setDihapus] = useState(() => standalone() || Boolean(localStorage.getItem(SUDAH_DITUTUP)));
 
   useEffect(() => {
     if (dihapus) return;

@@ -73,7 +73,10 @@ function PanduanIstilah() {
           <Info className="w-3.5 h-3.5 text-slate-400" aria-hidden="true" />
           Arti istilah di catatan ini
         </span>
-        <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${buka ? 'rotate-180' : ''}`} aria-hidden="true" />
+        <ChevronDown
+          className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${buka ? 'rotate-180' : ''}`}
+          aria-hidden="true"
+        />
       </button>
       {buka ? (
         <div className="grid gap-4 border-t border-slate-200 px-4 py-4 text-[11px] leading-relaxed text-slate-600 sm:grid-cols-3">
@@ -160,7 +163,8 @@ export default function CatatanDetail({
             ) : null}
             {detail.focus_theme_menu_makanan ? (
               <p className="mt-2 flex items-center gap-1.5 text-[11px] font-semibold text-slate-600">
-                <Utensils className="w-3.5 h-3.5 text-amber-600" aria-hidden="true" /> Menu: {detail.focus_theme_menu_makanan}
+                <Utensils className="w-3.5 h-3.5 text-amber-600" aria-hidden="true" /> Menu:{' '}
+                {detail.focus_theme_menu_makanan}
               </p>
             ) : null}
             {detail.modul_ajar_title ? (
@@ -174,7 +178,11 @@ export default function CatatanDetail({
         <div className="grid gap-2 sm:grid-cols-3">
           <Baris label="Mood" nilai={mood ? mood.label : '-'} tone={mood?.tone} />
           <Baris label="Makan" nilai={makan ? makan.label : '-'} tone={makan?.tone} />
-          <Baris label="Tidur" nilai={detail.tidur === 1 ? 'Tidur' : detail.tidur === 0 ? 'Tidak tidur' : '-'} tone="bg-slate-100 text-slate-600 border-slate-200" />
+          <Baris
+            label="Tidur"
+            nilai={detail.tidur === 1 ? 'Tidur' : detail.tidur === 0 ? 'Tidak tidur' : '-'}
+            tone="bg-slate-100 text-slate-600 border-slate-200"
+          />
         </div>
 
         {aktivitas.length ? (
@@ -199,7 +207,9 @@ export default function CatatanDetail({
 
         {adaPenilaian(detail.structured_observation) ? (
           <div>
-            <div className="mb-2 text-[10px] font-black uppercase tracking-wider text-slate-400">Penilaian perkembangan</div>
+            <div className="mb-2 text-[10px] font-black uppercase tracking-wider text-slate-400">
+              Penilaian perkembangan
+            </div>
             <ul className="grid gap-1.5 sm:grid-cols-2">
               {penilaian.map((p, i) => {
                 const r = ratingUI(p.rating);
@@ -301,7 +311,9 @@ export default function CatatanDetail({
                 return (
                   <li key={c.id} className={`flex gap-2 ${wali ? 'justify-end' : ''}`}>
                     <div className={`max-w-[85%] ${wali ? 'order-2' : ''}`}>
-                      <div className={`rounded-2xl px-3 py-2 text-xs leading-relaxed ${wali ? 'bg-primary-container text-text-main' : 'bg-slate-100 text-slate-700'}`}>
+                      <div
+                        className={`rounded-2xl px-3 py-2 text-xs leading-relaxed ${wali ? 'bg-primary-container text-text-main' : 'bg-slate-100 text-slate-700'}`}
+                      >
                         {c.body}
                       </div>
                       <div className={`mt-1 text-[10px] font-semibold text-slate-400 ${wali ? 'text-right' : ''}`}>
@@ -354,7 +366,8 @@ export default function CatatanDetail({
             </button>
           </form>
           <InfoNote tone="border-slate-200 bg-slate-50 text-slate-500">
-            Tanggapan Anda dibaca wali kelas pada aplikasi guru. Tekan Enter untuk mengirim, Shift+Enter untuk baris baru.
+            Tanggapan Anda dibaca wali kelas pada aplikasi guru. Tekan Enter untuk mengirim, Shift+Enter untuk baris
+            baru.
           </InfoNote>
         </div>
 

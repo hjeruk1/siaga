@@ -114,11 +114,7 @@ export function PaymentModal({
             <label className="label font-bold text-slate-700 dark:text-slate-300">
               Tanggal Bayar <span className="text-red-500">*</span>
             </label>
-            <Input
-              type="date"
-              value={payForm.tanggal}
-              onChange={(v) => setPayForm((f) => ({ ...f, tanggal: v }))}
-            />
+            <Input type="date" value={payForm.tanggal} onChange={(v) => setPayForm((f) => ({ ...f, tanggal: v }))} />
           </div>
           <div>
             <label className="label font-bold text-slate-700 dark:text-slate-300">Referensi / Bukti</label>

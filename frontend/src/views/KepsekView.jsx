@@ -140,7 +140,8 @@ export default function KepsekView({ user, toast, tab, syncNotif }) {
     [rows]
   );
 
-  const showTopControls = activeTab !== 'monitoring' && activeTab !== 'rekap' && (user.role === 'admin' || activeTab === 'laporan');
+  const showTopControls =
+    activeTab !== 'monitoring' && activeTab !== 'rekap' && (user.role === 'admin' || activeTab === 'laporan');
 
   return (
     <div className="w-full p-3 sm:p-4 lg:p-6 2xl:p-8 space-y-4">
@@ -335,7 +336,9 @@ function MonitoringPanel({
             {data?.hari_status?.nama || 'Status hari'} &middot; refresh 30 detik &middot;{' '}
             {dayClose?.closed ? 'hari sudah ditutup' : 'hari masih berjalan'}
           </p>
-          {!canCloseDay && <p className="text-[11px] font-bold text-amber-600 mt-0.5">Pilih cabang dulu untuk menutup hari.</p>}
+          {!canCloseDay && (
+            <p className="text-[11px] font-bold text-amber-600 mt-0.5">Pilih cabang dulu untuk menutup hari.</p>
+          )}
         </div>
         <div className="text-right flex-shrink-0">
           <LiveClock className="text-base sm:text-lg font-black tabular-nums text-text-main leading-none" />
@@ -424,10 +427,7 @@ function MonitoringPanel({
             {detailTab === 'kelas' && (
               <div className="space-y-2">
                 {kelasGroups.map((g) => (
-                  <div
-                    key={g.cabang}
-                    className="rounded-xl border border-slate-100 overflow-hidden"
-                  >
+                  <div key={g.cabang} className="rounded-xl border border-slate-100 overflow-hidden">
                     {showCabangHeader && (
                       <div className="flex items-center justify-between gap-2 px-3 py-1.5 bg-slate-50 border-b border-slate-100">
                         <span className="text-[10px] font-black uppercase tracking-[.08em] text-slate-500 truncate">
@@ -528,7 +528,9 @@ function CheckinCard({ pct, checkedIn, totalSiswa, atSchool, waiting, redFlags, 
             className="flex items-center gap-2.5 py-[7px] border-t border-slate-100 [&:nth-child(-n+2)]:border-t-0 sm:border-t sm:[&:nth-child(-n+2)]:border-t"
           >
             <span className={`w-2 h-2 rounded-[3px] flex-shrink-0 ${r.c}`} />
-            <span className={`text-[12px] sm:text-[13px] font-semibold truncate ${r.alert ? 'text-red-600' : 'text-slate-600'}`}>
+            <span
+              className={`text-[12px] sm:text-[13px] font-semibold truncate ${r.alert ? 'text-red-600' : 'text-slate-600'}`}
+            >
               {r.label}
             </span>
             <span
@@ -719,11 +721,17 @@ function StatusBoard({ rows = [], compact = false }) {
     ? 'space-y-1.5 max-h-72 overflow-y-auto overscroll-contain pr-1 custom-scrollbar'
     : 'space-y-1.5 max-h-72 overflow-y-auto overscroll-contain pr-1 custom-scrollbar';
   return (
-    <section className={compact ? '' : 'bg-white border border-slate-200 rounded-2xl p-3 shadow-[0_18px_60px_rgba(15,23,42,.05)]'}>
+    <section
+      className={
+        compact ? '' : 'bg-white border border-slate-200 rounded-2xl p-3 shadow-[0_18px_60px_rgba(15,23,42,.05)]'
+      }
+    >
       {!compact && (
         <div className="flex items-center justify-between gap-2 mb-2">
           <div>
-            <div className="text-[10px] sm:text-xs font-black text-slate-400 uppercase tracking-wider">Status Board</div>
+            <div className="text-[10px] sm:text-xs font-black text-slate-400 uppercase tracking-wider">
+              Status Board
+            </div>
             <div className="text-xs sm:text-sm font-bold text-text-main mt-0.5">
               Detail siswa per status dan jam aktivitas.
             </div>
@@ -1033,7 +1041,9 @@ function HeroStat({ label, value, tone }) {
   return (
     <div className="min-w-0">
       <div className="text-[9px] font-black uppercase tracking-wider text-slate-500">{label}</div>
-      <div className={`text-lg sm:text-xl font-black leading-tight tabular-nums ${tone || 'text-text-main'}`}>{value}</div>
+      <div className={`text-lg sm:text-xl font-black leading-tight tabular-nums ${tone || 'text-text-main'}`}>
+        {value}
+      </div>
     </div>
   );
 }
@@ -1045,9 +1055,7 @@ function FinanceLedger({ title, rows, first }) {
     <div>
       <h3 className="font-black text-sm sm:text-base text-text-main mb-2">{title}</h3>
       <div className="overflow-hidden rounded-xl border border-slate-200">
-        {rows.length === 0 && (
-          <div className="p-6 text-center text-sm font-bold text-slate-400">Belum ada data.</div>
-        )}
+        {rows.length === 0 && <div className="p-6 text-center text-sm font-bold text-slate-400">Belum ada data.</div>}
         {rows.map((r, i) => {
           const pctBar = Number(r.total) > 0 ? Math.min(100, (Number(r.lunas) / Number(r.total)) * 100) : 0;
           return (
@@ -1209,11 +1217,16 @@ function NotifRow({ item, onRead }) {
         unread ? 'bg-white hover:bg-slate-50' : 'bg-slate-50/40'
       }`}
     >
-      <span aria-hidden="true" className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${unread ? 'bg-primary' : 'bg-slate-300'}`} />
+      <span
+        aria-hidden="true"
+        className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${unread ? 'bg-primary' : 'bg-slate-300'}`}
+      />
       {!unread && <span className="sr-only">Sudah dibaca</span>}
       {unread && <span className="sr-only">Belum dibaca</span>}
       <div className="min-w-0 flex-1">
-        <div className={`text-sm leading-snug ${unread ? 'font-black text-text-main' : 'font-semibold text-slate-400'}`}>
+        <div
+          className={`text-sm leading-snug ${unread ? 'font-black text-text-main' : 'font-semibold text-slate-400'}`}
+        >
           <span className="line-clamp-2 break-words">{item.title}</span>
         </div>
         {item.body && <div className="mt-0.5 line-clamp-2 text-[11px] sm:text-xs text-slate-500">{item.body}</div>}

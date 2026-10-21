@@ -14,7 +14,16 @@ import {
   Wallet
 } from 'lucide-react';
 import { Avatar, ProgressRing, WeekStrip } from './ui.jsx';
-import { inisial, isAkhirPekan, namaPanggilan, rupiah, statusUI, tanggalPanjang, tanggalPendek, todayISO } from './portalHelpers.js';
+import {
+  inisial,
+  isAkhirPekan,
+  namaPanggilan,
+  rupiah,
+  statusUI,
+  tanggalPanjang,
+  tanggalPendek,
+  todayISO
+} from './portalHelpers.js';
 
 function InfoChip({ icon: Icon, children }) {
   return (
@@ -97,11 +106,7 @@ export default function HeroAnak({
 }) {
   const ui = statusUI(hariIni?.status);
   const akhirPekan = isAkhirPekan(todayISO());
-  const hariIniLabel = akhirPekan
-    ? 'Akhir pekan'
-    : hariIni?.status === 'Belum'
-      ? 'Belum ada catatan'
-      : ui.label;
+  const hariIniLabel = akhirPekan ? 'Akhir pekan' : hariIni?.status === 'Belum' ? 'Belum ada catatan' : ui.label;
   const hariIniHint = hariIni?.libur ? 'Libur' : tanggalPendek(todayISO());
 
   const harian = [
@@ -136,8 +141,14 @@ export default function HeroAnak({
           WebkitMaskImage: 'linear-gradient(to bottom, #000 0%, transparent 72%)'
         }}
       />
-      <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-white/20 blur-3xl" aria-hidden="true" />
-      <div className="pointer-events-none absolute -bottom-28 -left-16 h-64 w-64 rounded-full bg-amber-200/25 blur-3xl" aria-hidden="true" />
+      <div
+        className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-white/20 blur-3xl"
+        aria-hidden="true"
+      />
+      <div
+        className="pointer-events-none absolute -bottom-28 -left-16 h-64 w-64 rounded-full bg-amber-200/25 blur-3xl"
+        aria-hidden="true"
+      />
 
       <div className="relative space-y-4 sm:space-y-5">
         <div className="flex items-start justify-between gap-3">
@@ -167,7 +178,10 @@ export default function HeroAnak({
               </span>
             ) : null}
             {unread > 0 ? (
-              <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-white motion-safe:animate-pulse" aria-hidden="true" />
+              <span
+                className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-white motion-safe:animate-pulse"
+                aria-hidden="true"
+              />
             ) : null}
           </button>
         </div>
@@ -227,8 +241,12 @@ export default function HeroAnak({
 
             <div className="flex h-full flex-col gap-3 rounded-2xl border border-white/25 bg-white/12 p-4 backdrop-blur-md">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-[10px] font-black uppercase tracking-wider text-white/80">Kehadiran bulan ini</span>
-                <span className="text-[10px] font-bold tabular-nums text-white/70">{ringkas?.hari || 0} hari sekolah</span>
+                <span className="text-[10px] font-black uppercase tracking-wider text-white/80">
+                  Kehadiran bulan ini
+                </span>
+                <span className="text-[10px] font-bold tabular-nums text-white/70">
+                  {ringkas?.hari || 0} hari sekolah
+                </span>
               </div>
 
               <div className="flex flex-1 items-center gap-4">
@@ -275,7 +293,9 @@ export default function HeroAnak({
 
                   {strip.length ? (
                     <div className="mt-2.5">
-                      <div className="text-[9px] font-black uppercase tracking-wider text-white/55">10 hari terakhir</div>
+                      <div className="text-[9px] font-black uppercase tracking-wider text-white/55">
+                        10 hari terakhir
+                      </div>
                       <WeekStrip items={strip} className="mt-1" />
                     </div>
                   ) : null}

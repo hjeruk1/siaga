@@ -35,9 +35,7 @@ function publicKey() {
 // Mengembalikan jumlah yang berhasil + yang dibuang (endpoint mati) + total.
 async function sendToUser(penggunaId, payload) {
   if (!vapid()) return { sent: 0, removed: 0, total: 0, reason: 'vapid-belum-diset' };
-  const subs = db
-    .prepare('SELECT id,endpoint,p256dh,auth FROM push_subscription WHERE pengguna_id=?')
-    .all(penggunaId);
+  const subs = db.prepare('SELECT id,endpoint,p256dh,auth FROM push_subscription WHERE pengguna_id=?').all(penggunaId);
   let sent = 0;
   let removed = 0;
   for (const s of subs) {

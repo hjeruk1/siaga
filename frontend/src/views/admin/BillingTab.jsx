@@ -2327,12 +2327,7 @@ export default function BillingTab({ user, toast }) {
         onClose={requestClosePayment}
         onPay={pay}
       />
-      <AlokasiEditModal
-        alokasiEdit={alokasiEdit}
-        setAlokasiEdit={setAlokasiEdit}
-        siswa={siswa}
-        onSave={saveAlokasi}
-      />
+      <AlokasiEditModal alokasiEdit={alokasiEdit} setAlokasiEdit={setAlokasiEdit} siswa={siswa} onSave={saveAlokasi} />
       {confirmAction && <ConfirmModal action={confirmAction} onClose={() => setConfirmAction(null)} />}
     </>
   );

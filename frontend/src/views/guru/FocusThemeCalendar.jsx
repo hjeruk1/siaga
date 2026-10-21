@@ -84,9 +84,7 @@ export default function FocusThemeCalendar({ open, onClose, rombelId, tanggal, o
           <div>
             <div className="text-[10px] font-black uppercase tracking-widest text-primary">Kalender</div>
             <div className="text-xl font-black text-text-main leading-tight">Focus Theme</div>
-            <div className="text-xs text-slate-500 mt-0.5">
-              {themedCount} hari bertema · klik tanggal untuk atur
-            </div>
+            <div className="text-xs text-slate-500 mt-0.5">{themedCount} hari bertema · klik tanggal untuk atur</div>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -109,16 +107,11 @@ export default function FocusThemeCalendar({ open, onClose, rombelId, tanggal, o
           </div>
         </div>
 
-        {loading && (
-          <div className="text-xs text-slate-400 text-center py-2">Memuat tema...</div>
-        )}
+        {loading && <div className="text-xs text-slate-400 text-center py-2">Memuat tema...</div>}
 
         <div className="grid grid-cols-7 gap-1.5">
           {WEEKDAYS.map((w) => (
-            <div
-              key={w}
-              className="text-center text-[10px] font-black uppercase tracking-wider text-slate-400 py-1"
-            >
+            <div key={w} className="text-center text-[10px] font-black uppercase tracking-wider text-slate-400 py-1">
               {w}
             </div>
           ))}
@@ -144,25 +137,15 @@ export default function FocusThemeCalendar({ open, onClose, rombelId, tanggal, o
                 } ${isToday ? 'ring-2 ring-primary/60 ring-offset-1' : ''}`}
               >
                 <div className="flex items-center justify-between">
-                  <span
-                    className={`text-xs font-black leading-none ${
-                      isToday ? 'text-primary' : 'text-text-main'
-                    }`}
-                  >
+                  <span className={`text-xs font-black leading-none ${isToday ? 'text-primary' : 'text-text-main'}`}>
                     {dayNum}
                   </span>
-                  {theme && (
-                    <span className="h-1.5 w-1.5 rounded-full bg-primary" />
-                  )}
+                  {theme && <span className="h-1.5 w-1.5 rounded-full bg-primary" />}
                 </div>
                 {theme ? (
-                  <div className="mt-1 text-[9px] font-bold text-primary leading-tight line-clamp-2">
-                    {theme.title}
-                  </div>
+                  <div className="mt-1 text-[9px] font-bold text-primary leading-tight line-clamp-2">{theme.title}</div>
                 ) : (
-                  <div className="mt-1 text-[9px] text-slate-300 group-hover:text-primary/60 transition-colors">
-                    +
-                  </div>
+                  <div className="mt-1 text-[9px] text-slate-300 group-hover:text-primary/60 transition-colors">+</div>
                 )}
               </button>
             );

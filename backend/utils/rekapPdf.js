@@ -44,14 +44,18 @@ const KIRI = 40;
 
 // 'YYYY-MM-DD' -> '5 Okt 2026'
 function tanggalSingkat(iso) {
-  const [y, m, d] = String(iso || '').split('-').map(Number);
+  const [y, m, d] = String(iso || '')
+    .split('-')
+    .map(Number);
   if (!y || !m || !d) return String(iso || '-');
   return `${d} ${BULAN_SINGKAT[m - 1]} ${y}`;
 }
 
 // 'YYYY-MM-DD' -> 'Senin, 5 Okt 2026'
 function tanggalPanjang(iso) {
-  const [y, m, d] = String(iso || '').split('-').map(Number);
+  const [y, m, d] = String(iso || '')
+    .split('-')
+    .map(Number);
   if (!y || !m || !d) return String(iso || '-');
   const hari = HARI[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];
   return `${hari}, ${d} ${BULAN_SINGKAT[m - 1]} ${y}`;
@@ -102,7 +106,7 @@ function ringkasHarian(attMap, siswaId, schoolDays = []) {
   r.hadir = r.Hadir + r.Terlambat + r.Pulang;
   // Pembulatan 1 desimal disamakan dengan aplikasi (rekapHelpers round1) supaya
   // angka di layar wali sama persis dengan angka di PDF yang mereka terima.
-  r.persen = r.hari ? Math.round(((r.hadir / r.hari) * 100) * 10) / 10 : 0;
+  r.persen = r.hari ? Math.round((r.hadir / r.hari) * 100 * 10) / 10 : 0;
   return r;
 }
 
@@ -127,37 +131,56 @@ function gambarKop(doc, { logoPath, cabangNama, yayasan }) {
     }
   }
   doc.font('Helvetica-Bold').fontSize(14).fillColor(WARNA.utama).text(yayasan, x, 35);
-  doc.font('Helvetica-Bold').fontSize(9).fillColor(WARNA.isi).text(`Cabang ${cabangNama || '-'}`, x, 51);
+  doc
+    .font('Helvetica-Bold')
+    .fontSize(9)
+    .fillColor(WARNA.isi)
+    .text(`Cabang ${cabangNama || '-'}`, x, 51);
   doc
     .font('Helvetica')
     .fontSize(8)
     .fillColor(WARNA.redup)
     .text('Sistem Informasi Akademik & Gerbang Absensi (SIAGA)', x, 63);
-  doc.moveTo(KIRI, 86).lineTo(KIRI + LEBAR, 86).strokeColor(WARNA.garis).stroke();
+  doc
+    .moveTo(KIRI, 86)
+    .lineTo(KIRI + LEBAR, 86)
+    .strokeColor(WARNA.garis)
+    .stroke();
 }
 
 function gambarJudul(doc, { periode, y = 96 }) {
   doc.rect(KIRI, y, LEBAR, 26).fillColor(WARNA.utama).fill();
-  doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(11.5).text('LAPORAN KEHADIRAN SISWA', KIRI + 12, y + 8, {
-    lineBreak: false
-  });
-  doc.font('Helvetica').fontSize(9).text(`Periode: ${periode}`, KIRI + 12, y + 9, {
-    width: LEBAR - 24,
-    align: 'right',
-    lineBreak: false
-  });
+  doc
+    .fillColor('#ffffff')
+    .font('Helvetica-Bold')
+    .fontSize(11.5)
+    .text('LAPORAN KEHADIRAN SISWA', KIRI + 12, y + 8, {
+      lineBreak: false
+    });
+  doc
+    .font('Helvetica')
+    .fontSize(9)
+    .text(`Periode: ${periode}`, KIRI + 12, y + 9, {
+      width: LEBAR - 24,
+      align: 'right',
+      lineBreak: false
+    });
 }
 
 function gambarIdentitas(doc, { siswa, ringkas, y }) {
   doc.roundedRect(KIRI, y, LEBAR, 58, 6).fillColor(WARNA.latar).fill().strokeColor(WARNA.tepi).stroke();
   const label = (text, x, yy) => doc.font('Helvetica').fontSize(7).fillColor(WARNA.redup).text(text, x, yy);
   const nilai = (text, x, yy, lebar = 200) =>
-    doc.font('Helvetica-Bold').fontSize(9.5).fillColor(WARNA.teks).text(String(text ?? '-'), x, yy, {
-      width: lebar,
-      height: 12,
-      ellipsis: true,
-      lineBreak: false
-    });
+    doc
+      .font('Helvetica-Bold')
+      .fontSize(9.5)
+      .fillColor(WARNA.teks)
+      .text(String(text ?? '-'), x, yy, {
+        width: lebar,
+        height: 12,
+        ellipsis: true,
+        lineBreak: false
+      });
 
   label('NAMA SISWA', KIRI + 12, y + 8);
   nilai(siswa.nama, KIRI + 12, y + 18, 260);
@@ -186,23 +209,43 @@ function gambarRingkasan(doc, { ringkas, y }) {
   sel.forEach(([teks, nilai, warna], i) => {
     const x = KIRI + i * (lebarSel + jarak);
     doc.roundedRect(x, y, lebarSel, 44, 5).fillColor(WARNA.latar).fill().strokeColor(WARNA.tepi).stroke();
-    doc.font('Helvetica').fontSize(6.5).fillColor(WARNA.redup).text(teks, x + 5, y + 7, { width: lebarSel - 10 });
-    doc.font('Helvetica-Bold').fontSize(13).fillColor(warna).text(String(nilai), x + 5, y + 18, { width: lebarSel - 10 });
+    doc
+      .font('Helvetica')
+      .fontSize(6.5)
+      .fillColor(WARNA.redup)
+      .text(teks, x + 5, y + 7, { width: lebarSel - 10 });
+    doc
+      .font('Helvetica-Bold')
+      .fontSize(13)
+      .fillColor(warna)
+      .text(String(nilai), x + 5, y + 18, { width: lebarSel - 10 });
   });
 
   const xPersen = KIRI + sel.length * (lebarSel + jarak);
   const lebarPersen = KIRI + LEBAR - xPersen;
   doc.roundedRect(xPersen, y, lebarPersen, 44, 5).fillColor(WARNA.utama).fill();
-  doc.font('Helvetica').fontSize(7).fillColor('#c7d2fe').text('PERSENTASE KEHADIRAN', xPersen + 8, y + 7, {
-    width: lebarPersen - 16,
-    lineBreak: false
-  });
-  doc.font('Helvetica-Bold').fontSize(16).fillColor('#ffffff').text(`${ringkas.persen}%`, xPersen + 8, y + 17, {
-    width: lebarPersen - 16
-  });
-  doc.font('Helvetica').fontSize(6.5).fillColor('#c7d2fe').text('hadir + terlambat + pulang', xPersen + 8, y + 34, {
-    width: lebarPersen - 16
-  });
+  doc
+    .font('Helvetica')
+    .fontSize(7)
+    .fillColor('#c7d2fe')
+    .text('PERSENTASE KEHADIRAN', xPersen + 8, y + 7, {
+      width: lebarPersen - 16,
+      lineBreak: false
+    });
+  doc
+    .font('Helvetica-Bold')
+    .fontSize(16)
+    .fillColor('#ffffff')
+    .text(`${ringkas.persen}%`, xPersen + 8, y + 17, {
+      width: lebarPersen - 16
+    });
+  doc
+    .font('Helvetica')
+    .fontSize(6.5)
+    .fillColor('#c7d2fe')
+    .text('hadir + terlambat + pulang', xPersen + 8, y + 34, {
+      width: lebarPersen - 16
+    });
 }
 
 const KOLOM = [
@@ -223,8 +266,7 @@ function gambarHeaderTabel(doc, y) {
 // Menggambar satu halaman laporan untuk satu siswa. Menambah halaman sendiri
 // bila tabel harian melebihi tinggi halaman.
 function renderLaporanSiswa(doc, ctx) {
-  const { siswa, siswaId, schoolDays, attMap, periode, logoPath, yayasan, cabangNama, tanggalCetak, halamanBaru } =
-    ctx;
+  const { siswa, siswaId, schoolDays, attMap, periode, logoPath, yayasan, cabangNama, tanggalCetak, halamanBaru } = ctx;
   if (halamanBaru) doc.addPage();
 
   const ringkas = ringkasHarian(attMap, siswaId, schoolDays);
@@ -262,7 +304,10 @@ function renderLaporanSiswa(doc, ctx) {
     doc.font('Helvetica').fontSize(8.5).fillColor(WARNA.isi);
     doc.text(String(idx + 1), 48, y + 4, { width: 24, lineBreak: false });
     doc.text(tanggalPanjang(day), 78, y + 4, { width: 140, lineBreak: false });
-    doc.font('Helvetica-Bold').fillColor(warnaStatus(status)).text(status, 224, y + 4, { width: 76, lineBreak: false });
+    doc
+      .font('Helvetica-Bold')
+      .fillColor(warnaStatus(status))
+      .text(status, 224, y + 4, { width: 76, lineBreak: false });
     doc.font('Helvetica').fillColor(WARNA.isi);
     doc.text(att && att.jam_masuk ? att.jam_masuk : '-', 304, y + 4, { width: 52, lineBreak: false });
     doc.text(att && att.jam_pulang ? att.jam_pulang : '-', 360, y + 4, { width: 52, lineBreak: false });
@@ -300,10 +345,14 @@ function renderLaporanSiswa(doc, ctx) {
     .lineTo(KIRI + 180, sigY + 62)
     .strokeColor(WARNA.garis)
     .stroke();
-  doc.font('Helvetica').fontSize(8).fillColor(WARNA.redup).text('(nama dan tanda tangan)', KIRI + 12, sigY + 66, {
-    width: 200,
-    lineBreak: false
-  });
+  doc
+    .font('Helvetica')
+    .fontSize(8)
+    .fillColor(WARNA.redup)
+    .text('(nama dan tanda tangan)', KIRI + 12, sigY + 66, {
+      width: 200,
+      lineBreak: false
+    });
 
   doc.font('Helvetica').fontSize(9).fillColor(WARNA.isi);
   doc.text(`${cabangNama || ''}, ${tanggalCetak}`, KIRI + 300, sigY, { width: 200, lineBreak: false });
@@ -313,10 +362,14 @@ function renderLaporanSiswa(doc, ctx) {
     .lineTo(KIRI + 468, sigY + 62)
     .strokeColor(WARNA.garis)
     .stroke();
-  doc.font('Helvetica').fontSize(8).fillColor(WARNA.redup).text('(nama dan tanda tangan)', KIRI + 300, sigY + 66, {
-    width: 200,
-    lineBreak: false
-  });
+  doc
+    .font('Helvetica')
+    .fontSize(8)
+    .fillColor(WARNA.redup)
+    .text('(nama dan tanda tangan)', KIRI + 300, sigY + 66, {
+      width: 200,
+      lineBreak: false
+    });
 
   // lineBreak:false supaya catatan kaki tidak membungkus dan tanpa sengaja
   // menambah halaman baru di akhir laporan.

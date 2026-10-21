@@ -57,10 +57,13 @@ function batasi(kunci, maks, jendelaMs) {
 }
 
 // Bersihkan entri kedaluwarsa supaya Map tidak tumbuh selamanya.
-setInterval(() => {
-  const now = Date.now();
-  for (const [k, v] of catatanKirim.entries()) if (v.resetAt <= now) catatanKirim.delete(k);
-}, 10 * 60 * 1000).unref();
+setInterval(
+  () => {
+    const now = Date.now();
+    for (const [k, v] of catatanKirim.entries()) if (v.resetAt <= now) catatanKirim.delete(k);
+  },
+  10 * 60 * 1000
+).unref();
 
 function angkaSaja(value) {
   return String(value || '').replace(/\D/g, '');
@@ -167,7 +170,12 @@ function pesanKode(kode) {
  * Selalu mengembalikan objek; tidak pernah melempar error ke pemanggil.
  */
 async function kirimKode({ tipe, no_wa, username, ip } = {}) {
-  const identitas = tipe === 'wali' ? angkaSaja(no_wa) : String(username || '').trim().toLowerCase();
+  const identitas =
+    tipe === 'wali'
+      ? angkaSaja(no_wa)
+      : String(username || '')
+          .trim()
+          .toLowerCase();
   const kunciIdentitas = `id:${tipe}:${identitas}`;
   const kunciIp = `ip:${ip || 'unknown'}`;
 
@@ -175,9 +183,7 @@ async function kirimKode({ tipe, no_wa, username, ip } = {}) {
   if (!batasIdentitas.boleh) {
     return { status: 'terlalu-sering', sisaDetik: batasIdentitas.sisaDetik };
   }
-  const batasIp = ipLayakDibatasi(ip)
-    ? batasi(kunciIp, MAX_KIRIM_IP, JENDELA_IP_MS)
-    : { boleh: true };
+  const batasIp = ipLayakDibatasi(ip) ? batasi(kunciIp, MAX_KIRIM_IP, JENDELA_IP_MS) : { boleh: true };
   if (!batasIp.boleh) {
     return { status: 'terlalu-sering', sisaDetik: batasIp.sisaDetik };
   }

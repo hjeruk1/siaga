@@ -6,9 +6,13 @@ import { AlertCircle, CheckCircle2, Copy, FileText, Hourglass, RefreshCw, X } fr
 import { inisial, nadaAvatar, statusUI } from './portalHelpers.js';
 
 export function Avatar({ nama, url, size = 'md', ring = false, className = '' }) {
-  const px = { xs: 'w-8 h-8 text-[11px]', sm: 'w-9 h-9 text-xs', md: 'w-11 h-11 text-sm', lg: 'w-14 h-14 text-lg', xl: 'w-24 h-24 text-3xl' }[
-    size
-  ];
+  const px = {
+    xs: 'w-8 h-8 text-[11px]',
+    sm: 'w-9 h-9 text-xs',
+    md: 'w-11 h-11 text-sm',
+    lg: 'w-14 h-14 text-lg',
+    xl: 'w-24 h-24 text-3xl'
+  }[size];
   const base = `${px} shrink-0 rounded-full object-cover ${className}`;
   if (url) {
     return (
@@ -46,7 +50,9 @@ export function Pill({ children, tone = 'bg-slate-100 text-slate-600 border-slat
 
 export function Card({ children, className = '', as: Tag = 'section' }) {
   return (
-    <Tag className={`bg-white border border-slate-200 rounded-2xl shadow-[0_10px_30px_rgba(15,23,42,.05)] ${className}`}>
+    <Tag
+      className={`bg-white border border-slate-200 rounded-2xl shadow-[0_10px_30px_rgba(15,23,42,.05)] ${className}`}
+    >
       {children}
     </Tag>
   );
@@ -82,7 +88,14 @@ export function StatTile({ label, value, hint, icon: Icon, tone = 'text-text-mai
 
 // Cincin persentase. Radius dihitung dari ukuran supaya tidak ada angka ajaib
 // yang harus dijaga bersamaan dengan perubahan ukuran.
-export function ProgressRing({ value = 0, size = 116, stroke = 10, children, tone = '#f59e0b', track = 'rgba(255,255,255,.28)' }) {
+export function ProgressRing({
+  value = 0,
+  size = 116,
+  stroke = 10,
+  children,
+  tone = '#f59e0b',
+  track = 'rgba(255,255,255,.28)'
+}) {
   const r = (size - stroke) / 2;
   const keliling = 2 * Math.PI * r;
   const isi = Math.max(0, Math.min(100, Number(value) || 0));
@@ -325,7 +338,9 @@ export function Sheet({ open, onClose, title, subtitle, children, footer }) {
             <X className="w-4 h-4" aria-hidden="true" />
           </button>
         </div>
-        <div className="max-h-[70dvh] overflow-y-auto p-4 sm:max-h-[calc(100dvh-140px)] custom-scrollbar">{children}</div>
+        <div className="max-h-[70dvh] overflow-y-auto p-4 sm:max-h-[calc(100dvh-140px)] custom-scrollbar">
+          {children}
+        </div>
         {footer ? <div className="border-t border-slate-200 p-3">{footer}</div> : null}
       </div>
     </div>,
@@ -345,13 +360,27 @@ export function Lightbox({ gambar, onClose }) {
 
   if (!gambar) return null;
   return createPortal(
-    <div className="fixed inset-0 z-[80] grid place-items-center bg-slate-950/85 p-4" role="dialog" aria-modal="true" aria-label="Pratinjau foto">
+    <div
+      className="fixed inset-0 z-[80] grid place-items-center bg-slate-950/85 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Pratinjau foto"
+    >
       <button type="button" aria-label="Tutup pratinjau" onClick={onClose} className="absolute inset-0" />
       <figure className="relative max-h-full w-full max-w-3xl">
-        <img src={gambar.url} alt={gambar.filename || 'Foto kegiatan'} className="mx-auto max-h-[80dvh] rounded-2xl object-contain" />
+        <img
+          src={gambar.url}
+          alt={gambar.filename || 'Foto kegiatan'}
+          className="mx-auto max-h-[80dvh] rounded-2xl object-contain"
+        />
         <figcaption className="mt-3 flex items-center justify-between gap-3 text-xs font-semibold text-white/80">
           <span className="truncate">{gambar.filename || 'Foto kegiatan'}</span>
-          <a href={gambar.url} target="_blank" rel="noreferrer" className="shrink-0 underline decoration-white/40 hover:text-white">
+          <a
+            href={gambar.url}
+            target="_blank"
+            rel="noreferrer"
+            className="shrink-0 underline decoration-white/40 hover:text-white"
+          >
             Buka di tab baru
           </a>
         </figcaption>
@@ -399,7 +428,11 @@ export function CopyButton({ teks, label = 'Salin ringkasan', toast, className =
       onClick={jalan}
       className={`inline-flex h-10 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-xs font-black text-slate-600 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${className}`}
     >
-      {salin ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" aria-hidden="true" /> : <Copy className="w-3.5 h-3.5" aria-hidden="true" />}
+      {salin ? (
+        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" aria-hidden="true" />
+      ) : (
+        <Copy className="w-3.5 h-3.5" aria-hidden="true" />
+      )}
       {salin ? 'Tersalin' : label}
     </button>
   );

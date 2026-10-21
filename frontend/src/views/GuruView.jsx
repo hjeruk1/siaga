@@ -1438,55 +1438,90 @@ export default function GuruView({ user, toast, tab }) {
         </Modal>
       )}
       {classThemeOpen && (
-        <Modal title="Atur Tema & Kegiatan Kelas" onClose={() => setClassThemeOpen(false)} footer={
-          <div className="flex items-center justify-between gap-2">
-            <div>
-              {classThemeExists && (
-                <button onClick={hapusClassTheme} className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-50 rounded-lg transition-colors">
-                  Hapus
-                </button>
-              )}
-            </div>
-            <div className="flex items-center gap-2 flex-wrap justify-end">
-              {classThemeStep === 2 && (
-                <button onClick={() => setClassThemeStep(1)} className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
-                  ← Kembali
-                </button>
-              )}
-              {classThemeStep === 1 && classThemeRombelId && (
-                <button onClick={() => setClassThemeStep(2)} disabled={!classThemeForm.title.trim()} className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg shadow-sm transition-all active:scale-[0.98]">
-                  Lanjut →
-                </button>
-              )}
-              {classThemeStep === 2 && (
-                <>
-                  <button onClick={saveClassThemeToNextDay} disabled={!classThemeRombelId || !classThemeForm.title.trim()} className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-slate-700 border border-slate-200 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors">
-                    Salin ke Besok
+        <Modal
+          title="Atur Tema & Kegiatan Kelas"
+          onClose={() => setClassThemeOpen(false)}
+          footer={
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                {classThemeExists && (
+                  <button
+                    onClick={hapusClassTheme}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                  >
+                    Hapus
                   </button>
-                  <button onClick={saveClassTheme} disabled={!classThemeRombelId} className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg shadow-sm transition-all active:scale-[0.98]">
-                    Simpan & Terapkan
+                )}
+              </div>
+              <div className="flex items-center gap-2 flex-wrap justify-end">
+                {classThemeStep === 2 && (
+                  <button
+                    onClick={() => setClassThemeStep(1)}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                  >
+                    ← Kembali
                   </button>
-                </>
-              )}
-              {classThemeStep === 1 && !classThemeRombelId && (
-                <button onClick={() => setClassThemeOpen(false)} className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
-                  Batal
-                </button>
-              )}
+                )}
+                {classThemeStep === 1 && classThemeRombelId && (
+                  <button
+                    onClick={() => setClassThemeStep(2)}
+                    disabled={!classThemeForm.title.trim()}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg shadow-sm transition-all active:scale-[0.98]"
+                  >
+                    Lanjut →
+                  </button>
+                )}
+                {classThemeStep === 2 && (
+                  <>
+                    <button
+                      onClick={saveClassThemeToNextDay}
+                      disabled={!classThemeRombelId || !classThemeForm.title.trim()}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-slate-700 border border-slate-200 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors"
+                    >
+                      Salin ke Besok
+                    </button>
+                    <button
+                      onClick={saveClassTheme}
+                      disabled={!classThemeRombelId}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg shadow-sm transition-all active:scale-[0.98]"
+                    >
+                      Simpan & Terapkan
+                    </button>
+                  </>
+                )}
+                {classThemeStep === 1 && !classThemeRombelId && (
+                  <button
+                    onClick={() => setClassThemeOpen(false)}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                  >
+                    Batal
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
-        }>
+          }
+        >
           <div className="space-y-4">
             <div className="flex items-center gap-2">
-              <div className={`flex items-center gap-2 px-2.5 py-1.5 rounded-full text-xs font-black transition-all ${classThemeStep === 1 ? 'bg-primary text-white shadow-sm' : 'bg-emerald-50 text-emerald-600'}`}>
-                <span className={`h-5 w-5 rounded-full flex items-center justify-center text-[10px] font-black ${classThemeStep === 1 ? 'bg-white/25 text-white' : 'bg-emerald-500 text-white'}`}>
+              <div
+                className={`flex items-center gap-2 px-2.5 py-1.5 rounded-full text-xs font-black transition-all ${classThemeStep === 1 ? 'bg-primary text-white shadow-sm' : 'bg-emerald-50 text-emerald-600'}`}
+              >
+                <span
+                  className={`h-5 w-5 rounded-full flex items-center justify-center text-[10px] font-black ${classThemeStep === 1 ? 'bg-white/25 text-white' : 'bg-emerald-500 text-white'}`}
+                >
                   {classThemeStep === 1 ? '1' : '✓'}
                 </span>
                 Identitas
               </div>
               <div className="h-px flex-1 bg-slate-200" />
-              <div className={`flex items-center gap-2 px-2.5 py-1.5 rounded-full text-xs font-black transition-all ${classThemeStep === 2 ? 'bg-primary text-white shadow-sm' : 'bg-slate-100 text-slate-400'}`}>
-                <span className={`h-5 w-5 rounded-full flex items-center justify-center text-[10px] font-black ${classThemeStep === 2 ? 'bg-white/25 text-white' : 'bg-slate-200 text-slate-500'}`}>2</span>
+              <div
+                className={`flex items-center gap-2 px-2.5 py-1.5 rounded-full text-xs font-black transition-all ${classThemeStep === 2 ? 'bg-primary text-white shadow-sm' : 'bg-slate-100 text-slate-400'}`}
+              >
+                <span
+                  className={`h-5 w-5 rounded-full flex items-center justify-center text-[10px] font-black ${classThemeStep === 2 ? 'bg-white/25 text-white' : 'bg-slate-200 text-slate-500'}`}
+                >
+                  2
+                </span>
                 Kegiatan
               </div>
             </div>
@@ -1655,8 +1690,7 @@ export default function GuruView({ user, toast, tab }) {
                 Pilih rombel terlebih dahulu untuk melihat tema.
               </div>
             )}
-
-                      </div>
+          </div>
         </Modal>
       )}
 

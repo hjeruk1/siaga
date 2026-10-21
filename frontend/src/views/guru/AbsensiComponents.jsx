@@ -276,7 +276,9 @@ export function AbsensiCard({ row, selected, onSelect, onCheckin, onKet, onPulan
           <h3 className="truncate text-base font-black text-white [text-shadow:0_1px_10px_rgba(0,0,0,0.5)] sm:text-lg">
             {row.nama}
           </h3>
-          <p className="truncate text-xs text-white/85">{row.rombel_nama} · {row.paket}</p>
+          <p className="truncate text-xs text-white/85">
+            {row.rombel_nama} · {row.paket}
+          </p>
         </div>
         <div className="grid grid-cols-3 gap-1.5">
           {[

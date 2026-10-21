@@ -153,7 +153,6 @@ router.post('/pulang', auth(['gerbang', 'guru', 'admin', 'admin_cabang']), (req,
   }
 });
 
-
 // Jalan keluar ketika QR penjemput tidak terbaca / kartu hilang: petugas
 // memilih siswa + penjemput terdaftar dan menyebut alasan. Guard-nya sama persis
 // dengan scan biasa; sisanya dicatat sebagai audit + notifikasi karena jalur ini
@@ -170,15 +169,12 @@ router.post(
     const access = canAccessSiswa(req.user, siswaId, { tanggal });
     if (access === false) return res.status(403).json({ error: 'Akses siswa ditolak' });
     if (!access) return res.status(404).json({ error: 'Siswa tidak ditemukan' });
-    if (access.siswa.status !== 'aktif')
-      return res.status(400).json({ error: 'Siswa nonaktif tidak bisa dijemput' });
+    if (access.siswa.status !== 'aktif') return res.status(400).json({ error: 'Siswa nonaktif tidak bisa dijemput' });
     if (!requireActiveCabang(req, res, access.enrollment.cabang_id)) return;
     if (isDayClosed(tanggal, access.enrollment.cabang_id))
       return res.status(400).json({ error: 'Hari sudah ditutup, tidak bisa konfirmasi serah terima' });
 
-    const penjemput = db
-      .prepare('SELECT * FROM penjemput WHERE id=? AND siswa_id=?')
-      .get(d.penjemput_id, siswaId);
+    const penjemput = db.prepare('SELECT * FROM penjemput WHERE id=? AND siswa_id=?').get(d.penjemput_id, siswaId);
     if (!penjemput) return res.status(404).json({ error: 'Penjemput tidak ditemukan untuk siswa ini' });
     if (!penjemput.aktif) return res.status(400).json({ error: 'Penjemput sudah dinonaktifkan' });
 

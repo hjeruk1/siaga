@@ -41,7 +41,9 @@ const env = {
   PORT: String(port),
   // Kunci uji bebas: push tidak benar-benar terkirim di tes, tapi jalur
   // registrasi subscription (200/503/400) tetap tervalidasi.
-  VAPID_PUBLIC_KEY: process.env.VAPID_PUBLIC_KEY || 'BJ/8nTtK0WTf2b5gGgh7OnPQOKaaOGvRBcQMSGozLWJJQQpJ0tC1zWInAGVdBKKqOFYgCE1RNGUHPELLvGxDkI',
+  VAPID_PUBLIC_KEY:
+    process.env.VAPID_PUBLIC_KEY ||
+    'BJ/8nTtK0WTf2b5gGgh7OnPQOKaaOGvRBcQMSGozLWJJQQpJ0tC1zWInAGVdBKKqOFYgCE1RNGUHPELLvGxDkI',
   VAPID_PRIVATE_KEY: process.env.VAPID_PRIVATE_KEY || '8wqhxKfItgNLARI1ZmSNbAtUCyxOPUCzHX6xkafC3zY',
   VAPID_SUBJECT: 'mailto:test@localhost',
   // Kanal WhatsApp diuji dengan provider 'log': tidak ada jaringan, tapi

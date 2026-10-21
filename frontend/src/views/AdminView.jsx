@@ -11,7 +11,19 @@ import AuditTab from './admin/AuditTab';
 import RekapAbsensiBulanan from './shared/RekapAbsensiBulanan';
 
 export default function AdminView({ user, toast, tab }) {
-  const tabs = ['cabang', 'siswa', 'staff', 'wali', 'rombel', 'billing', 'laporan', 'rekap', 'config', 'kalender', 'audit'];
+  const tabs = [
+    'cabang',
+    'siswa',
+    'staff',
+    'wali',
+    'rombel',
+    'billing',
+    'laporan',
+    'rekap',
+    'config',
+    'kalender',
+    'audit'
+  ];
   const activeTab = tabs.includes(tab) ? tab : 'siswa';
   return (
     <div className="w-full p-3 sm:p-4 lg:p-6 2xl:p-8 space-y-4">

@@ -157,7 +157,12 @@ export default function RombelTab({ user, toast }) {
 
   const right = (
     <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center">
-      <ActionButton icon={UserPlus} onClick={openAssignModal} variant="ghost" className="w-full sm:w-auto px-2 sm:px-4 text-xs sm:text-sm">
+      <ActionButton
+        icon={UserPlus}
+        onClick={openAssignModal}
+        variant="ghost"
+        className="w-full sm:w-auto px-2 sm:px-4 text-xs sm:text-sm"
+      >
         Tugaskan Guru
       </ActionButton>
       <ActionButton

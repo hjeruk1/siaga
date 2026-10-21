@@ -221,7 +221,9 @@ describe('wali konfirmasi pembayaran', () => {
     // Kanal WA ikut jalan (provider 'log' di server uji): wa_sent_at tercatat.
     // Pengiriman asinkron (antrean), jadi tunggu sebentar, jangan asumsikan
     // sudah selesai saat respons verify kembali.
-    const rowWa = db.prepare("SELECT wa_sent_at FROM notifikasi WHERE tipe='payment_verified' AND entity_id=? LIMIT 1").get(dibuat.body.id);
+    const rowWa = db
+      .prepare("SELECT wa_sent_at FROM notifikasi WHERE tipe='payment_verified' AND entity_id=? LIMIT 1")
+      .get(dibuat.body.id);
     if (!rowWa?.wa_sent_at) {
       await new Promise((r) => setTimeout(r, 1500));
       const ulang = db

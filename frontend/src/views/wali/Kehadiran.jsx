@@ -38,11 +38,18 @@ export default function Kehadiran({
 }) {
   const hariIni = todayISO();
   const ringkas = useMemo(() => ringkasAnak(rekap, siswa?.id), [rekap, siswa?.id]);
-  const cells = useMemo(() => gridBulan(bulan, (rekap?.hari_libur || []).map((d) => `${bulan}-${d}`)), [bulan, rekap?.hari_libur]);
+  const cells = useMemo(
+    () =>
+      gridBulan(
+        bulan,
+        (rekap?.hari_libur || []).map((d) => `${bulan}-${d}`)
+      ),
+    [bulan, rekap?.hari_libur]
+  );
   const minggu = useMemo(() => chunkMinggu(cells), [cells]);
   const peta = useMemo(() => petaBulan(rekap, siswa?.id), [rekap, siswa?.id]);
   const liburSet = useMemo(() => new Set((rekap?.hari_libur || []).map((d) => String(d))), [rekap?.hari_libur]);
-  const bulanDepan = geserBulan(bulan, 1) > bulanIni() ;
+  const bulanDepan = geserBulan(bulan, 1) > bulanIni();
   const adaCatatan = peta.some((p) => p.status && p.status !== 'Belum');
 
   const ringkasanTeks = siswa
@@ -61,7 +68,10 @@ export default function Kehadiran({
     <div className="space-y-4">
       <Card className="space-y-4 p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <SectionTitle icon={CalendarDays} hint="Hanya hari sekolah yang sudah berjalan. Hari yang belum berjalan tidak dinilai.">
+          <SectionTitle
+            icon={CalendarDays}
+            hint="Hanya hari sekolah yang sudah berjalan. Hari yang belum berjalan tidak dinilai."
+          >
             Kehadiran bulanan
           </SectionTitle>
           <div className="flex items-center gap-1.5">
@@ -145,7 +155,11 @@ export default function Kehadiran({
                 <thead>
                   <tr>
                     {HARI_HEADER.map((h) => (
-                      <th key={h} scope="col" className="pb-1 text-[10px] font-black uppercase tracking-wider text-slate-400">
+                      <th
+                        key={h}
+                        scope="col"
+                        className="pb-1 text-[10px] font-black uppercase tracking-wider text-slate-400"
+                      >
                         {h}
                       </th>
                     ))}
@@ -168,12 +182,12 @@ export default function Kehadiran({
                                 judulLibur ? ` (${judulLibur})` : ''
                               }`}
                               className={`flex h-full min-h-[54px] flex-col items-center justify-center gap-0.5 rounded-xl border px-1 py-1.5 ${
-                                belumBerjalan
-                                  ? 'border-dashed border-slate-200 bg-white text-slate-300'
-                                  : `${ui.pill}`
+                                belumBerjalan ? 'border-dashed border-slate-200 bg-white text-slate-300' : `${ui.pill}`
                               }`}
                             >
-                              <span className={`text-xs font-black tabular-nums ${belumBerjalan ? 'text-slate-300' : ''}`}>
+                              <span
+                                className={`text-xs font-black tabular-nums ${belumBerjalan ? 'text-slate-300' : ''}`}
+                              >
                                 {sel.hari}
                               </span>
                               {!belumBerjalan ? (
@@ -237,8 +251,8 @@ export default function Kehadiran({
       </Card>
 
       <InfoNote>
-        Angka dihitung dari catatan absensi gerbang: <b>Pulang</b> berarti anak sudah terekam masuk lalu dijemput, sedangkan{' '}
-        <b>Menunggu</b> belum divalidasi petugas. Status <b>Belum</b> berarti hari sekolah tanpa catatan.
+        Angka dihitung dari catatan absensi gerbang: <b>Pulang</b> berarti anak sudah terekam masuk lalu dijemput,
+        sedangkan <b>Menunggu</b> belum divalidasi petugas. Status <b>Belum</b> berarti hari sekolah tanpa catatan.
       </InfoNote>
     </div>
   );

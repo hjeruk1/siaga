@@ -37,7 +37,8 @@ const NOTIF_META = {
 };
 function notifMeta(tipe) {
   if (NOTIF_META[tipe]) return NOTIF_META[tipe];
-  if (String(tipe || '').startsWith('billing')) return { icon: Receipt, label: 'Billing', cls: 'bg-emerald-100 text-emerald-700' };
+  if (String(tipe || '').startsWith('billing'))
+    return { icon: Receipt, label: 'Billing', cls: 'bg-emerald-100 text-emerald-700' };
   return { icon: Bell, label: null, cls: 'bg-slate-100 text-slate-500' };
 }
 
@@ -534,22 +535,22 @@ export default function App() {
                         const meta = notifMeta(n.tipe);
                         const NotifIcon = meta.icon;
                         return (
-                        <div
-                          key={n.id}
-                          className={`rounded-lg border p-2 transition-colors duration-200 ${n.read_at ? 'bg-white border-slate-100' : 'bg-primary-container border-primary/20'}`}
-                        >
-                          {meta.label && (
-                            <span
-                              className={`mb-1.5 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-black ${meta.cls}`}
-                            >
-                              <NotifIcon className="size-3" />
-                              {meta.label}
-                            </span>
-                          )}
-                          <div className="text-[13px] font-black text-text-main">{n.title}</div>
-                          <div className="text-[11px] text-slate-500 mt-0.5 leading-snug">{n.body || n.tipe}</div>
-                          <div className="text-[10px] font-bold text-slate-400 mt-1">{fmtTime(n.created_at)}</div>
-                        </div>
+                          <div
+                            key={n.id}
+                            className={`rounded-lg border p-2 transition-colors duration-200 ${n.read_at ? 'bg-white border-slate-100' : 'bg-primary-container border-primary/20'}`}
+                          >
+                            {meta.label && (
+                              <span
+                                className={`mb-1.5 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-black ${meta.cls}`}
+                              >
+                                <NotifIcon className="size-3" />
+                                {meta.label}
+                              </span>
+                            )}
+                            <div className="text-[13px] font-black text-text-main">{n.title}</div>
+                            <div className="text-[11px] text-slate-500 mt-0.5 leading-snug">{n.body || n.tipe}</div>
+                            <div className="text-[10px] font-bold text-slate-400 mt-1">{fmtTime(n.created_at)}</div>
+                          </div>
                         );
                       })}
                       {notif.length === 0 && (

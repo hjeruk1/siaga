@@ -196,62 +196,62 @@ export function StaffCard({ staff, onEdit, onReset, onStatusToggle, onDelete, ca
         </div>
 
         <div className="mt-2 flex flex-wrap justify-end gap-1.5 border-t border-slate-100 pt-2">
-        <button
-          type="button"
-          onClick={() => onEdit(staff)}
-          aria-label={`Edit ${staff.display_name}`}
-          title={`Edit ${staff.display_name}`}
-          className="inline-flex items-center justify-center gap-1.5 h-8 px-2 sm:px-3 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 active:scale-95 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/25 focus-visible:ring-offset-2"
-        >
-          <Pencil className="w-4 h-4 shrink-0" strokeWidth={2.4} />
-          <span className="hidden sm:block text-xs font-bold">Edit</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => onReset(staff)}
-          aria-label="Reset password"
-          title="Reset password"
-          className="inline-flex items-center justify-center gap-1.5 h-8 px-2 sm:px-3 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 active:scale-95 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/25 focus-visible:ring-offset-2"
-        >
-          <RotateCcw className="w-4 h-4 shrink-0" strokeWidth={2.4} />
-          <span className="hidden sm:block text-xs font-bold">Reset</span>
-        </button>
-        {staff.status === 'nonaktif' ? (
           <button
             type="button"
-            onClick={() => onStatusToggle({ staff, status: 'aktif' })}
-            aria-label="Aktifkan"
-            title="Aktifkan"
+            onClick={() => onEdit(staff)}
+            aria-label={`Edit ${staff.display_name}`}
+            title={`Edit ${staff.display_name}`}
             className="inline-flex items-center justify-center gap-1.5 h-8 px-2 sm:px-3 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 active:scale-95 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/25 focus-visible:ring-offset-2"
           >
-            <Power className="w-4 h-4 shrink-0" strokeWidth={2.4} />
-            <span className="hidden sm:block text-xs font-bold">Aktifkan</span>
+            <Pencil className="w-4 h-4 shrink-0" strokeWidth={2.4} />
+            <span className="hidden sm:block text-xs font-bold">Edit</span>
           </button>
-        ) : (
           <button
             type="button"
-            onClick={() => onStatusToggle({ staff, status: 'nonaktif' })}
-            aria-label="Nonaktifkan"
-            title="Nonaktifkan"
-            className="inline-flex items-center justify-center gap-1.5 h-8 px-2 sm:px-3 rounded-lg bg-red-50 text-red-700 hover:bg-red-100 border border-red-100 active:scale-95 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-200 focus-visible:ring-offset-2"
+            onClick={() => onReset(staff)}
+            aria-label="Reset password"
+            title="Reset password"
+            className="inline-flex items-center justify-center gap-1.5 h-8 px-2 sm:px-3 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 active:scale-95 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/25 focus-visible:ring-offset-2"
           >
-            <PowerOff className="w-4 h-4 shrink-0" strokeWidth={2.4} />
-            <span className="hidden sm:block text-xs font-bold">Nonaktifkan</span>
+            <RotateCcw className="w-4 h-4 shrink-0" strokeWidth={2.4} />
+            <span className="hidden sm:block text-xs font-bold">Reset</span>
           </button>
-        )}
-        {canDelete && (
-          <button
-            type="button"
-            onClick={() => onDelete(staff)}
-            aria-label={`Hapus permanen ${staff.display_name}`}
-            title={`Hapus permanen ${staff.display_name}`}
-            className="inline-flex items-center justify-center gap-1.5 h-8 px-2 sm:px-3 rounded-lg bg-red-50 text-red-700 hover:bg-red-100 border border-red-100 active:scale-95 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-200 focus-visible:ring-offset-2"
-          >
-            <Trash2 className="w-4 h-4 shrink-0" strokeWidth={2.4} />
-            <span className="hidden sm:block text-xs font-bold">Hapus</span>
-          </button>
-        )}
-      </div>
+          {staff.status === 'nonaktif' ? (
+            <button
+              type="button"
+              onClick={() => onStatusToggle({ staff, status: 'aktif' })}
+              aria-label="Aktifkan"
+              title="Aktifkan"
+              className="inline-flex items-center justify-center gap-1.5 h-8 px-2 sm:px-3 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 active:scale-95 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/25 focus-visible:ring-offset-2"
+            >
+              <Power className="w-4 h-4 shrink-0" strokeWidth={2.4} />
+              <span className="hidden sm:block text-xs font-bold">Aktifkan</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => onStatusToggle({ staff, status: 'nonaktif' })}
+              aria-label="Nonaktifkan"
+              title="Nonaktifkan"
+              className="inline-flex items-center justify-center gap-1.5 h-8 px-2 sm:px-3 rounded-lg bg-red-50 text-red-700 hover:bg-red-100 border border-red-100 active:scale-95 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-200 focus-visible:ring-offset-2"
+            >
+              <PowerOff className="w-4 h-4 shrink-0" strokeWidth={2.4} />
+              <span className="hidden sm:block text-xs font-bold">Nonaktifkan</span>
+            </button>
+          )}
+          {canDelete && (
+            <button
+              type="button"
+              onClick={() => onDelete(staff)}
+              aria-label={`Hapus permanen ${staff.display_name}`}
+              title={`Hapus permanen ${staff.display_name}`}
+              className="inline-flex items-center justify-center gap-1.5 h-8 px-2 sm:px-3 rounded-lg bg-red-50 text-red-700 hover:bg-red-100 border border-red-100 active:scale-95 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-200 focus-visible:ring-offset-2"
+            >
+              <Trash2 className="w-4 h-4 shrink-0" strokeWidth={2.4} />
+              <span className="hidden sm:block text-xs font-bold">Hapus</span>
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

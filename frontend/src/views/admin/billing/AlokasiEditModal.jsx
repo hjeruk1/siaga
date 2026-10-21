@@ -13,9 +13,7 @@ export function AlokasiEditModal({ alokasiEdit, setAlokasiEdit, siswa, onSave })
       <div className="space-y-4">
         <div className="bg-slate-50 dark:bg-slate-800/40 rounded-2xl p-4 border border-slate-100 dark:border-slate-800 grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
-            <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">
-              Wali / Siswa
-            </span>
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Wali / Siswa</span>
             <span className="font-bold text-slate-800 dark:text-slate-200">
               {siswa.find((s) => String(s.id) === String(alokasiEdit.payment.siswa_id))?.nama || '-'}
             </span>
@@ -99,9 +97,7 @@ export function AlokasiEditModal({ alokasiEdit, setAlokasiEdit, siswa, onSave })
           </ActionButton>
           <ActionButton
             icon={Save}
-            disabled={
-              alokasiEdit.payment.nominal - alokasiEdit.bills.reduce((sum, b) => sum + (b._alloc || 0), 0) < 0
-            }
+            disabled={alokasiEdit.payment.nominal - alokasiEdit.bills.reduce((sum, b) => sum + (b._alloc || 0), 0) < 0}
             onClick={onSave}
           >
             Simpan Alokasi

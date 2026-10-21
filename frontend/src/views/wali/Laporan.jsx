@@ -58,7 +58,9 @@ export default function Laporan({ siswa, bulan, onGantiBulan, rekap, memuat = fa
 
         {memuat && !rekap ? (
           <div className="grid gap-2 sm:grid-cols-4">
-            {[0, 1, 2, 3].map((i) => <div key={i} className="h-20 animate-pulse rounded-2xl bg-slate-200/70" />)}
+            {[0, 1, 2, 3].map((i) => (
+              <div key={i} className="h-20 animate-pulse rounded-2xl bg-slate-200/70" />
+            ))}
           </div>
         ) : (
           <div className="grid gap-2 sm:grid-cols-4">
