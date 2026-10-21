@@ -235,6 +235,22 @@ function kirimWA({ no_wa, pesan }) {
   return antre;
 }
 
+/**
+ * Periksa kesehatan kanal (bisa memanggil jaringan untuk provider openwa).
+ * Dipakai pemantau sesi: tanpa ini, sesi yang putus tidak pernah ketahuan
+ * sampai ada orang tua bertanya "kenapa saya tidak menerima kabar?".
+ */
+async function cekStatus() {
+  const p = providerAktif();
+  if (!p) return { aktif: false, provider: 'none', reachable: false };
+  try {
+    const detail = await p.status();
+    return { aktif: true, ...detail };
+  } catch (e) {
+    return { aktif: true, provider: p.nama, reachable: false, error: e.message };
+  }
+}
+
 function statusWA() {
   const p = providerAktif();
   return {
@@ -251,6 +267,7 @@ module.exports = {
   chatIdDari,
   formatPesan,
   kirimWA,
+  cekStatus,
   statusWA,
   tipeAktif,
   // ekspor untuk tes saja

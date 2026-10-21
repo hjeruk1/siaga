@@ -25,6 +25,7 @@ const files =
         'scripts/backup.test.js',
         'scripts/restore.test.js',
         'scripts/pengumuman.test.js',
+        'scripts/wa-monitor.test.js',
         'scripts/pin.test.js',
         'scripts/reset-password.test.js',
         'scripts/izin.test.js',
@@ -53,6 +54,8 @@ const env = {
   // alur notifikasi -> antrean -> penandaan wa_sent_at tetap tervalidasi.
   WA_PROVIDER: 'log',
   WA_DELAY_MS: '0',
+  // Pemantau WA dimatikan di server uji: tes memanggil cekSekarang() sendiri.
+  WA_MONITOR: 'off',
   WA_TIPE_AKTIF: 'daily_published,guru_reply,payment_verified,payment_rejected,invoice_issued',
   // Kode OTP ditulis ke berkas ini supaya tes bisa menyelesaikan alur pemulihan
   // password. Hanya diset di harness — server sungguhan tidak pernah menulis

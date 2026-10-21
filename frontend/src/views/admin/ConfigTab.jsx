@@ -17,6 +17,7 @@ import {
   X
 } from 'lucide-react';
 import { useMaster, CabangFilter, Panel, Input } from './AdminShared';
+import WaStatusPanel from './WaStatusPanel';
 
 export default function ConfigTab({ user, toast }) {
   const m = useMaster(user, { autoDefaultCabang: true });
@@ -99,6 +100,10 @@ export default function ConfigTab({ user, toast }) {
   }
   return (
     <div className="space-y-6">
+      {/* Status kanal WA ditaruh paling atas: kalau sesi putus, itu yang perlu
+          ditindaklanjuti lebih dulu sebelum mengubah konfigurasi lain. */}
+      <WaStatusPanel toast={toast} />
+
       <Panel title="Konfigurasi Operasional" right={<CabangFilter user={user} {...m} />}>
         <div className="mb-4 grid grid-cols-2 gap-2 lg:grid-cols-4">
           <ConfigStat icon={Settings} label="Cabang" value={selectedCabang?.kode || selectedCabang?.nama || '-'} />

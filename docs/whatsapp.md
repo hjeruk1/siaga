@@ -122,8 +122,38 @@ Catatan operasional:
 
 ## 5. Pantau & audit
 
+### Pemantau otomatis (berjalan sendiri)
+
+Sesi WhatsApp bisa berhenti bekerja **tanpa suara**: Easy API mati, sesi logout
+(perlu pindai QR ulang), atau token gateway kedaluwarsa. Tanpa pemantau, yang
+pertama tahu adalah orang tua yang bertanya "kenapa saya tidak menerima kabar?".
+
+Karena itu backend memeriksa kanal setiap **5 menit** (`WA_CHECK_MS`, bisa
+diubah; `WA_MONITOR=off` mematikannya) dan:
+
+- menyimpan keadaan terakhir di tabel `wa_monitor` (status, sejak kapan,
+  berapa kali gagal beruntun, kapan terakhir sehat);
+- mengirim **satu** notifikasi ke semua admin saat kanal putus, lalu
+  mengingatkan tiap **6 jam** selama masih putus — alarm tiap 5 menit akan
+  diabaikan orang, dan itu sama saja dengan tidak memberi tahu;
+- mengirim notifikasi **pulih** sekali ketika kanal kembali sehat;
+- **tidak** memberi alarm kalau `WA_PROVIDER=none` — kanal yang memang
+  dimatikan bukan gangguan.
+
+Notifikasi itu masuk lewat aplikasi + push (bukan WhatsApp, karena kanalnya
+sedang bermasalah). Statusnya juga terlihat di **Admin → Konfigurasi → Status
+WhatsApp**, lengkap dengan tombol *Periksa sekarang* supaya admin tidak perlu
+menunggu jadwal berikutnya setelah memperbaiki sesi.
+
+```bash
+# periksa manual tanpa menunggu 5 menit
+curl -X POST localhost:3001/api/wa/check -H "Authorization: Bearer <token-admin>"
+```
+
+### Yang bisa dibaca manual
+
 - `GET /api/wa/status` — apakah kanal aktif, provider apa, sesi terhubung,
-  berapa pesan menunggu di antrean.
+  berapa pesan menunggu di antrean, plus keadaan pemantau terakhir.
 - `notifikasi.wa_sent_at` — kapan WhatsApp berhasil dikirim.
 - `notifikasi.wa_error` — alasan kegagalan (mis. "Easy API 404", "nomor tidak
   valid"). Baris ini dipakai saat menelusuri keluhan orang tua.

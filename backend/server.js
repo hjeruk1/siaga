@@ -237,6 +237,15 @@ app.use((err, req, res, _next) => {
 const port = process.env.PORT || 3001;
 const server = app.listen(port, '0.0.0.0', () => {
   logger.info(`SIAGA Backend listening on http://localhost:${port} [${process.env.NODE_ENV || 'development'}]`);
+  // Pantau sesi WhatsApp: kalau kanal berhenti bekerja, admin diberi tahu
+  // lewat notifikasi aplikasi — bukan menunggu orang tua bertanya.
+  try {
+    // WA_MONITOR=off dipakai harness tes supaya pemantau latar tidak menulis
+    // ke tabel wa_monitor saat tes sedang memeriksa tabel yang sama.
+    if (process.env.WA_MONITOR !== 'off') require('./utils/wa-monitor').mulaiMonitor();
+  } catch (e) {
+    logger.warn(`Pemantau WhatsApp tidak aktif: ${e.message}`);
+  }
 });
 server.requestTimeout = 30_000;
 server.headersTimeout = 35_000;

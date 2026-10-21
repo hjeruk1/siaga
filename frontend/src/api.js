@@ -235,6 +235,10 @@ export const api = {
   setPin: (pin, password) => req('POST', '/api/auth/pin', { pin, password }),
   verifyPin: (pin) => req('POST', '/api/auth/pin/verify', { pin }),
   deletePin: (password) => req('DELETE', '/api/auth/pin', { password }),
+  // Status kanal WhatsApp (admin): sesi hidup, antrean, kegagalan.
+  waStatus: () => req('GET', '/api/wa/status'),
+  waCheck: () => req('POST', '/api/wa/check', {}),
+
   // Pengumuman sekolah ke orang tua (satu pesan, banyak penerima).
   pengumumanPreview: (params) => req('GET', '/api/pengumuman/preview' + qs(params || {})),
   kirimPengumuman: (d) => req('POST', '/api/pengumuman', d),
