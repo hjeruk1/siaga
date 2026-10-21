@@ -23,6 +23,7 @@ const files =
         'scripts/wali-konfirmasi.test.js',
         'scripts/wa.test.js',
         'scripts/backup.test.js',
+        'scripts/restore.test.js',
         'scripts/pin.test.js',
         'scripts/reset-password.test.js',
         'scripts/izin.test.js',
