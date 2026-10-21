@@ -199,6 +199,9 @@ app.use('/api/notifikasi', require('./routes/notifikasi'));
 app.use('/api/billing', require('./routes/billing'));
 app.use('/api/rekap', require('./routes/rekap'));
 app.use('/api/push', require('./routes/push'));
+// Dipasang SEBELUM router /api/wa supaya path /api/wa/sesi/* tidak masuk
+// dulu ke pencocokan rute di dalam router wa.js.
+app.use('/api/wa/sesi', require('./routes/wa-sesi'));
 app.use('/api/wa', require('./routes/wa'));
 
 // 404 JSON untuk endpoint API yang tidak dikenal. Tanpa ini Express mengirim

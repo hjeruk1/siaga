@@ -251,6 +251,16 @@ export const api = {
   simpanWaAkun: (d, id) => (id ? req('PUT', '/api/wa/akun/' + id, d) : req('POST', '/api/wa/akun', d)),
   hapusWaAkun: (id) => req('DELETE', '/api/wa/akun/' + id),
   ujiWaAkun: (id) => req('POST', '/api/wa/akun/' + id + '/uji', {}),
+  // Sesi open-wa multi-sesi (alur hubungkan nomor mandiri). Kredensial
+  // instance tetap di server; browser hanya menerima QR/kode pairing/status.
+  waSesi: () => req('GET', '/api/wa/sesi'),
+  waDetailSesi: (id) => req('GET', '/api/wa/sesi/' + id),
+  waBuatSesi: (d) => req('POST', '/api/wa/sesi', d),
+  waStartSesi: (id) => req('POST', '/api/wa/sesi/' + id + '/start', {}),
+  waQrSesi: (id) => req('GET', '/api/wa/sesi/' + id + '/qr'),
+  waKodePairing: (id, nomor) => req('POST', '/api/wa/sesi/' + id + '/pairing', { nomor }),
+  waSimpanSesi: (id, d) => req('POST', '/api/wa/sesi/' + id + '/simpan', d),
+  waHapusSesi: (id) => req('DELETE', '/api/wa/sesi/' + id),
 
   // Pengumuman sekolah ke orang tua (satu pesan, banyak penerima).
   pengumumanPreview: (params) => req('GET', '/api/pengumuman/preview' + qs(params || {})),

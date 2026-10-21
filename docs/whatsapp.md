@@ -243,6 +243,40 @@ Catatan yang tetap berlaku: folder sesi open-wa berisi kredensial WhatsApp
 (backup seperti database, jangan di-commit), dan **setiap sesi tetap memuat
 engine sendiri** — RAM per sesi masih timbul walau prosesnya satu.
 
+### Hubungkan nomor mandiri (tanpa dashboard OpenWA)
+
+Admin cabang bisa menghubungkan nomor cabangnya **sendiri lewat SIAGA** —
+tidak perlu mengakses dashboard OpenWA di server, tidak perlu tahu URL atau
+API key-nya. Kredensial instance hidup di `.env` server (`WA_API_URL`,
+`WA_API_KEY`); semua permintaan ke OpenWA dilakukan server atas nama pengguna
+yang sudah login.
+
+Alur di **Konfigurasi → Nomor WhatsApp per cabang → "Hubungkan nomor
+mandiri"**:
+
+1. Pilih cabang (admin cabang terkunci ke cabangnya sendiri) dan nama sesi —
+   atau pakai sesi yang sudah ada di instance.
+2. SIAGA membuat sesi, menyalakannya, lalu menampilkan **QR** (segar otomatis
+   tiap 5 detik). Alternatifnya: minta **kode pairing** dengan nomor HP
+   cabang (maks 1x per menit per sesi — permintaan beruntun memicu blokir).
+3. Di HP cabang: WhatsApp → Perangkat Tertaut → Tautkan Perangkat (pindai QR)
+   **atau** Tautkan dengan nomor telepon (masukkan kode pairing).
+4. Setelah sesi `ready`, SIAGA menampilkan nama/phone pemilik dan menyimpan
+   sesi itu sebagai akun pengirim cabang — URL & API key diambil dari `.env`
+   lalu disimpan terenkripsi seperti akun lain.
+
+Hak akses: `admin` (pusat) mengelola semua cabang + akun pusat (cadangan);
+`admin_cabang` hanya sesi dan nomor untuk cabangnya sendiri. Menghapus sesi
+dari instance hanya untuk admin pusat. Semua tindakan (sesi dibuat, kode
+pairing diminta, nomor disimpan, sesi dihapus) tercatat di audit log. QR
+adalah kredensial hidup — tidak pernah ditulis ke log dan hanya tampil untuk
+pemegang sesi admin yang berhak.
+
+Endpoint yang dipakai server ke OpenWA (untuk diagnosa):
+`POST /api/sessions`, `POST /api/sessions/{id}/start`,
+`GET /api/sessions/{id}/qr`, `POST /api/sessions/{id}/pairing-code`,
+`GET /api/sessions/{id}`.
+
 ---
 
 ## 7. Deploy di server sendiri (bukan komputer pengembangan)

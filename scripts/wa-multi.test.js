@@ -200,6 +200,21 @@ describe('open-wa multi-sesi', () => {
     keadaan[SESI_B] = 'connected';
   });
 
+  it('status ready = terhubung (state connected di build multi-sesi)', async () => {
+    // Nama state terhubung di dashboard Sessions adalah 'ready'; sebagian
+    // build lain memakai 'connected'. Keduanya harus diterima.
+    keadaan[SESI_A] = 'ready';
+    const provider = wa.providerDariAkun(akunWa.ambil(idA));
+    const hasil = await provider.status();
+    assert.equal(hasil.connected, true);
+    assert.equal(hasil.ready, true);
+    assert.equal(monitor.klasifikasi({ aktif: true, ...hasil }), 'ok');
+    keadaan[SESI_A] = 'connected';
+    const hasil2 = await provider.status();
+    assert.equal(hasil2.connected, true, "state 'connected' juga diterima");
+    keadaan[SESI_A] = 'ready';
+  });
+
   it('layanan OpenWA mati -> down dengan pesan perbaikan multi-sesi', async () => {
     const portAsal = stMulti.port;
     await new Promise((r) => stMulti.server.close(r));

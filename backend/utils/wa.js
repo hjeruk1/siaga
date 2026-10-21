@@ -137,7 +137,9 @@ async function openwaMultiStatus({ url, key, sid }) {
     });
     if (!r.ok) return { ...dasar, reachable: false, error: `OpenWA ${r.status}` };
     const d = await r.json();
-    const terhubung = d.status === 'connected';
+    // State "terhubung" bernama 'ready' di build multi-sesi (dashboard
+    // Sessions); sebagian build lain memakai 'connected'. Terima keduanya.
+    const terhubung = d.status === 'ready' || d.status === 'connected';
     return {
       ...dasar,
       reachable: true,

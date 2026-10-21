@@ -11,6 +11,7 @@ import {
   MessageCircle,
   Pencil,
   Plus,
+  QrCode,
   RefreshCw,
   Trash2,
   XCircle
@@ -18,6 +19,7 @@ import {
 import { api } from '../../api';
 import { CustomSelect, Modal } from '../../components/Shared';
 import { useMaster } from '../admin/AdminShared';
+import WizardSesiWa from './WizardSesiWa';
 
 function waktu(iso) {
   if (!iso) return '-';
@@ -57,6 +59,8 @@ function labelProvider(a) {
 export default function WaSettings({ user, toast }) {
   const { cabang } = useMaster(user);
   const admin = user.role === 'admin';
+  const adminCabang = user.role === 'admin_cabang';
+  const bolehKelola = admin || adminCabang;
 
   const [data, setData] = useState(null);
   const [akun, setAkun] = useState([]);
@@ -64,13 +68,14 @@ export default function WaSettings({ user, toast }) {
   const [busy, setBusy] = useState(false);
   const [busyId, setBusyId] = useState(null);
   const [form, setForm] = useState(null);
+  const [wizard, setWizard] = useState(false);
 
   const muat = useCallback(async () => {
     setMemuat(true);
     try {
       const [s, a] = await Promise.all([
         api.waStatus(),
-        admin ? api.waAkun().catch(() => ({ rows: [] })) : Promise.resolve({ rows: [] })
+        bolehKelola ? api.waAkun().catch(() => ({ rows: [] })) : Promise.resolve({ rows: [] })
       ]);
       setData(s);
       setAkun(a?.rows || []);
@@ -79,7 +84,7 @@ export default function WaSettings({ user, toast }) {
     } finally {
       setMemuat(false);
     }
-  }, [admin, toast]);
+  }, [bolehKelola, toast]);
 
   useEffect(() => {
     muat();
@@ -276,29 +281,45 @@ export default function WaSettings({ user, toast }) {
         )}
       </section>
 
-      {admin && (
+      {bolehKelola && (
         <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-[0_18px_60px_rgba(15,23,42,.05)] sm:p-4">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <div>
               <h2 className="text-[15px] font-black text-text-main">Nomor WhatsApp per cabang</h2>
               <p className="text-[11px] font-semibold text-slate-500">
-                Cabang tanpa nomor memakai nomor pusat (cadangan). Tanpa cadangan, pesannya tidak dikirim.
+                {adminCabang
+                  ? 'Nomor cabang Anda. Hubungkan sendiri lewat tombol di samping — HP cabang yang memindai QR, tanpa menyentuh server.'
+                  : 'Cabang tanpa nomor memakai nomor pusat (cadangan). Tanpa cadangan, pesannya tidak dikirim.'}
               </p>
             </div>
-            <button
-              type="button"
-              onClick={() => setForm({ ...FORM_KOSONG })}
-              className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary px-3 text-[12px] font-black text-white hover:bg-primary-hover"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              Tambah nomor
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setWizard(true)}
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-primary/40 bg-primary-container/50 px-3 text-[12px] font-black text-primary hover:bg-primary-container"
+              >
+                <QrCode className="h-3.5 w-3.5" />
+                Hubungkan nomor mandiri
+              </button>
+              {admin && (
+                <button
+                  type="button"
+                  onClick={() => setForm({ ...FORM_KOSONG })}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary px-3 text-[12px] font-black text-white hover:bg-primary-hover"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Tambah nomor
+                </button>
+              )}
+            </div>
           </div>
 
           {akun.length === 0 ? (
             <div className="rounded-xl border border-dashed border-slate-200 px-4 py-8 text-center">
               <p className="text-[12px] font-semibold text-slate-500">
-                Belum ada nomor terdaftar — pesan memakai satu nomor dari konfigurasi server.
+                {adminCabang
+                  ? 'Cabang Anda belum punya nomor sendiri. Klik "Hubungkan nomor mandiri" — HP cabang memindai QR, pesan keluarlah dari nomor cabang sendiri.'
+                  : 'Belum ada nomor terdaftar — pesan memakai satu nomor dari konfigurasi server.'}
               </p>
             </div>
           ) : (
@@ -343,22 +364,26 @@ export default function WaSettings({ user, toast }) {
                               <RefreshCw className="h-3.5 w-3.5" />
                             )}
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => setForm({ ...FORM_KOSONG, ...a, api_key: '', gateway_token: '' })}
-                            aria-label={`Ubah ${a.label}`}
-                            className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100"
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => hapus(a)}
-                            aria-label={`Hapus ${a.label}`}
-                            className="rounded-lg p-1.5 text-rose-500 hover:bg-rose-50"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
+                          {admin && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => setForm({ ...FORM_KOSONG, ...a, api_key: '', gateway_token: '' })}
+                                aria-label={`Ubah ${a.label}`}
+                                className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100"
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => hapus(a)}
+                                aria-label={`Hapus ${a.label}`}
+                                className="rounded-lg p-1.5 text-rose-500 hover:bg-rose-50"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -368,6 +393,19 @@ export default function WaSettings({ user, toast }) {
             </div>
           )}
         </section>
+      )}
+
+      {wizard && bolehKelola && (
+        <WizardSesiWa
+          user={user}
+          cabang={cabang}
+          onClose={() => setWizard(false)}
+          onSelesai={() => {
+            setWizard(false);
+            toast?.('ok', 'Nomor cabang tersimpan. Pesan untuk cabang ini sekarang keluar dari nomor tersebut.');
+            muat();
+          }}
+        />
       )}
 
       {form && (

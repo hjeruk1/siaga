@@ -28,6 +28,7 @@ const files =
         'scripts/wa-monitor.test.js',
         'scripts/wa-akun.test.js',
         'scripts/wa-multi.test.js',
+        'scripts/wa-sesi.test.js',
         'scripts/pin.test.js',
         'scripts/reset-password.test.js',
         'scripts/totp.test.js',

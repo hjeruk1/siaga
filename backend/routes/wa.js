@@ -40,8 +40,16 @@ router.post('/check', auth(['admin', 'admin_cabang', 'kepsek']), async (req, res
 // ---------------------------------------------------------------------------
 // Registry nomor per cabang
 // ---------------------------------------------------------------------------
-router.get('/akun', auth(ADMIN), (req, res) => {
-  res.json({ rows: akunWa.daftar() });
+// Daftar akun: admin pusat melihat semua; admin_cabang hanya milik cabangnya
+// (dibutuhkan alur "hubungkan nomor mandiri" — mereka melihat status nomor
+// sendiri tanpa bisa mengubah kredensial).
+router.get('/akun', auth(['admin', 'admin_cabang']), (req, res) => {
+  const rows = akunWa.daftar();
+  if (req.user.role === 'admin_cabang') {
+    const cabang = Number(req.user.cabang_id);
+    return res.json({ rows: rows.filter((a) => Number(a.cabang_id) === cabang) });
+  }
+  res.json({ rows });
 });
 
 router.post('/akun', auth(ADMIN), (req, res) => {
@@ -68,10 +76,13 @@ router.delete('/akun/:id', auth(ADMIN), (req, res) => {
   res.json({ success: true });
 });
 
-// Uji satu nomor tanpa menunggu jadwal pemantau.
-router.post('/akun/:id/uji', auth(ADMIN), async (req, res) => {
+// Uji satu nomor tanpa menunggu jadwal pemantau. admin_cabang boleh menguji
+// nomor cabangnya sendiri (pemeriksaan hanya baca, tidak mengubah apa pun).
+router.post('/akun/:id/uji', auth(['admin', 'admin_cabang']), async (req, res) => {
   const akun = akunWa.ambil(Number(req.params.id));
   if (!akun) return res.status(404).json({ error: 'Akun tidak ditemukan' });
+  if (req.user.role === 'admin_cabang' && Number(akun.cabang_id) !== Number(req.user.cabang_id))
+    return res.status(403).json({ error: 'Anda hanya boleh menguji nomor cabang sendiri.' });
   const hasil = await monitor.cekAkun(akun);
   res.json({ success: true, ...hasil });
 });
