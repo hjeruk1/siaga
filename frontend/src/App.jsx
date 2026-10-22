@@ -3,6 +3,7 @@ import { api } from './api';
 import LoginView from './views/LoginView';
 import { ActionButton, IconButton, Modal } from './components/Shared';
 import KeamananStaffCard from './views/shared/KeamananStaffCard';
+import PushToggle from './components/PushToggle';
 import {
   Bell,
   CheckCheck,
@@ -621,7 +622,12 @@ export default function App() {
       {/* Keamanan akun staff (verifikasi dua faktor TOTP) */}
       {keamananOpen && user.tipe === 'staff' && (
         <Modal onClose={() => setKeamananOpen(false)} title="Keamanan Akun" maxWidth="max-w-lg">
-          <KeamananStaffCard toast={toast} onClose={() => setKeamananOpen(false)} />
+          <div className="space-y-3">
+            <KeamananStaffCard toast={toast} onClose={() => setKeamananOpen(false)} />
+            {/* Push juga untuk staff: alarm WA putus dan izin baru datang
+                lewat kanal ini, bukan hanya ke wali. */}
+            <PushToggle toast={toast} />
+          </div>
         </Modal>
       )}
 

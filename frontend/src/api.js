@@ -200,6 +200,7 @@ export const api = {
   vapidKey: () => req('GET', '/api/push/vapid-key'),
   subscribePush: (d) => req('POST', '/api/push/subscribe', d),
   unsubscribePush: (d) => req('POST', '/api/push/unsubscribe', d),
+  ujiPush: () => req('POST', '/api/push/test', {}),
   testPush: () => req('POST', '/api/push/test'),
   tarif: (p) => req('GET', '/api/billing/tarif' + qs(p || {})),
   createTarif: (d) => req('POST', '/api/billing/tarif', d),

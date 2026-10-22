@@ -274,6 +274,15 @@ Catatan:
 - Peristiwa keamanan (2FA aktif/dimati, kode pemulihan dipakai) dicatat di audit log dan dikabarkan lewat WhatsApp ke nomor pemilik.
 - Aplikasi authenticator apa pun yang membaca `otpauth://totp/` bisa dipakai (Google Authenticator, Authy, 1Password, Aegis); bekerja offline.
 
+### 4.3b Notifikasi Perangkat (Web Push)
+
+- Push memakai VAPID; pasangan kunci ada di `.env` server (`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`). Kunci baru dibuat dengan `node -e "console.log(require('web-push').generateVAPIDKeys())"` dari folder `backend`.
+- **Mengganti kunci VAPID membatalkan semua langganan** — setiap perangkat harus mengaktifkan ulang notifikasi.
+- Wali mengaktifkan dari portal wali (kartu notifikasi); staff dari **Keamanan akun → Notifikasi perangkat**. Aktivasi wajib berupa klik pengguna: browser melarang langganan otomatis.
+- Syarat perangkat: HTTPS (kecuali `localhost`), dan di iPhone/iPad aplikasi harus dipasang ke Layar Utama lebih dulu.
+- Endpoint: `GET /api/push/vapid-key`, `POST /api/push/subscribe`, `POST /api/push/unsubscribe`, `POST /api/push/test` (kirim uji ke perangkat sendiri).
+- Langganan disimpan per perangkat di `push_subscription`. Endpoint yang sudah mati (404/410 dari layanan push) otomatis dibuang saat pengiriman berikutnya, sehingga daftar tidak menumpuk perangkat lama.
+
 ### 4.4 Hak Kelola Akun
 
 - `admin` mengelola semua akun.
