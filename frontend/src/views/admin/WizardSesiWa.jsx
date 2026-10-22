@@ -82,9 +82,11 @@ export default function WizardSesiWa({ user, cabang, onSelesai, onClose }) {
     return () => clearInterval(t);
   }, [sesi, langkah, muatStatus]);
 
-  // Poll QR selama tab QR aktif dan sesi belum siap.
+  // Poll QR selama tab QR aktif dan sesi SUDAH siap dipindai. Saat masih
+  // 'initializing', instance membalas 400 ("Session is not started") — tidak
+  // ada gunanya menembak, dan errornya mengotori konsol.
   useEffect(() => {
-    if (!sesi || tab !== 'qr' || langkah !== 'hubungkan') return;
+    if (!sesi || tab !== 'qr' || langkah !== 'hubungkan' || sesi.status !== 'qr_ready') return;
     let berhenti = false;
     async function ambil() {
       try {
