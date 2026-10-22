@@ -40,14 +40,15 @@ function handler(url, body, method) {
     return { status: 200, json: { qrCode: 'data:image/png;base64,UERSSw==', status: 'qr_ready' } };
   }
   if (aksi === 'pairing-code') return { status: 200, json: { pairingCode: 'ABCD-EFGH' } };
+  const terhubung = keadaan[sid] === 'ready' || keadaan[sid] === 'connected';
   return {
     status: 200,
     json: {
       id: sid,
       name: 'wa-godean',
       status: keadaan[sid],
-      phone: keadaan[sid] === 'ready' ? '6285172124543' : null,
-      pushName: keadaan[sid] === 'ready' ? 'Syifa' : null
+      phone: terhubung ? '6285172124543' : null,
+      pushName: terhubung ? 'Syifa' : null
     }
   };
 }
@@ -221,6 +222,16 @@ describe('util manajemen sesi open-wa', () => {
       () => sesi.simpanSebagaiAkun(SESI, { cabang_id: cabang.id, label: 'Uji Sesi Godean' }, { id: null }),
       /belum terhubung/
     );
+
+    // Build lain memakai state 'connected' — sesi terhubung tetap boleh disimpan.
+    assert.equal(sesi.sudahTerhubung('ready'), true);
+    assert.equal(sesi.sudahTerhubung('connected'), true);
+    assert.equal(sesi.sudahTerhubung('qr_ready'), false);
+    keadaan[SESI] = 'connected';
+    const hasil2 = await sesi.simpanSebagaiAkun(SESI, { cabang_id: cabang.id, label: 'Uji Sesi Conn' }, { id: null });
+    assert.ok(hasil2.id, "state 'connected' harus diterima");
+    db.prepare('DELETE FROM wa_akun WHERE id=?').run(hasil2.id);
+    keadaan[SESI] = 'qr_ready';
   });
 });
 

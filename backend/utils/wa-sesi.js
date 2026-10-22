@@ -143,19 +143,25 @@ function nomorTampilan(phone) {
   return d || null;
 }
 
+// Status "sudah terhubung": build multi-sesi memakai 'ready', sebagian build
+// lain 'connected'. Satu tempat, supaya simpan/UI tidak berbeda pendapat.
+function sudahTerhubung(status) {
+  return status === 'ready' || status === 'connected';
+}
+
 function akunUntukSesi(sid) {
   return db.prepare('SELECT * FROM wa_akun WHERE session_id=?').get(sid) || null;
 }
 
 /**
- * Setelah sesi 'ready', jadikan sesi itu akun pengirim untuk satu cabang.
+ * Setelah sesi terhubung, jadikan sesi itu akun pengirim untuk satu cabang.
  * Kredensial instance diambil dari environment lalu dienkripsi seperti akun
  * lain — admin cabang tidak pernah mengetahui URL/API key-nya.
  */
 async function simpanSebagaiAkun(sid, { cabang_id, label }, aktor) {
   const sesi = await detailSesi(sid);
-  if (!sesi || sesi.status !== 'ready')
-    throw new Error('Sesi belum terhubung. Selesaikan pemindai QR / kode pairing terlebih dahulu.');
+  if (!sesi || !sudahTerhubung(sesi.status))
+    throw new Error('Sesi belum terhubung. Selesaikan pemindaian QR / kode pairing terlebih dahulu.');
   if (akunUntukSesi(sid))
     throw new Error('Sesi ini sudah terdaftar sebagai nomor WhatsApp. Hapus dulu bila ingin mengganti.');
 
@@ -189,6 +195,7 @@ module.exports = {
   nomorPairing,
   sisaJedaPairing,
   nomorTampilan,
+  sudahTerhubung,
   akunUntukSesi,
   simpanSebagaiAkun,
   PAIRING_JEDA_MS

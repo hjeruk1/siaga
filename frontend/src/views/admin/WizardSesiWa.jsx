@@ -26,6 +26,11 @@ function labelStatus(s) {
   return LABEL_STATUS[s] || s || '-';
 }
 
+// "Sudah terhubung" di build ini = 'ready'; sebagian build lain 'connected'.
+function sudahTerhubung(status) {
+  return status === 'ready' || status === 'connected';
+}
+
 export default function WizardSesiWa({ user, cabang, onSelesai, onClose }) {
   const adminCabang = user.role === 'admin_cabang';
   const cabangTerpakai = adminCabang ? String(user.cabang_id) : null;
@@ -66,7 +71,7 @@ export default function WizardSesiWa({ user, cabang, onSelesai, onClose }) {
     try {
       const s = await api.waDetailSesi(sesi.id);
       setSesi(s);
-      if (s.status === 'ready' && langkah === 'hubungkan') {
+      if (sudahTerhubung(s.status) && langkah === 'hubungkan') {
         setLangkah('selesai');
         setLabel(s.name || '');
       }
@@ -93,7 +98,7 @@ export default function WizardSesiWa({ user, cabang, onSelesai, onClose }) {
         const r = await api.waQrSesi(sesi.id);
         if (berhenti) return;
         setQr(r.qrCode || null);
-        if (r.status === 'ready') setLangkah('selesai');
+        if (sudahTerhubung(r.status)) setLangkah('selesai');
       } catch {
         /* QR mungkin belum siap (initializing); poll berikutnya mencoba lagi */
       }
@@ -187,11 +192,16 @@ export default function WizardSesiWa({ user, cabang, onSelesai, onClose }) {
               {adminCabang ? (
                 <option value={cabangId}>{cabang.find((c) => String(c.id) === cabangId)?.nama || 'Cabang Anda'}</option>
               ) : (
-                cabang.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.nama}
-                  </option>
-                ))
+                <>
+                  {/* Akun pusat (cadangan) hanya bisa dibuat admin pusat —
+                      backend menolak cabang_id kosong dari admin cabang. */}
+                  <option value="">Pusat (cadangan)</option>
+                  {cabang.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.nama}
+                    </option>
+                  ))}
+                </>
               )}
             </select>
             {adminCabang && (
@@ -241,7 +251,7 @@ export default function WizardSesiWa({ user, cabang, onSelesai, onClose }) {
                   onClick={() => {
                     setSesi(s);
                     setLabel(s.name || '');
-                    setLangkah(s.status === 'ready' ? 'selesai' : 'hubungkan');
+                    setLangkah(sudahTerhubung(s.status) ? 'selesai' : 'hubungkan');
                     setTab('qr');
                   }}
                   className="flex w-full items-center gap-2 rounded-xl border border-slate-200 px-3 py-2.5 text-left transition-colors hover:bg-slate-50"
@@ -253,7 +263,7 @@ export default function WizardSesiWa({ user, cabang, onSelesai, onClose }) {
                       {s.phone ? ` · ${s.phone}` : ''}
                     </span>
                   </span>
-                  {s.status === 'ready' && <CheckCircle2 className="h-4 w-4 text-emerald-500" />}
+                  {sudahTerhubung(s.status) && <CheckCircle2 className="h-4 w-4 text-emerald-500" />}
                 </button>
               ))}
               {!daftar.length && (
