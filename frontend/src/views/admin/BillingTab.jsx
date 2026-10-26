@@ -47,6 +47,7 @@ import {
   MoneyCell
 } from './AdminShared';
 import { StatCard } from './billing/StatCard';
+import EksporKeuangan from './EksporKeuangan';
 import { ActionCard } from './billing/ActionCard';
 import { ConfirmModal } from './billing/ConfirmModal';
 import { PaymentModal } from './billing/PaymentModal';
@@ -738,6 +739,8 @@ export default function BillingTab({ user, toast }) {
           progress={billingStats.collectionRate}
         />
       </div>
+      <EksporKeuangan cabangId={m.cabangId} toast={toast} />
+
       {billingStats.pendingCount > 0 && (
         <button
           type="button"
@@ -2314,19 +2317,25 @@ export default function BillingTab({ user, toast }) {
         </Modal>
       )}
 
-      <PaymentModal
-        user={user}
-        m={m}
-        localCabangIdPayment={localCabangIdPayment}
-        setLocalCabangIdPayment={setLocalCabangIdPayment}
-        payForm={payForm}
-        setPayForm={setPayForm}
-        filteredSiswaForPayment={filteredSiswaForPayment}
-        alokasiPreview={alokasiPreview}
-        submitting={submitting}
-        onClose={requestClosePayment}
-        onPay={pay}
-      />
+      {/* Dulu modal ini dirender TANPA syarat, sehingga setiap kali tab Billing
+          dibuka, dialog "Catat Pembayaran" langsung menutupi seluruh halaman.
+          Flag showPaymentModal sudah ada sejak awal (dipakai ActionCard untuk
+          membukanya) tetapi tidak pernah dipakai sebagai gerbang render. */}
+      {showPaymentModal && (
+        <PaymentModal
+          user={user}
+          m={m}
+          localCabangIdPayment={localCabangIdPayment}
+          setLocalCabangIdPayment={setLocalCabangIdPayment}
+          payForm={payForm}
+          setPayForm={setPayForm}
+          filteredSiswaForPayment={filteredSiswaForPayment}
+          alokasiPreview={alokasiPreview}
+          submitting={submitting}
+          onClose={requestClosePayment}
+          onPay={pay}
+        />
+      )}
       <AlokasiEditModal alokasiEdit={alokasiEdit} setAlokasiEdit={setAlokasiEdit} siswa={siswa} onSave={saveAlokasi} />
       {confirmAction && <ConfirmModal action={confirmAction} onClose={() => setConfirmAction(null)} />}
     </>

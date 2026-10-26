@@ -215,6 +215,8 @@ export const api = {
   simpanPengingatSetelan: (d) => req('PUT', '/api/pengingat/setelan', d),
   pengingatPratinjau: (mode) => req('GET', `/api/pengingat/pratinjau${mode === 'manual' ? '?mode=manual' : ''}`),
   kirimPengingat: (d) => req('POST', '/api/pengingat/kirim', d || {}),
+  // Ekspor keuangan (CSV) untuk pembukuan.
+  eksporKeuangan: (params) => blob('/api/billing/export' + qs(params || {})),
   // Galeri foto kegiatan per rombel.
   kegiatanRombel: () => req('GET', '/api/kegiatan/rombel'),
   kegiatanList: (q) => {

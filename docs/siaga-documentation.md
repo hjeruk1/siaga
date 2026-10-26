@@ -906,6 +906,26 @@ Aturan:
 - Header pesan WhatsApp memakai `organisasi.nama`, bukan teks di kode.
 - Baris "Buka aplikasi" hanya disertakan bila `FRONTEND_URL` bukan localhost/127.0.0.1 — tautan localhost tidak ada artinya bagi orang tua dan hanya membuat pesan terlihat rusak.
 
+### 9.8 Ekspor Keuangan (CSV)
+
+Endpoint `GET /api/billing/export?jenis=tagihan|pembayaran&periode=YYYY-MM&cabang_id=`, kartu "Ekspor untuk pembukuan" di tab Billing.
+
+Dua dataset karena pertanyaannya berbeda:
+
+- `jenis=tagihan` — apa yang seharusnya masuk, per periode. Kolom: cabang, siswa, rombel, periode, jenis, nominal awal, diskon, koreksi, nominal final, terbayar, sisa, status, jatuh tempo.
+- `jenis=pembayaran` — apa yang benar-benar masuk, per tanggal bayar. Kolom: tanggal, cabang, siswa, no kuitansi, metode, nominal, status, referensi, catatan, verifikator.
+
+Aturan:
+
+- Tagihan `void` dan pembayaran `void` **tidak** diekspor. Mencampurnya membuat total di Excel berbeda dari angka di aplikasi.
+- Status dan metode ditulis dalam bahasa manusia ("Belum dibayar", "Menunggu verifikasi", "QRIS"), bukan kode database.
+- CSV memakai BOM UTF-8 + baris `sep=,` sehingga Excel di Windows langsung memisahkan kolom tanpa wizard impor.
+- Nama yang mengandung koma atau tanda kutip di-escape sesuai standar CSV, mis. `"Uji, ""Koma"""`.
+- `admin_cabang` selalu dibatasi ke cabangnya, termasuk bila mencoba menambahkan `cabang_id` cabang lain di query.
+- Tanpa `periode`, seluruh periode diekspor (tombol "Semua periode").
+
+Catatan teknis: `Response.text()` pada fetch membuang BOM sesuai spesifikasi, jadi tes memeriksa byte mentah (`EF BB BF`), bukan string hasil decode.
+
 ## 10. Audit, Waktu, dan Keamanan
 
 ### 10.1 Audit Log
