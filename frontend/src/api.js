@@ -215,6 +215,27 @@ export const api = {
   simpanPengingatSetelan: (d) => req('PUT', '/api/pengingat/setelan', d),
   pengingatPratinjau: (mode) => req('GET', `/api/pengingat/pratinjau${mode === 'manual' ? '?mode=manual' : ''}`),
   kirimPengingat: (d) => req('POST', '/api/pengingat/kirim', d || {}),
+  // Galeri foto kegiatan per rombel.
+  kegiatanRombel: () => req('GET', '/api/kegiatan/rombel'),
+  kegiatanList: (q) => {
+    const p = new URLSearchParams();
+    if (q?.rombel_id) p.set('rombel_id', q.rombel_id);
+    if (q?.dari) p.set('dari', q.dari);
+    if (q?.sampai) p.set('sampai', q.sampai);
+    if (q?.limit) p.set('limit', q.limit);
+    const qs = p.toString();
+    return req('GET', `/api/kegiatan${qs ? `?${qs}` : ''}`);
+  },
+  kegiatanUnggah: (data) => {
+    const f = new FormData();
+    f.append('rombel_id', data.rombel_id);
+    f.append('tanggal', data.tanggal);
+    f.append('judul', data.judul);
+    if (data.keterangan) f.append('keterangan', data.keterangan);
+    for (const foto of data.foto || []) f.append('foto', foto);
+    return upload('/api/kegiatan', f);
+  },
+  kegiatanHapus: (id) => req('DELETE', '/api/kegiatan/' + id),
   generateKegiatan: (d) => req('POST', '/api/billing/generate-kegiatan', d),
   generateKegiatanPreview: (d) => req('POST', '/api/billing/generate-kegiatan/preview', d),
   tagihan: (p) => req('GET', '/api/billing/tagihan' + qs(p || {})),

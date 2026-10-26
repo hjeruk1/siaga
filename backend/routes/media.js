@@ -31,6 +31,26 @@ function canAccessReport(user, report) {
   return !!canAccessSiswa(user, report.siswa_id, { tanggal: report.tanggal });
 }
 
+// Foto kegiatan milik satu rombel. Aturannya sengaja sama dengan
+// routes/kegiatan.js — daftar yang tertutup tidak ada gunanya kalau berkasnya
+// masih bisa diambil lewat URL langsung.
+function canAccessKegiatan(user, foto) {
+  if (user.role === 'admin') return true;
+  if (user.role === 'wali') {
+    return !!db
+      .prepare(
+        `SELECT 1 FROM wali_siswa ws
+         JOIN siswa_enrollment se ON se.siswa_id=ws.siswa_id AND se.status='aktif'
+         WHERE ws.wali_pengguna_id=? AND ws.aktif=1 AND se.rombel_id=? LIMIT 1`
+      )
+      .get(user.id, foto.rombel_id);
+  }
+  if (user.role === 'guru') {
+    return !!db.prepare('SELECT 1 FROM guru_rombel WHERE pengguna_id=? AND rombel_id=?').get(user.id, foto.rombel_id);
+  }
+  return Number(user.cabang_id) === Number(foto.cabang_id);
+}
+
 router.get('/:folder/:filename', auth.media(), (req, res) => {
   const folder = String(req.params.folder || '');
   const filename = path.basename(String(req.params.filename || ''));
@@ -97,7 +117,16 @@ router.get('/:folder/:filename', auth.media(), (req, res) => {
               : req.user.role === 'admin'
                 ? true
                 : Number(req.user.cabang_id) === Number(izin.cabang_id) || !!canAccessSiswa(req.user, izin.siswa_id));
-          if (!bolehIzin) return res.status(403).json({ error: 'Akses media ditolak' });
+          if (bolehIzin) {
+            // lolos: lanjut kirim berkas
+          } else {
+            const foto = db
+              .prepare('SELECT cabang_id,rombel_id FROM kegiatan_foto WHERE url=? OR thumb_url=? LIMIT 1')
+              .get(url, url);
+            if (!foto || !canAccessKegiatan(req.user, foto)) {
+              return res.status(403).json({ error: 'Akses media ditolak' });
+            }
+          }
         }
       }
     }

@@ -71,6 +71,7 @@ const submenuMap = {
     { id: 'laporan', label: 'Laporan' },
     { id: 'izin', label: 'Izin & Sakit' },
     { id: 'pengumuman', label: 'Pengumuman' },
+    { id: 'kegiatan', label: 'Galeri' },
     { id: 'rekap', label: 'Rekap Absensi' },
     { id: 'config', label: 'Konfigurasi' },
     { id: 'kalender', label: 'Kalender' },
@@ -89,7 +90,8 @@ const submenuMap = {
     { id: 'daily', label: 'Daily Record' },
     { id: 'absensi', label: 'Absensi' },
     { id: 'modulAjar', label: 'Focus Theme' },
-    { id: 'izin', label: 'Izin & Sakit' }
+    { id: 'izin', label: 'Izin & Sakit' },
+    { id: 'galeri', label: 'Galeri' }
   ]
 };
 
@@ -219,12 +221,12 @@ export default function App() {
           searchParams.set('tab', activeTab);
           changed = true;
         }
-      } else {
-        if (searchParams.has('tab')) {
-          searchParams.delete('tab');
-          changed = true;
-        }
       }
+      // View tanpa submenu (portal wali, gerbang) mengelola tabnya sendiri dan
+      // membaca ?tab= saat mount. Parameternya JANGAN dihapus: itulah yang
+      // membuat tautan notifikasi push ("?view=wali&tab=tagihan") mendarat di
+      // tab yang benar. Menghapusnya di sini membuat semua deep link jatuh ke
+      // tab pertama.
       if (changed) {
         window.history.replaceState(null, '', `?${searchParams.toString()}`);
       }

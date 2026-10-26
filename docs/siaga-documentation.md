@@ -625,7 +625,6 @@ Aturan:
 - Komentar wali teks saja fase awal.
 
 ### 8.5 Histori Portal Wali
-
 Jika siswa lulus/keluar:
 
 - Wali tetap dapat login kecuali akun dinonaktifkan manual.
@@ -648,6 +647,33 @@ Repair 2026-05-17:
 - Ditambahkan access path khusus wali berdasarkan `wali_siswa`.
 - Ditambahkan `/api/siswa/wali/children`.
 - Wali history tidak lagi bergantung pada active enrollment saja.
+
+### 8.6 Galeri Foto Kegiatan
+
+Tabel: `kegiatan_foto`. Endpoint: `/api/kegiatan` (+ `/rombel`), berkas disajikan lewat `/uploads/kegiatan/*` dengan pengecekan akses di `routes/media.js`.
+
+Model:
+
+- Foto dimiliki **rombel**, bukan siswa. Satu foto kegiatan kelas dipakai semua anak di kelas itu — menyimpan per anak berarti menggandakan berkas yang sama.
+- `judul` berfungsi sebagai nama album. Foto dengan (tanggal, judul, rombel) sama tampil sebagai satu album; tidak ada tabel album terpisah.
+- Tiap unggahan menghasilkan dua berkas: versi 1280px (rasio asli, EXIF diputar) dan thumbnail 480px. Grid memakai thumbnail; berkas penuh hanya saat foto dibuka.
+- Maksimal 10 foto sekali unggah, 5 MB per foto, 30 foto per album. Tanggal tidak boleh di masa depan.
+
+Batas akses (dipakai ulang saat berkas disajikan — bukan hanya di daftar):
+
+| Peran | Boleh |
+|---|---|
+| `admin` | semua cabang, unggah + hapus |
+| `admin_cabang` | cabangnya, unggah + hapus |
+| `kepsek` | cabangnya, baca saja |
+| `guru` | rombel yang diampu (`guru_rombel`), unggah + hapus |
+| `wali` | rombel tempat anaknya terdaftar aktif, baca saja |
+
+Catatan keamanan: foto anak tidak boleh dapat diakses lewat URL langsung. `routes/media.js` memeriksa `kegiatan_foto` untuk URL yang tidak dikenali pemilik lain, sehingga menebak nama berkas tidak cukup untuk melihatnya.
+
+### 8.7 Deep Link Tab Portal Wali
+
+`App.jsx` mempertahankan parameter `?tab=` untuk view yang tidak punya submenu (wali, gerbang), karena view itulah yang membacanya saat mount. Tanpa ini, tautan notifikasi push (`/?view=wali&tab=tagihan`) selalu mendarat di tab pertama — termasuk pengingat tagihan.
 
 ## 9. Billing dan Keuangan
 

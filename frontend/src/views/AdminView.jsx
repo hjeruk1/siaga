@@ -11,6 +11,7 @@ import ConfigTab from './admin/ConfigTab';
 import KalenderTab from './admin/KalenderTab';
 import AuditTab from './admin/AuditTab';
 import RekapAbsensiBulanan from './shared/RekapAbsensiBulanan';
+import GaleriKegiatan from './shared/GaleriKegiatan';
 
 export default function AdminView({ user, toast, tab }) {
   const tabs = [
@@ -23,6 +24,7 @@ export default function AdminView({ user, toast, tab }) {
     'laporan',
     'izin',
     'pengumuman',
+    'kegiatan',
     'rekap',
     'config',
     'kalender',
@@ -40,6 +42,7 @@ export default function AdminView({ user, toast, tab }) {
       {activeTab === 'laporan' && <LaporanTab user={user} toast={toast} />}
       {activeTab === 'izin' && <IzinPanel user={user} toast={toast} />}
       {activeTab === 'pengumuman' && <PengumumanPanel user={user} toast={toast} />}
+      {activeTab === 'kegiatan' && <GaleriKegiatan toast={toast} bisaUnggah={user.role !== 'kepsek'} />}
       {activeTab === 'rekap' && <RekapAbsensiBulanan user={user} toast={toast} />}
       {activeTab === 'config' && <ConfigTab user={user} toast={toast} />}
       {activeTab === 'kalender' && <KalenderTab user={user} toast={toast} />}

@@ -198,6 +198,7 @@ app.use('/api/daily-record', require('./routes/daily-record'));
 app.use('/api/notifikasi', require('./routes/notifikasi'));
 app.use('/api/billing', require('./routes/billing'));
 app.use('/api/pengingat', require('./routes/pengingat'));
+app.use('/api/kegiatan', require('./routes/kegiatan'));
 app.use('/api/rekap', require('./routes/rekap'));
 app.use('/api/push', require('./routes/push'));
 // Dipasang SEBELUM router /api/wa supaya path /api/wa/sesi/* tidak masuk

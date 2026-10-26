@@ -3,13 +3,14 @@
 // (anak yang terhubung) dijaga oleh backend.
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
-import { CalendarCheck2, CalendarDays, FileText, Receipt } from 'lucide-react';
+import { CalendarCheck2, CalendarDays, Camera, FileText, Receipt } from 'lucide-react';
 import HeroAnak from './wali/HeroAnak.jsx';
 import HariIni from './wali/HariIni.jsx';
 import CatatanTimeline from './wali/CatatanTimeline.jsx';
 import Kehadiran from './wali/Kehadiran.jsx';
 import Tagihan from './wali/Tagihan.jsx';
 import Laporan from './wali/Laporan.jsx';
+import GaleriKegiatan from './shared/GaleriKegiatan.jsx';
 import Izin from './wali/Izin.jsx';
 import Pengumuman from './wali/Pengumuman.jsx';
 import { PushCard } from './wali/PushCard.jsx';
@@ -32,6 +33,7 @@ const TABS = [
   { id: 'catatan', label: 'Catatan', icon: FileText },
   { id: 'kehadiran', label: 'Kehadiran', icon: CalendarDays },
   { id: 'izin', label: 'Izin', icon: CalendarCheck2 },
+  { id: 'galeri', label: 'Galeri', icon: Camera },
   { id: 'tagihan', label: 'Tagihan', icon: Receipt },
   { id: 'laporan', label: 'Laporan', icon: FileText }
 ];
@@ -51,7 +53,7 @@ export default function WaliView({ user, toast }) {
   // orang tua langsung mendarat di bagian yang dimaksud.
   const [activeTab, setActiveTab] = useState(() => {
     const t = new URLSearchParams(window.location.search).get('tab');
-    return ['catatan', 'kehadiran', 'tagihan', 'laporan'].includes(t) ? t : 'catatan';
+    return ['catatan', 'kehadiran', 'izin', 'galeri', 'tagihan', 'laporan'].includes(t) ? t : 'catatan';
   });
   const [billing, setBilling] = useState(null);
   // Izin/sakit: pengajuan milik anak yang sedang dipilih.
@@ -443,6 +445,8 @@ export default function WaliView({ user, toast }) {
             }}
           />
         ) : null}
+
+        {activeTab === 'galeri' ? <GaleriKegiatan toast={toast} /> : null}
 
         {activeTab === 'laporan' ? (
           <Laporan

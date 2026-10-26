@@ -5,6 +5,7 @@ import { ConfirmActionModal, Modal, CustomSelect } from '../components/Shared';
 import { todayWIB } from '../utils/date';
 import KegiatanMingguanTab from './KegiatanMingguanTab';
 import IzinPanel from './shared/IzinPanel';
+import GaleriKegiatan from './shared/GaleriKegiatan';
 
 // Helper murni, komponen absensi, dan sub-view dipisah agar file ini fokus pada
 // view induk. Impor lucide-react yang sebelumnya ada di sini ternyata tidak
@@ -24,7 +25,7 @@ import { HistoryModal } from './guru/HistoryModal';
 import { Editor } from './guru/Editor';
 
 export default function GuruView({ user, toast, tab }) {
-  const tabs = ['daily', 'absensi', 'modulAjar', 'izin'];
+  const tabs = ['daily', 'absensi', 'modulAjar', 'izin', 'galeri'];
   const activeTab = tabs.includes(tab) ? tab : 'daily';
   const [tanggal, setTanggal] = useState(() => todayWIB());
   const [list, setList] = useState([]);
@@ -1400,6 +1401,7 @@ export default function GuruView({ user, toast, tab }) {
       )}
       {activeTab === 'modulAjar' && <KegiatanMingguanTab user={user} toast={toast} />}
       {activeTab === 'izin' && <IzinPanel user={user} toast={toast} />}
+      {activeTab === 'galeri' && <GaleriKegiatan toast={toast} bisaUnggah />}
       {historyFor && (
         <HistoryModal siswa={historyFor} onClose={() => setHistoryFor(null)} onOpenDate={openFromHistory} />
       )}
