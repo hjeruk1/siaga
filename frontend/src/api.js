@@ -210,6 +210,11 @@ export const api = {
   updateDiskon: (id, d) => req('PUT', '/api/billing/diskon/' + id, d),
   generateBulanan: (d) => req('POST', '/api/billing/generate-bulanan', d),
   generateBulananPreview: (d) => req('POST', '/api/billing/generate-bulanan/preview', d),
+  // Pengingat tagihan: kebijakan, pratinjau (tanpa mengirim), dan kirim manual.
+  pengingatSetelan: () => req('GET', '/api/pengingat/setelan'),
+  simpanPengingatSetelan: (d) => req('PUT', '/api/pengingat/setelan', d),
+  pengingatPratinjau: (mode) => req('GET', `/api/pengingat/pratinjau${mode === 'manual' ? '?mode=manual' : ''}`),
+  kirimPengingat: (d) => req('POST', '/api/pengingat/kirim', d || {}),
   generateKegiatan: (d) => req('POST', '/api/billing/generate-kegiatan', d),
   generateKegiatanPreview: (d) => req('POST', '/api/billing/generate-kegiatan/preview', d),
   tagihan: (p) => req('GET', '/api/billing/tagihan' + qs(p || {})),

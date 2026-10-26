@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { useMaster, CabangFilter, Panel, Input } from './AdminShared';
 import WaSettings from './WaSettings';
+import PengingatTagihanCard from './PengingatTagihanCard';
 
 export default function ConfigTab({ user, toast }) {
   const m = useMaster(user, { autoDefaultCabang: true });
@@ -103,6 +104,10 @@ export default function ConfigTab({ user, toast }) {
       {/* Status kanal WA ditaruh paling atas: kalau sesi putus, itu yang perlu
           ditindaklanjuti lebih dulu sebelum mengubah konfigurasi lain. */}
       <WaSettings user={user} toast={toast} />
+
+      {/* Kebijakan penagihan ditaruh tepat di bawah kanal WA: pengingat hanya
+          berguna kalau nomornya hidup, jadi keduanya dibaca berurutan. */}
+      <PengingatTagihanCard user={user} toast={toast} />
 
       <Panel title="Konfigurasi Operasional" right={<CabangFilter user={user} {...m} />}>
         <div className="mb-4 grid grid-cols-2 gap-2 lg:grid-cols-4">

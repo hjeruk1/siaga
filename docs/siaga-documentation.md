@@ -179,7 +179,7 @@ Catatan:
 
 ### 3.6 Billing
 
-Tabel: `biaya_tarif`, `diskon_siswa`, `tagihan`, `pembayaran`, `pembayaran_alokasi`, `invoice`, `invoice_item`, `sequence_counter`.
+Tabel: `biaya_tarif`, `diskon_siswa`, `tagihan`, `pembayaran`, `pembayaran_alokasi`, `invoice`, `invoice_item`, `sequence_counter`, `tagihan_pengingat`, `setelan`.
 
 Endpoint: `/api/billing`.
 
@@ -776,6 +776,40 @@ Aturan:
 - PDF memakai header resmi Taruna Prima dengan logo, identitas yayasan, identitas cabang, nomor dokumen, panel ringkasan, tabel rapi, footer legal, dan blok penerbit.
 - Header invoice dan kuitansi memakai asset logo Taruna Prima dari `frontend/public/tp_logo.png`.
 - Kartu QR penjemput dibuat dari profil siswa, memakai template Taruna Prima, dan dapat diunduh sebagai PNG.
+
+### 9.7 Pengingat Tagihan
+
+Tabel: `tagihan.jatuh_tempo`, `setelan` (kunci `pengingat_*`), `tagihan_pengingat`.
+
+Endpoint: `/api/pengingat` (`setelan`, `pratinjau`, `kirim`).
+
+Kebijakan (tingkat sekolah, hanya `admin` yang boleh mengubah):
+
+- Tanggal jatuh tempo (1–28) dan jam kirim.
+- Ingatkan H-berapa hari sebelum jatuh tempo.
+- Sakelar aktif/mati. Saat pertama diaktifkan, sistem mencatat tanggal mulai.
+
+Tiga tahap pengingat, masing-masing dikirim **sekali** per tagihan:
+
+| Tahap | Kapan | Contoh judul |
+|---|---|---|
+| `h_sebelum` | sisa hari ≤ H- yang diatur | Tagihan SPP Oktober jatuh tempo 3 hari lagi |
+| `jatuh_tempo` | hari-H | Tagihan SPP Oktober jatuh tempo hari ini |
+| `terlambat` | hari pertama setelah jatuh tempo | Tagihan SPP Oktober sudah lewat jatuh tempo |
+
+Aturan yang menentukan perilakunya:
+
+- Hanya tagihan `open`/`sebagian` dengan sisa > 0 yang diingatkan. `lunas` dan `void` dilewati.
+- Sisa dihitung dari `nominal_final` dikurangi pembayaran `confirmed`, bukan nominal awal.
+- `UNIQUE(tagihan_id, jenis_ingat)` di `tagihan_pengingat` adalah pengaman anti-spam: tahap yang sudah terkirim tidak diulang, sehingga menekan tombol kirim dua kali tidak menggandakan pesan.
+- Tahap dipilih berdasarkan jendela, bukan tanggal tetap. Server yang mati sehari tetap mengirim keesokan harinya.
+- Tagihan yang lewat jatuh tempo lebih dari 30 hari dilewati — tunggakan berbulan-bulan diselesaikan lewat telepon, bukan pesan otomatis.
+- Tanggal mulai menahan tunggakan lama dari job otomatis. Tombol **Kirim termasuk tunggakan** hanya menyertakannya setelah admin melihat jumlahnya di pratinjau.
+- Pengiriman memakai `notify()`, jadi satu pengingat masuk ke tiga kanal: notifikasi aplikasi, push, dan WhatsApp — WA dikirim dari **nomor cabang pemilik tagihan**. Hasil WA tercatat di `notifikasi.wa_sent_at`/`wa_error`.
+- Tagihan tanpa wali aktif dilewati dan dihitung di ringkasan, bukan dianggap terkirim.
+- Job berjalan tiap 15 menit tetapi hanya bekerja sekali per tanggal setelah jam kirim (tahan restart). `PENGINGAT=off` mematikannya, dipakai harness tes.
+
+Jatuh tempo juga ditulis saat tagihan bulanan dibuat (`generate-bulanan`), memakai tanggal kebijakan yang berlaku saat itu — sehingga perilaku pengingat tidak bergantung pada tebakan saat pengiriman.
 
 ## 10. Audit, Waktu, dan Keamanan
 

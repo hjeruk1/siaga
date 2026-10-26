@@ -4,6 +4,7 @@ const router = require('express').Router();
 const db = require('../db');
 const auth = require('../middleware/auth');
 const requirePin = require('../middleware/pin');
+const pengingat = require('../utils/pengingat');
 const { validateBody } = require('../middleware/validate');
 const { pembayaranSchema } = require('../schemas');
 const {
@@ -461,9 +462,13 @@ router.post('/generate-bulanan', auth(['admin', 'admin_cabang']), (req, res) => 
   );
   const insertStmt = db.prepare(
     `INSERT OR IGNORE INTO tagihan
-          (siswa_id,cabang_id,jenjang_id,rombel_id,paket,tahun_ajaran,periode,jenis,nama,nominal_awal,diskon_amount,nominal_final,created_by,created_at,updated_at)
-          VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+          (siswa_id,cabang_id,jenjang_id,rombel_id,paket,tahun_ajaran,periode,jenis,nama,nominal_awal,diskon_amount,nominal_final,jatuh_tempo,created_by,created_at,updated_at)
+          VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
   );
+  // Jatuh tempo ikut ditulis saat tagihan lahir, bukan dibiarkan kosong lalu
+  // ditebak pengingat: satu sumber kebenaran, dan admin bisa mengubahnya per
+  // tagihan nanti tanpa mengubah perilaku pengingat.
+  const jatuhTempo = pengingat.tanggalJatuhTempo(period, pengingat.ambilSetelan().tanggal);
   const diskonMap = discountRowsBySiswa(cabangId, tahunAjaran, ['care', 'spp', 'full_day']);
   const created = [];
   const errors = [];
@@ -498,6 +503,7 @@ router.post('/generate-bulanan', auth(['admin', 'admin_cabang']), (req, res) => 
           tarif.nominal,
           diskon,
           final,
+          jatuhTempo,
           req.user.id,
           nowUtc(),
           nowUtc()

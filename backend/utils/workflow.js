@@ -276,7 +276,7 @@ function kirimWaJikaPerlu({ notifId, recipientId, tipe, title, body, cabangId })
 // Tujuan saat notifikasi diklik: orang tua selalu dibawa ke portal wali pada
 // tab yang berkaitan dengan isinya (catatan/tagihan), bukan beranda umum.
 function pushUrl(tipe) {
-  if (['payment_verified', 'invoice_issued'].includes(tipe)) return '/?view=wali&tab=tagihan';
+  if (['payment_verified', 'invoice_issued', 'tagihan_jatuh_tempo'].includes(tipe)) return '/?view=wali&tab=tagihan';
   if (['daily_published', 'guru_reply'].includes(tipe)) return '/?view=wali&tab=catatan';
   return '/';
 }

@@ -197,6 +197,7 @@ app.use('/api/penjemputan', require('./routes/penjemputan'));
 app.use('/api/daily-record', require('./routes/daily-record'));
 app.use('/api/notifikasi', require('./routes/notifikasi'));
 app.use('/api/billing', require('./routes/billing'));
+app.use('/api/pengingat', require('./routes/pengingat'));
 app.use('/api/rekap', require('./routes/rekap'));
 app.use('/api/push', require('./routes/push'));
 // Dipasang SEBELUM router /api/wa supaya path /api/wa/sesi/* tidak masuk
@@ -253,6 +254,32 @@ const server = app.listen(port, '0.0.0.0', () => {
     if (process.env.WA_MONITOR !== 'off') require('./utils/wa-monitor').mulaiMonitor();
   } catch (e) {
     logger.warn(`Pemantau WhatsApp tidak aktif: ${e.message}`);
+  }
+  // Pengingat tagihan: diperiksa tiap 15 menit, tetapi job-nya sendiri hanya
+  // bekerja sekali per tanggal setelah jam kirim. Cara ini tahan restart —
+  // server yang hidup lagi pukul 10.00 tetap mengirim pengingat hari itu.
+  // PENGINGAT=off dipakai harness tes supaya job latar tidak mengirim pesan
+  // saat tes sedang memeriksa tabel pengingat.
+  try {
+    if (process.env.PENGINGAT !== 'off') {
+      const pengingat = require('./utils/pengingat');
+      const timer = setInterval(
+        () => {
+          try {
+            const hasil = pengingat.jalanHarian();
+            if (hasil.status === 'jalan' && hasil.terkirim > 0) {
+              logger.info({ terkirim: hasil.terkirim, gagal: hasil.gagal }, 'pengingat tagihan terkirim');
+            }
+          } catch (e) {
+            logger.warn(`Pengingat tagihan gagal: ${e.message}`);
+          }
+        },
+        15 * 60 * 1000
+      );
+      timer.unref();
+    }
+  } catch (e) {
+    logger.warn(`Pengingat tagihan tidak aktif: ${e.message}`);
   }
 });
 server.requestTimeout = 30_000;
