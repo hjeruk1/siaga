@@ -27,19 +27,19 @@
 | 5.2 | Rename `admin/shared.jsx` → `AdminShared.jsx` | Selesai |
 | 6.1 | Test unit frontend (37 test) | Selesai |
 | 6.2 | E2E alur kritikal (wajib ganti password, bayar→FIFO, QR penjemput) | Selesai |
+| 5.3 | Konsolidasi design token — `index.css` satu sumber, perantara JSON dihapus | Selesai |
+| — | Lint 57 warning → 0 (unused, entitas JSX, fast-refresh, deps effect) | Selesai |
 
 **Belum dikerjakan** — lihat §12 untuk alasan dan rencananya:
 
 | Item | Catatan |
 |------|---------|
 | 5.1 lanjutan | `BillingTab.jsx` (2698 baris) — seluruhnya satu komponen 2611 baris, tidak ada fungsi murni untuk diekstrak. Butuh refactor bertahap, bukan pemindahan mekanis. |
-| 5.3 | Konsolidasi design token (`DESIGN.md` → `tailwind.theme.json` → `index.css`) |
 | 4.2 | TanStack Query — menyentuh ~160 endpoint di seluruh view |
 | 4.3 | React Router — mengubah routing custom di `App.jsx` |
-| Lain | `useMaster` terduplikasi di `KegiatanMingguanTab.jsx` dan `admin/AdminShared.jsx` |
 
-**Angka akhir:** 144 test lulus (96 backend + 11 workflow + 37 frontend),
-lint 0 error, build hijau, `npm audit` 0 vulnerabilities (root + frontend).
+**Angka akhir:** 405 test lulus (315 backend + 90 frontend) + 13 E2E,
+lint 0 error dan **0 warning**, build hijau, `npm audit` 0 vulnerabilities (root + frontend).
 Backend masih 3 moderate dari rantai `mammoth → argparse → sprintf-js`
 (advisory mencakup semua versi sprintf-js; kode terdampak adalah CLI argparse
 yang tidak dipakai saat mammoth sebagai library).

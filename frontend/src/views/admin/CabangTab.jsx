@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { api } from '../../api';
 import { ActionButton, ConfirmActionModal, IconButton, Modal, CustomSelect } from '../../components/Shared';
 import { Pencil, Plus, Power, PowerOff, Save, X } from 'lucide-react';
@@ -11,12 +11,12 @@ export default function CabangTab({ user, toast }) {
   const [editing, setEditing] = useState(null);
   const [openForm, setOpenForm] = useState(false);
   const [cabangConfirm, setCabangConfirm] = useState(null);
-  async function load() {
+  const load = useCallback(async () => {
     setList(await api.cabang());
-  }
+  }, []);
   useEffect(() => {
     load().catch((e) => toast('err', e.message));
-  }, []);
+  }, [load, toast]);
   async function add() {
     try {
       await api.createCabang(form);

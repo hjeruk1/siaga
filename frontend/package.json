@@ -4,10 +4,7 @@
   "type": "module",
   "scripts": {
     "design:lint": "node node_modules/@google/design.md/dist/index.js lint DESIGN.md",
-    "design:export": "node export-design.js",
-    "predev": "npm run design:export",
     "dev": "node dev.mjs",
-    "prebuild": "npm run design:export",
     "build": "node build.mjs",
     "preview": "vite preview"
   },

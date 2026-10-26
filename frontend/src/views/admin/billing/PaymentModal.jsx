@@ -13,7 +13,7 @@ function Input({ value, onChange, className = '', ...props }) {
   );
 }
 import { Receipt, X, CheckCircle2, Loader2 } from 'lucide-react';
-import { money } from '../AdminShared';
+import { money } from '../../../utils/format';
 
 /**
  * Dialog "Catat Pembayaran Siswa".

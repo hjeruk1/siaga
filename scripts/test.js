@@ -6,7 +6,6 @@ const http = require('node:http');
 // WAL/log files change, causing ECONNRESET in the middle of the suite.
 const BASE = process.env.TEST_URL || 'http://localhost:3001';
 let token = '';
-let adminToken = '';
 let mediaCookie = '';
 
 function req(method, path, body) {
@@ -76,7 +75,6 @@ describe('SIAGA API Tests', () => {
     });
     assert.equal(r.status, 200, 'Login should succeed');
     token = r.body.token;
-    adminToken = token;
     mediaCookie = String((r.headers['set-cookie'] || [])[0] || '').split(';')[0];
     assert.match(mediaCookie, /^siaga_media=/);
   });

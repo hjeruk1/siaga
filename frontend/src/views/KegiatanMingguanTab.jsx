@@ -1,32 +1,10 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useCallback, useState, useEffect, useRef, useMemo } from 'react';
 import { api } from '../api';
 import { ActionButton, IconButton, CustomSelect, CustomDatePicker, Modal } from '../components/Shared';
 import { todayWIB } from '../utils/date';
 import { RefreshCw, Upload, FilePlus, Pencil, X, Save } from 'lucide-react';
 import { normalizeActivities } from './guru/helpers';
-
-function useMaster(user, { autoDefaultCabang = false } = {}) {
-  const [cabang, setCabang] = useState([]);
-  const [jenjang, setJenjang] = useState([]);
-  const [rombel, setRombel] = useState([]);
-  const [cabangId, setCabangId] = useState(user.role === 'admin' ? '' : user.cabang_id);
-
-  async function load() {
-    const [c, j] = await Promise.all([api.cabang(), api.jenjang()]);
-    setCabang(c);
-    setJenjang(j);
-    const preferred = c.find((x) => x.kode === 'GDN' && x.aktif) || c.find((x) => x.aktif) || c[0];
-    const cid = cabangId || (autoDefaultCabang ? preferred?.id : '');
-    if (user.role === 'admin' && !cabangId && cid) setCabangId(cid);
-    setRombel(await api.rombel(cid));
-  }
-
-  useEffect(() => {
-    load().catch(() => {});
-  }, [cabangId]);
-
-  return { cabang, jenjang, rombel, cabangId, setCabangId, load };
-}
+import { useMaster } from './admin/useMaster';
 
 function CabangFilter({ user, cabang, cabangId, setCabangId, className = '', plain = false }) {
   if (user.role !== 'admin') return null;
@@ -340,15 +318,15 @@ export default function KegiatanMingguanTab({ user, toast }) {
       (!filterRombel || String(r.rombel_id) === String(filterRombel))
   );
 
-  async function load() {
+  const load = useCallback(async () => {
     if (user.role !== 'admin' && !m.cabangId) return;
     const data = await api.modulAjar({ cabang_id: m.cabangId || '', tanggal });
     setRows(data);
-  }
+  }, [user.role, m.cabangId, tanggal]);
 
   useEffect(() => {
     load().catch((e) => toast('err', e.message));
-  }, [m.cabangId, tanggal]);
+  }, [load, toast]);
 
   useEffect(() => {
     setFilterRombel('');

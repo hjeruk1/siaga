@@ -8,7 +8,6 @@ backend/*.db-wal
 backend/.env
 frontend/dist/
 *.log
-frontend/tailwind.theme.json
 backend/uploads/
 backups/
 .agents/

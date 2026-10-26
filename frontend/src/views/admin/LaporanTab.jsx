@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { api } from '../../api';
 import { ActionButton, IconButton, Modal, CustomSelect, CustomDatePicker, EmptyState } from '../../components/Shared';
 import { FilePenLine, Moon, RefreshCw, Save, X } from 'lucide-react';
-import { useMaster, CabangFilter, Panel, fmtTime } from './AdminShared';
+import { CabangFilter, Panel } from './AdminShared';
+import { useMaster } from './useMaster';
+import { fmtTime } from '../../utils/format';
 
 /** Caption grup di dalam modal koreksi — 11px, idiom yang sama dengan kartu mobile. */
 const CAPTION = 'text-[11px] font-black uppercase tracking-wider text-slate-400';
@@ -45,7 +47,10 @@ export default function LaporanTab({ user, toast }) {
   const [rombelId, setRombelId] = useState('');
   const [detail, setDetail] = useState(null);
   const [edits, setEdits] = useState(null);
-  async function load() {
+  const load = useCallback(async () => {
+    // Penjaga cabang ikut di dalam load: dengan begitu effect cukup bergantung
+    // pada identitas load, bukan mengulang syarat yang sama di dua tempat.
+    if (!m.cabangId && user.role !== 'admin') return;
     try {
       const r = await api.dailyAdminHistory({
         cabang_id: m.cabangId,
@@ -57,10 +62,10 @@ export default function LaporanTab({ user, toast }) {
     } catch (e) {
       toast('err', e.message);
     }
-  }
+  }, [m.cabangId, user.role, tanggal, rombelId, toast]);
   useEffect(() => {
-    if (m.cabangId || user.role === 'admin') load();
-  }, [m.cabangId, tanggal, rombelId]);
+    load();
+  }, [load]);
   useEffect(() => {
     setRombelId('');
   }, [m.cabangId]);

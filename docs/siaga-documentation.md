@@ -1359,7 +1359,27 @@ Verifikasi penuh:
 npm run build
 npm test
 npm run test:workflow
+npm run test:frontend
+npm run test:e2e
+npm run lint
+npm run format:check
 ```
+
+`npm run lint` harus **0 error dan 0 warning**. Dua pola yang dipakai untuk
+mencapainya, dan sebaiknya diikuti saat menambah view baru:
+
+1. **Fungsi pemuat dibungkus `useCallback`.** `const load = useCallback(async () => {…}, [m.cabangId, toast])`
+   lalu `useEffect(() => { load().catch(…); }, [load, toast])`. Dengan begitu
+   effect cukup bergantung pada identitas `load`, bukan mengulang daftar
+   dependensi di dua tempat — dan tidak ada lagi peringatan `exhaustive-deps`.
+2. **`toast` dari `App.jsx` stabil** (`useCallback` dengan dependensi kosong).
+   Ini bukan kosmetik: identitas yang berubah tiap render pernah membuat form
+   ter-reset sendiri karena effect memuat ulang data.
+
+Kalau sebuah effect memang harus berjalan sekali saat mount dan membaca nilai
+yang berubah cepat (mis. daftar absensi di effect focus theme), nilainya dibaca
+lewat `ref` — bukan dimasukkan ke dependensi, karena itu akan memicu effect
+berulang dan menimpa isian pengguna.
 
 ### 14.1 Uji E2E (Playwright)
 

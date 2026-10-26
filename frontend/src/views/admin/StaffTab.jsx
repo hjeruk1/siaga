@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../../api';
 import { ActionButton, ConfirmActionModal, IconButton, Modal, CustomSelect } from '../../components/Shared';
 import {
@@ -13,12 +13,12 @@ import {
   Search,
   Settings,
   Trash2,
-  Upload,
   UserPlus,
   Users,
   X
 } from 'lucide-react';
-import { useMaster, StudentAvatar, StatusBadge, StaffCard, Panel, Table, Td, FotoUpload } from './AdminShared';
+import { StudentAvatar, StatusBadge, StaffCard, Panel, Table, Td, FotoUpload } from './AdminShared';
+import { useMaster } from './useMaster';
 
 export default function StaffTab({ user, toast }) {
   const m = useMaster(user);
@@ -73,12 +73,12 @@ export default function StaffTab({ user, toast }) {
     };
   }, [editFotoUrl]);
 
-  async function load() {
+  const load = useCallback(async () => {
     setList(await api.staff(m.cabangId));
-  }
+  }, [m.cabangId]);
   useEffect(() => {
     load().catch((e) => toast('err', e.message));
-  }, [m.cabangId]);
+  }, [load, toast]);
 
   // Client-side filtering logic
   const filteredList = useMemo(() => {
@@ -156,7 +156,10 @@ export default function StaffTab({ user, toast }) {
       if (editFotoFile) {
         await api.uploadStaffFoto(edit.id, editFotoFile);
       }
-      const { foto, ...payload } = edit;
+      // `foto` sengaja dibuang: unggah foto punya endpoint sendiri, bukan
+      // bagian dari payload updateStaff.
+      const payload = { ...edit };
+      delete payload.foto;
       await api.updateStaff(edit.id, payload);
       toast('ok', 'Staff diperbarui');
       closeEditForm();

@@ -1,6 +1,6 @@
 // Panel detail siswa: data, QR penjemput, dan aksi terkait.
 // Dipisah dari SiswaTab.jsx (sebelumnya 840 baris menumpuk dalam satu file).
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import QRCode from 'react-qr-code';
 import { api } from '../../../api';
 import { ActionButton, IconButton, LogoMark, Modal, CustomSelect, CustomDatePicker } from '../../../components/Shared';
@@ -23,7 +23,8 @@ import {
   Users,
   X
 } from 'lucide-react';
-import { FotoUpload, money, paketLabel } from '../AdminShared';
+import { FotoUpload } from '../AdminShared';
+import { money, paketLabel } from '../../../utils/format';
 import { downloadQrCard } from './downloadQrCard';
 
 export function SiswaDetailPanel({ user, m, detail, setDetail, toast, refresh, close }) {
@@ -52,6 +53,10 @@ export function SiswaDetailPanel({ user, m, detail, setDetail, toast, refresh, c
   const [selectedFotoFile, setSelectedFotoFile] = useState(null);
   const [selectedFotoUrl, setSelectedFotoUrl] = useState('');
   const [fotoDeleted, setFotoDeleted] = useState(false);
+  // Daftar rombel hanya dipakai sebagai cadangan saat permintaan gagal. Dibaca
+  // lewat ref supaya perubahan daftar tidak memicu pemuatan ulang.
+  const rombelRef = useRef(m.rombel);
+  rombelRef.current = m.rombel;
 
   useEffect(() => {
     return () => {
@@ -64,7 +69,7 @@ export function SiswaDetailPanel({ user, m, detail, setDetail, toast, refresh, c
       api
         .rombel(move.cabang_id)
         .then(setTargetRombel)
-        .catch(() => setTargetRombel(m.rombel));
+        .catch(() => setTargetRombel(rombelRef.current));
   }, [move.cabang_id]);
   useEffect(() => {
     api

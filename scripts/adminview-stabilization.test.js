@@ -27,11 +27,28 @@ test('monthly billing preview does not hardcode a fallback period', () => {
 });
 
 test('admin all-branch Wali and Billing tabs load without selected cabang', () => {
-  assert.match(
-    adminView,
-    /useEffect\(\s*\(\)\s*=>\s*\{\s*load\(\)\.catch\(\(e\)\s*=>\s*toast\('err',\s*e\.message\)\);\s*\},\s*\[m\.cabangId\]\)/
-  );
-  assert.match(adminView, /useEffect\(\s*\(\)\s*=>\s*\{\s*load\(\);\s*\},\s*\[m\.cabangId,\s*filterTahunAjaran\]\)/);
+  // Inti yang dijaga: saat admin memilih "Semua Cabang" (m.cabangId kosong),
+  // kedua tab tetap memuat data. Dulu keduanya berhenti karena effect dijaga
+  // `if (m.cabangId)`. Sekarang load dibungkus useCallback, jadi yang diperiksa
+  // adalah sifatnya, bukan bentuk tulisannya:
+  //   - ada effect yang memanggil load(), dan load-lah yang bergantung pada
+  //     cabang terpilih;
+  //   - tidak ada penjaga "berhenti bila cabang kosong" di kedua berkas.
+  for (const [nama, berkas] of [
+    ['WaliTab', 'WaliTab.jsx'],
+    ['BillingTab', 'BillingTab.jsx']
+  ]) {
+    const sumber = readFileSync(`${adminDir}/${berkas}`, 'utf8');
+    const badan = /const\s+load\s*=\s*useCallback\([\s\S]*?\n {2}\}, \[[^\]]*\]\);/.exec(sumber);
+    assert.ok(badan, `${nama}: load harus dibungkus useCallback`);
+    assert.match(badan[0], /\[[^\]]*m\.cabangId[^\]]*\]\);$/, `${nama}: load harus ikut cabang terpilih`);
+    assert.doesNotMatch(badan[0], /if\s*\(\s*!m\.cabangId\s*\)\s*return/, `${nama}: load berhenti saat cabang kosong`);
+    assert.match(
+      sumber,
+      /useEffect\(\(\)\s*=>\s*\{[\s\S]*?load\(\)[\s\S]*?\},\s*\[[^\]]*load[^\]]*\]\)/,
+      `${nama}: effect harus memanggil load()`
+    );
+  }
 });
 
 test('route views are lazy-loaded to reduce initial bundle pressure', () => {

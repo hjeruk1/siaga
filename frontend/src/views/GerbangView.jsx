@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import jsQR from 'jsqr';
 import { api } from '../api';
 import { ActionButton, IconButton, Modal } from '../components/Shared';
@@ -30,12 +30,17 @@ export default function GerbangView({ toast }) {
   const streamRef = useRef(null);
   const canvasRef = useRef(null);
   const scanLoopRef = useRef(null);
-  async function load() {
+  // `stopCamera` dideklarasikan jauh di bawah (dipakai juga oleh tombol), dan
+  // identitasnya berubah setiap render. Effect pemantau absensi di bawah sengaja
+  // mount-only — EventSource dibuka sekali — jadi pelepasan kamera dipanggil
+  // lewat ref agar tidak memaksa effect dibangun ulang tiap render.
+  const stopCameraRef = useRef(() => {});
+  const load = useCallback(async () => {
     try {
       const data = await api.absensiToday({});
       setRows(data.rows || data);
     } catch {}
-  }
+  }, []);
   useEffect(() => {
     load();
     const eventSource = new EventSource('/api/absensi/stream');
@@ -49,9 +54,9 @@ export default function GerbangView({ toast }) {
     };
     return () => {
       eventSource.close();
-      stopCamera();
+      stopCameraRef.current();
     };
-  }, []);
+  }, [load]);
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 30000);
     return () => clearInterval(id);
@@ -306,6 +311,7 @@ export default function GerbangView({ toast }) {
     if (videoRef.current) videoRef.current.srcObject = null;
     setCamera(false);
   }
+  stopCameraRef.current = stopCamera;
   return (
     <div className="flex flex-col bg-slate-950 p-2.5 text-white sm:p-3 lg:p-4 xl:min-h-[calc(100dvh-53px)]">
       {/* Satu permukaan dua kolom, dipisah seam hairline — bukan kartu bertumpuk */}

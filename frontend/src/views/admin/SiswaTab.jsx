@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../../api';
 import { ActionButton, Modal, CustomSelect, CustomDatePicker } from '../../components/Shared';
 import { todayWIB } from '../../utils/date';
 import { CheckCircle2, FileText, RefreshCw, Search, Settings, UserCheck, UserPlus, Users, X } from 'lucide-react';
-import { useMaster, StudentMetricGroup, SiswaCard, SiswaTable, SiswaDrawer, Panel, FotoUpload } from './AdminShared';
+import { StudentMetricGroup, SiswaCard, SiswaTable, SiswaDrawer, Panel, FotoUpload } from './AdminShared';
+import { useMaster } from './useMaster';
 import { SiswaDetailPanel } from './siswa/SiswaDetailPanel';
 
 export default function SiswaTab({ user, toast }) {
@@ -58,12 +59,12 @@ export default function SiswaTab({ user, toast }) {
     setSelectedFotoUrl('');
   }
 
-  async function load() {
+  const load = useCallback(async () => {
     setList(await api.siswa({ cabang_id: m.cabangId, status: 'semua' }));
-  }
+  }, [m.cabangId]);
   useEffect(() => {
     load().catch((e) => toast('err', e.message));
-  }, [m.cabangId]);
+  }, [load, toast]);
 
   // Client-side filtering logic
   const filteredList = useMemo(() => {

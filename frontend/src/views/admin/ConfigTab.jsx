@@ -16,7 +16,8 @@ import {
   Wallet,
   X
 } from 'lucide-react';
-import { useMaster, CabangFilter, Panel, Input } from './AdminShared';
+import { CabangFilter, Panel, Input } from './AdminShared';
+import { useMaster } from './useMaster';
 import WaSettings from './WaSettings';
 import PengingatTagihanCard from './PengingatTagihanCard';
 import PenyimpananCard from './PenyimpananCard';
@@ -35,14 +36,14 @@ export default function ConfigTab({ user, toast }) {
         .operasionalConfig(m.cabangId)
         .then(setCfg)
         .catch((e) => toast('err', e.message));
-  }, [m.cabangId]);
+  }, [m.cabangId, user.role, toast]);
   useEffect(() => {
     if (user.role === 'admin')
       api
         .organisasi()
         .then(setOrg)
         .catch(() => {});
-  }, []);
+  }, [user.role]);
   const cfgGroups = useMemo(() => {
     const map = new Map();
     cfg.forEach((row) => {

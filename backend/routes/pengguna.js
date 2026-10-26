@@ -6,7 +6,7 @@ const fs = require('fs');
 const db = require('../db');
 const auth = require('../middleware/auth');
 const { uploadImage, saveSquareJpeg, ensureDir } = require('../utils/image-upload');
-const { nowUtc, audit, requireCabang, requireActiveCabang } = require('../utils/workflow');
+const { nowUtc, audit, requireActiveCabang } = require('../utils/workflow');
 
 const FOTO_DIR = path.join(__dirname, '../uploads/foto');
 ensureDir(FOTO_DIR);

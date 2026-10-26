@@ -15,19 +15,8 @@ import {
   Settings,
   Wallet
 } from 'lucide-react';
-import { nowWIB as getNowWIB, todayWIB as getTodayWIB } from '../utils/date';
+import { SS } from '../utils/status';
 
-export const SS = {
-  Hadir: 'bg-emerald-100 text-emerald-700 border-emerald-200',
-  Menunggu: 'bg-amber-100 text-amber-700 border-amber-200',
-  Pulang: 'bg-slate-100 text-slate-500 border-slate-200',
-  Terlambat: 'bg-orange-100 text-orange-700 border-orange-200',
-  Izin: 'bg-sky-100 text-sky-700 border-sky-200',
-  Sakit: 'bg-purple-100 text-purple-700 border-purple-200',
-  Absen: 'bg-red-100 text-red-600 border-red-200',
-  Libur: 'bg-indigo-100 text-indigo-700 border-indigo-200',
-  Belum: 'bg-slate-100 text-slate-400 border-slate-200'
-};
 export function LogoMark({ className = 'w-44 h-12 rounded-xl' }) {
   return (
     <div
@@ -208,18 +197,6 @@ export function Spinner() {
       />
     </div>
   );
-}
-function nowWIB() {
-  return getNowWIB();
-}
-export function todayWIB() {
-  return getTodayWIB();
-}
-export function meniTunggu(j) {
-  if (!j) return null;
-  const [h, m] = j.split(':').map(Number);
-  const now = nowWIB();
-  return Math.max(0, now.h * 60 + now.m - h * 60 - m);
 }
 const emptyStateIcons = {
   clipboard: Clipboard,
@@ -549,8 +526,12 @@ export function CustomDatePicker({ value, onChange, className = '', disabled = f
   const containerRef = useRef(null);
   const buttonRef = useRef(null);
   const panelRef = useRef(null);
+  // `selected` dihitung ulang setiap render (objek Date baru), jadi ia tidak
+  // boleh jadi dependensi — hasilnya effect berjalan terus. Yang berubah hanya
+  // bila `value` berubah, dan di situlah tanggal diurai ulang.
   useEffect(() => {
-    if (selected) setViewDate(selected);
+    const d = parseDateValue(value);
+    if (d) setViewDate(d);
   }, [value]);
   useEffect(() => {
     function handleClickOutside(event) {
@@ -726,8 +707,10 @@ export function CustomMonthPicker({ value, onChange, className = '', disabled = 
   const containerRef = useRef(null);
   const buttonRef = useRef(null);
   const panelRef = useRef(null);
+  // Sama seperti CustomDatePicker: `selected` adalah objek baru tiap render.
   useEffect(() => {
-    if (selected) setYear(selected.getFullYear());
+    const d = parseMonthValue(value);
+    if (d) setYear(d.getFullYear());
   }, [value]);
   useEffect(() => {
     function handleClickOutside(event) {

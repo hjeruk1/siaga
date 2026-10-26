@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { api } from '../../api';
 import { CustomSelect, Modal } from '../../components/Shared';
-import { useMaster } from '../admin/AdminShared';
+import { useMaster } from './useMaster';
 import WizardSesiWa from './WizardSesiWa';
 
 function waktu(iso) {

@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { api } from '../../api';
 import { ActionButton, ConfirmActionModal, IconButton, Modal, CustomSelect } from '../../components/Shared';
 import { Pencil, Plus, RefreshCw, Save, Search, Settings, Trash2, UserMinus, UserPlus, Users, X } from 'lucide-react';
-import { useMaster, StudentAvatar, Panel, Input } from './AdminShared';
+import { StudentAvatar, Panel, Input } from './AdminShared';
+import { useMaster } from './useMaster';
 import { GuruAvatarStack } from './billing/GuruAvatarStack';
 
 export default function RombelTab({ user, toast }) {
@@ -25,7 +26,7 @@ export default function RombelTab({ user, toast }) {
       .staff(user.role === 'admin' ? '' : m.cabangId)
       .then(setStaff)
       .catch((e) => toast('err', e.message));
-  }, [m.cabangId, user.role]);
+  }, [m.cabangId, user.role, toast]);
   useEffect(() => {
     if (user.role === 'admin') {
       api
@@ -35,7 +36,7 @@ export default function RombelTab({ user, toast }) {
     } else {
       setAssignRombel(m.rombel);
     }
-  }, [user.role, m.rombel]);
+  }, [user.role, m.rombel, toast]);
   async function refreshRombelData() {
     await m.load();
     if (user.role === 'admin') setAssignRombel(await api.rombel(''));

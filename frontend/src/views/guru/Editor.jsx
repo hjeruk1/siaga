@@ -40,6 +40,10 @@ export function Editor({ row, detail, setDetail, onClose, onLanjut, user, toast 
   const [edits, setEdits] = useState(null);
   const [mobileChecklistOpen, setMobileChecklistOpen] = useState(false);
   const activities = useMemo(() => (Array.isArray(detail.aktivitas) ? detail.aktivitas : []), [detail.aktivitas]);
+  // Salinan terbaru `detail` untuk effect focus theme yang tidak boleh
+  // bergantung pada identitas objek detail (lihat catatan di effect itu).
+  const detailRef = useRef(detail);
+  detailRef.current = detail;
   const tanggal = detail.tanggal || row.tanggal;
   const cabangId = user?.cabang_id || row.cabang_id;
 
@@ -83,21 +87,23 @@ export function Editor({ row, detail, setDetail, onClose, onLanjut, user, toast 
           };
         }
 
-        // Auto-precheck: if row.laporan_id is null or detail.aktivitas is empty,
+        // Auto-precheck: if row.laporan_id is null or detailRef.current.aktivitas is empty,
         // pre-fill and save the activities from the Focus Theme
-        const currentActivities = Array.isArray(detail.aktivitas) ? detail.aktivitas : [];
-        const themeActivities = activityLinesFromText(theme?.activity_summary || detail.focus_theme_activity_summary);
+        const currentActivities = Array.isArray(detailRef.current.aktivitas) ? detailRef.current.aktivitas : [];
+        const themeActivities = activityLinesFromText(
+          theme?.activity_summary || detailRef.current.focus_theme_activity_summary
+        );
 
         if (!row.laporan_id && currentActivities.length === 0 && themeActivities.length > 0) {
           // Build structured observation defaulting to BSH
-          const obs = { ...(detail.structured_observation || {}) };
+          const obs = { ...(detailRef.current.structured_observation || {}) };
           const actObs = { ...(obs.activities || {}) };
           themeActivities.forEach((act) => {
             if (!actObs[act]) actObs[act] = 'BSH';
           });
 
           const updatedDetail = {
-            ...detail,
+            ...detailRef.current,
             ...detailUpdate,
             aktivitas: themeActivities,
             structured_observation: { ...obs, activities: actObs }
@@ -139,7 +145,9 @@ export function Editor({ row, detail, setDetail, onClose, onLanjut, user, toast 
     return () => {
       alive = false;
     };
-  }, [row.rombel_id, row.jenjang_id, row.paket, tanggal, cabangId]);
+    // `detail` dibaca lewat ref: effect ini mengisi detail lewat setDetail(),
+    // jadi memasukkannya ke dependensi akan memicu effect berulang tanpa henti.
+  }, [row.rombel_id, row.jenjang_id, row.paket, row.laporan_id, row.siswa_id, tanggal, cabangId, setDetail, toast]);
 
   function update(k, v) {
     setDetail((d) => ({ ...d, [k]: v }));
@@ -747,8 +755,8 @@ export function Editor({ row, detail, setDetail, onClose, onLanjut, user, toast 
                 </div>
                 <p className="text-xs text-amber-700 leading-relaxed">
                   Silakan atur tema & kegiatan kelas terlebih dahulu menggunakan tombol{' '}
-                  <strong>"Atur Tema & Kegiatan Kelas"</strong> di daftar siswa sebelah kiri agar bisa mengisi laporan
-                  harian.
+                  <strong>&ldquo;Atur Tema &amp; Kegiatan Kelas&rdquo;</strong> di daftar siswa sebelah kiri agar bisa
+                  mengisi laporan harian.
                 </p>
               </div>
             )}

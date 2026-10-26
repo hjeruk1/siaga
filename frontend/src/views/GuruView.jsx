@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api';
 import FocusThemeCalendar from './guru/FocusThemeCalendar';
 import { ConfirmActionModal, Modal, CustomSelect } from '../components/Shared';
@@ -31,6 +31,11 @@ export default function GuruView({ user, toast, tab }) {
   const activeTab = tabs.includes(tab) ? tab : 'daily';
   const [tanggal, setTanggal] = useState(() => todayWIB());
   const [list, setList] = useState([]);
+  // `list` dibaca di dalam effect focus theme hanya untuk mencari satu siswa
+  // contoh. Memasukkannya ke dependensi akan mengulang effect (dan menimpa
+  // isian form) setiap daftar absensi dimuat ulang, jadi dibaca lewat ref.
+  const listRef = useRef(list);
+  listRef.current = list;
   const [isSchoolDay, setIsSchoolDay] = useState(null);
   const [absensi, setAbsensi] = useState([]);
   const [absenMode, setAbsenMode] = useState('masuk');
@@ -173,39 +178,39 @@ export default function GuruView({ user, toast, tab }) {
     }
   }
 
-  async function load() {
+  const load = useCallback(async () => {
     const data = await api.dailyToday({ tanggal });
     const rows = data.rows || data;
     setList(rows);
     setIsSchoolDay(data.is_school_day);
-  }
-  async function loadAbsensi() {
+  }, [tanggal]);
+  const loadAbsensi = useCallback(async () => {
     const data = await api.absensiToday({ tanggal });
     setAbsensi(data.rows || data);
     if (data.is_school_day !== undefined) setIsSchoolDay(data.is_school_day);
-  }
-  async function loadReminder() {
+  }, [tanggal]);
+  const loadReminder = useCallback(async () => {
     try {
       const cfg = await api.operasionalConfig(user.cabang_id);
       if (cfg[0]) setReminder({ aktif: !!cfg[0].daily_record_wajib, jam: cfg[0].daily_record_due_time || '18:00' });
     } catch {}
-  }
-  async function loadTutupHari() {
+  }, [user.cabang_id]);
+  const loadTutupHari = useCallback(async () => {
     try {
       const s = await api.tutupHariStatus({ cabang_id: user.cabang_id, tanggal });
       setDayClosed(s.closed);
     } catch {}
-  }
+  }, [user.cabang_id, tanggal]);
   useEffect(() => {
     load().catch((e) => toast('err', e.message));
     loadReminder();
-  }, [tanggal]);
+  }, [load, loadReminder, toast]);
   useEffect(() => {
     if (activeTab === 'absensi') {
       loadAbsensi().catch((e) => toast('err', e.message));
       loadTutupHari();
     }
-  }, [tanggal, activeTab]);
+  }, [loadAbsensi, loadTutupHari, activeTab, toast]);
   useEffect(() => {
     let alive = true;
     api
@@ -588,7 +593,7 @@ export default function GuruView({ user, toast, tab }) {
         let defaultDomains = themeDomains(source?.suggested_domains).join(', ');
 
         if (!defaultModulAjarId && Array.isArray(mods)) {
-          const sampleStudent = list.find((s) => String(s.rombel_id) === String(classThemeRombelId));
+          const sampleStudent = listRef.current.find((s) => String(s.rombel_id) === String(classThemeRombelId));
           if (sampleStudent) {
             const matched = mods.find((m) => matchesClassModule(m, classThemeRombelId, sampleStudent));
             if (matched) {
@@ -616,7 +621,7 @@ export default function GuruView({ user, toast, tab }) {
     return () => {
       alive = false;
     };
-  }, [classThemeOpen, classThemeRombelId, tanggal, user.cabang_id]);
+  }, [classThemeOpen, classThemeRombelId, tanggal, user.cabang_id, toast]);
 
   async function saveClassThemeToNextDay() {
     const title = classThemeForm.title.trim();

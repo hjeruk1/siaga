@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useState, useRef } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import { api } from './api';
 import LoginView from './views/LoginView';
 import { ActionButton, IconButton, Modal } from './components/Shared';
@@ -100,6 +100,14 @@ export default function App() {
   const [view, setView] = useState('');
   const [checking, setChecking] = useState(true);
   const [toasts, setToasts] = useState([]);
+  // Identitas toast harus stabil. Sebelumnya fungsi ini dibuat ulang setiap
+  // render, sehingga view yang memasukkannya ke dependensi effect memuat ulang
+  // data terus-menerus — dan view yang mengabaikannya menyimpan closure basi.
+  const toast = useCallback((type, msg) => {
+    const id = Date.now();
+    setToasts((t) => [...t, { id, type, msg }]);
+    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 3500);
+  }, []);
   const [notif, setNotif] = useState([]);
   const [showNotif, setShowNotif] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -206,7 +214,7 @@ export default function App() {
     }
     window.addEventListener('siaga:unauthorized', handleUnauthorized);
     return () => window.removeEventListener('siaga:unauthorized', handleUnauthorized);
-  }, []);
+  }, [toast]);
   useEffect(() => {
     if (view) {
       const searchParams = new URLSearchParams(window.location.search);
@@ -239,7 +247,7 @@ export default function App() {
         .notifikasi()
         .then(setNotif)
         .catch(() => {});
-  }, [user?.id, user?.must_change_password, view]);
+  }, [user, view]);
   function login(u) {
     setUser(u);
     const searchParams = new URLSearchParams(window.location.search);
@@ -282,11 +290,6 @@ export default function App() {
     setView('');
     setNotif([]);
     window.history.replaceState(null, '', window.location.pathname);
-  }
-  function toast(type, msg) {
-    const id = Date.now();
-    setToasts((t) => [...t, { id, type, msg }]);
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 3500);
   }
   async function markAllRead() {
     try {

@@ -1,6 +1,5 @@
-import { useEffect, useState } from 'react';
-import { api } from '../../api';
 import { IconButton, CustomSelect, CustomDatePicker, CustomTimePicker } from '../../components/Shared';
+import { paketLabel } from '../../utils/format';
 import {
   Banknote,
   Check,
@@ -16,26 +15,6 @@ import {
   Users,
   Wallet
 } from 'lucide-react';
-
-export function useMaster(user, { autoDefaultCabang = false } = {}) {
-  const [cabang, setCabang] = useState([]),
-    [jenjang, setJenjang] = useState([]),
-    [rombel, setRombel] = useState([]);
-  const [cabangId, setCabangId] = useState(user.role === 'admin' ? '' : user.cabang_id);
-  async function load() {
-    const [c, j] = await Promise.all([api.cabang(), api.jenjang()]);
-    setCabang(c);
-    setJenjang(j);
-    const preferred = c.find((x) => x.kode === 'GDN' && x.aktif) || c.find((x) => x.aktif) || c[0];
-    const cid = cabangId || (autoDefaultCabang ? preferred?.id : '');
-    if (user.role === 'admin' && !cabangId && cid) setCabangId(cid);
-    setRombel(await api.rombel(cid));
-  }
-  useEffect(() => {
-    load().catch(() => {});
-  }, [cabangId]);
-  return { cabang, jenjang, rombel, cabangId, setCabangId, load };
-}
 
 export function StudentAvatar({ name, url, size = 'md' }) {
   const boxClass =
@@ -607,27 +586,6 @@ export function FotoUpload({ url, onUpload, onDelete, size = 'md' }) {
       )}
     </div>
   );
-}
-export function money(v) {
-  return 'Rp ' + Number(v || 0).toLocaleString('id-ID');
-}
-// Enum paket mentah ('full_day') tidak layak tampil di UI. Dipakai oleh tabel siswa,
-// kartu siswa mobile, dan badge paket di panel detail supaya ketiganya seragam.
-export const PAKET_LABELS = { reguler: 'Reguler', full_day: 'Full Day', care: 'Care' };
-export function paketLabel(paket) {
-  const key = String(paket || '').toLowerCase();
-  return PAKET_LABELS[key] || paket || '';
-}
-export function fmtTime(v) {
-  try {
-    return new Intl.DateTimeFormat('id-ID', {
-      dateStyle: 'short',
-      timeStyle: 'short',
-      timeZone: 'Asia/Jakarta'
-    }).format(new Date(v));
-  } catch {
-    return v;
-  }
 }
 
 export function BillingStatusBadge({ status }) {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../../api';
 import {
   ActionButton,
@@ -23,7 +23,8 @@ import {
   Users,
   X
 } from 'lucide-react';
-import { useMaster, WaliStatusBadge, WaliCard, Panel, Input, Table, Td } from './AdminShared';
+import { WaliStatusBadge, WaliCard, Panel, Input, Table, Td } from './AdminShared';
+import { useMaster } from './useMaster';
 
 export default function WaliTab({ user, toast }) {
   const m = useMaster(user);
@@ -39,17 +40,17 @@ export default function WaliTab({ user, toast }) {
   const [filterStatus, setFilterStatus] = useState('');
   const [filterOpen, setFilterOpen] = useState(false);
 
-  async function load() {
+  const load = useCallback(async () => {
     const [siswaData, waliData] = await Promise.all([
       api.siswa({ cabang_id: m.cabangId, status: 'semua' }),
       api.wali(m.cabangId)
     ]);
     setSiswa(siswaData);
     setWali(waliData);
-  }
+  }, [m.cabangId]);
   useEffect(() => {
     load().catch((e) => toast('err', e.message));
-  }, [m.cabangId]);
+  }, [load, toast]);
   async function add() {
     if (!form.display_name.trim() || !form.no_wa.trim() || !form.siswa_id) {
       toast('err', 'Nama wali, nomor WA, dan siswa wajib diisi');

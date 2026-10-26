@@ -13,8 +13,6 @@ const {
   notify,
   isDayClosed,
   rejectFutureTanggal,
-  minutesBetween,
-  pickupActorId,
   insertPickupLog,
   notifyKepsek
 } = require('../utils/workflow');

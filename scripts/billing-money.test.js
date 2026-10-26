@@ -133,7 +133,7 @@ async function pay(token, body) {
   return res;
 }
 
-let adminToken, cabangToken, adminCabangUserId, cabang;
+let adminToken, cabangToken, cabang;
 let mA, mB;
 let siswaA, siswaB, siswaD, siswaE;
 let billA_spp, billA_full, billB;
@@ -184,7 +184,6 @@ test.before(async () => {
     VALUES('staff','admin_cabang','Kepala Cabang Test','cabang_test',?,?,0,?,?)`
     )
     .run(hash, 'aktif', now, now);
-  adminCabangUserId = r.lastInsertRowid;
   db.prepare('INSERT INTO staff_profile(pengguna_id,cabang_id,jabatan) VALUES(?,?,?)').run(
     Number(r.lastInsertRowid),
     cabang.id,

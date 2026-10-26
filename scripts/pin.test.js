@@ -5,8 +5,6 @@
 // kunci percobaan, dan bahwa staff TIDAK pernah terhalang PIN.
 const { describe, it, before } = require('node:test');
 const assert = require('node:assert');
-const fs = require('fs');
-const path = require('path');
 const db = require('../backend/db');
 const bcrypt = require('../backend/node_modules/bcryptjs');
 
@@ -82,14 +80,13 @@ function buatTagihan(siswaId, nominal) {
 
 describe('PIN keuangan wali', () => {
   let wali;
-  let tagihanId;
   let adminToken;
 
   before(async () => {
     const admin = await req('POST', '/api/auth/login', { username: 'admin', password: 'admin123' });
     adminToken = admin.body?.token;
     wali = await buatKeluarga(`Pin${NYAWA}`);
-    tagihanId = buatTagihan(wali.siswaId, 200000);
+    buatTagihan(wali.siswaId, 200000);
   });
 
   it('tanpa PIN, data keuangan tetap bisa dibuka (PIN itu opsional)', async () => {

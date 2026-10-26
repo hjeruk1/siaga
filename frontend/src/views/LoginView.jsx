@@ -147,7 +147,7 @@ export default function LoginView({ onLogin, theme, setTheme }) {
           </p>
 
           <div className="mt-9 grid grid-cols-5 gap-2">
-            {branchStats.map((c, i) => (
+            {branchStats.map((c) => (
               <div
                 key={c}
                 className={`group rounded-xl border border-slate-200 bg-white/70 dark:border-white/10 dark:bg-white/5 p-3 transition-all duration-300 hover:bg-white hover:border-slate-300 dark:hover:bg-white/[0.09] dark:hover:border-white/20`}

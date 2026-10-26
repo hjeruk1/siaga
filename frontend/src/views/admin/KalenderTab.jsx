@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { api } from '../../api';
 import { ActionButton, ConfirmActionModal, IconButton, Modal, CustomSelect } from '../../components/Shared';
 import { AlertCircle, CalendarPlus, ChevronDown, Trash2, X } from 'lucide-react';
-import { useMaster, Panel, Input } from './AdminShared';
+import { Panel, Input } from './AdminShared';
+import { useMaster } from './useMaster';
 
 export default function KalenderTab({ user, toast }) {
   const m = useMaster(user);
@@ -29,7 +30,7 @@ export default function KalenderTab({ user, toast }) {
           );
         })
         .catch((e) => toast('err', e.message));
-  }, [m.cabangId, tahun]);
+  }, [m.cabangId, tahun, user.role, toast]);
   async function add() {
     if (!form.tanggal || !form.nama.trim()) {
       toast('err', 'Tanggal dan nama event wajib diisi');

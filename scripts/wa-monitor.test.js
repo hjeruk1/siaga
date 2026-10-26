@@ -9,8 +9,6 @@ const assert = require('node:assert');
 const db = require('../backend/db');
 const monitor = require('../backend/utils/wa-monitor');
 
-const nowIso = () => new Date().toISOString();
-
 function resetStatus() {
   db.prepare(
     `UPDATE wa_monitor SET status='belum-dicek', provider=NULL, pesan=NULL, terakhir_cek=NULL,

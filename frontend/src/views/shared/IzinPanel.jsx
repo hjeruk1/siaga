@@ -8,7 +8,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { api } from '../../api';
 import { Modal } from '../../components/Shared';
 import { CheckCircle2, Clock, ExternalLink, Loader2, Paperclip, XCircle } from 'lucide-react';
-import { CabangFilter, Panel, StudentAvatar, useMaster } from '../admin/AdminShared';
+import { CabangFilter, Panel, StudentAvatar } from '../admin/AdminShared';
+import { useMaster } from '../admin/useMaster';
 
 const STATUS_TABS = [
   { id: 'menunggu', label: 'Menunggu' },

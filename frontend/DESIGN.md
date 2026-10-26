@@ -19,8 +19,6 @@ rounded:
   lg: '12px'
   xl: '16px'
   2xl: '20px'
-spacing:
-  sm: '4px'
 ---
 
 ## Overview
@@ -39,3 +37,18 @@ The UI is mostly clean white/slate with an **amber** accent (`#f59e0b`) to denot
 ## Typography
 
 All text is rendered in **DM Sans**.
+
+## Single source of truth
+
+Nilai warna, radius, dan tipografi **hanya** didefinisikan di blok `@theme`
+pada `src/index.css` (Tailwind v4). Berkas ini adalah niat desainnya; keduanya
+dijaga tetap sama oleh `src/designTokens.test.js`.
+
+Dulu ada perantara `tailwind.theme.json` yang dihasilkan `export-design.js`
+saat `predev`/`prebuild`. Tidak ada satu pun kode yang membacanya — Tailwind v4
+tidak memakai `tailwind.config.js` — sehingga nilainya bisa basi tanpa ketahuan.
+Perantara itu sudah dihapus.
+
+Catatan yang mahal dipelajari: **jangan** mendefinisikan `--spacing-sm`.
+Kunci `sm` di namespace spacing membuat `max-w-sm` ter-resolve ke 4px, bukan
+24rem, dan semua `EmptyState` runtuh menjadi satu kata per baris.

@@ -2,7 +2,8 @@ import { Fragment, useEffect, useMemo, useState } from 'react';
 import { api } from '../../api';
 import { CustomSelect } from '../../components/Shared';
 import { ChevronRight, Search, X } from 'lucide-react';
-import { useMaster, Panel } from './AdminShared';
+import { Panel } from './AdminShared';
+import { useMaster } from './useMaster';
 
 // Vocabulary untuk data audit mentah: action dan entity_type adalah token teknis
 // (create, pickup_scan, laporan_harian) — dipetakan ke label Indonesia.
@@ -131,7 +132,7 @@ export default function AuditTab({ user, toast }) {
       .auditLog({ cabang_id: m.cabangId, limit: 150 })
       .then(setRows)
       .catch((e) => toast('err', e.message));
-  }, [m.cabangId]);
+  }, [m.cabangId, toast]);
 
   const searched = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();

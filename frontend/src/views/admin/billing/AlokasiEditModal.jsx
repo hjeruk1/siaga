@@ -1,6 +1,7 @@
 import { Modal, ActionButton } from '../../../components/Shared';
 import { X, Save } from 'lucide-react';
-import { money, BillingStatusBadge } from '../AdminShared';
+import { BillingStatusBadge } from '../AdminShared';
+import { money } from '../../../utils/format';
 
 /**
  * Dialog "Koreksi Alokasi Pembayaran".

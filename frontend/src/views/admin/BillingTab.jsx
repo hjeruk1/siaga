@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../../api';
 import {
   ActionButton,
@@ -33,7 +33,6 @@ import {
   X
 } from 'lucide-react';
 import {
-  useMaster,
   StudentAvatar,
   CabangFilter,
   Panel,
@@ -41,11 +40,12 @@ import {
   Table,
   Td,
   Toggle,
-  money,
   BillingStatusBadge,
   MethodBadge,
   MoneyCell
 } from './AdminShared';
+import { useMaster } from './useMaster';
+import { money } from '../../utils/format';
 import { StatCard } from './billing/StatCard';
 import EksporKeuangan from './EksporKeuangan';
 import { ActionCard } from './billing/ActionCard';
@@ -273,7 +273,7 @@ export default function BillingTab({ user, toast }) {
   const selectedPaymentStudent = siswa.find((s) => String(s.id) === String(payForm.siswa_id));
   const paymentCabangId = m.cabangId || selectedPaymentStudent?.cabang_id || '';
 
-  async function load() {
+  const load = useCallback(async () => {
     try {
       const [tarifData, diskonData, tagihanData, pembayaranData, invoicesData, siswaData] = await Promise.all([
         api.tarif({ cabang_id: m.cabangId, tahun_ajaran: filterTahunAjaran }),
@@ -299,11 +299,11 @@ export default function BillingTab({ user, toast }) {
       setSiswa([]);
       toast('err', e.message);
     }
-  }
+  }, [m.cabangId, filterTahunAjaran, toast]);
 
   useEffect(() => {
     load();
-  }, [m.cabangId, filterTahunAjaran]);
+  }, [load]);
 
   // Debounced auto-fetch for payment allocation preview
   useEffect(() => {
@@ -316,7 +316,7 @@ export default function BillingTab({ user, toast }) {
             nominal: Number(payForm.nominal)
           })
           .then(setAlokasiPreview)
-          .catch((e) => {
+          .catch(() => {
             setAlokasiPreview(null);
           });
       }, 500);
@@ -1682,7 +1682,7 @@ export default function BillingTab({ user, toast }) {
                                 </div>
                                 {d.catatan && (
                                   <p className="mt-2 rounded-lg border border-emerald-100/60 bg-white/60 p-2 text-xs font-medium italic text-slate-500">
-                                    "{d.catatan}"
+                                    &ldquo;{d.catatan}&rdquo;
                                   </p>
                                 )}
                               </div>

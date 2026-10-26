@@ -1,16 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
-import {
-  ActionButton,
-  Chip,
-  CustomSelect,
-  CustomDatePicker,
-  LiveClock,
-  Modal,
-  Spinner,
-  meniTunggu
-} from '../components/Shared';
-import { todayWIB } from '../utils/date';
+import { ActionButton, Chip, CustomSelect, CustomDatePicker, LiveClock, Modal, Spinner } from '../components/Shared';
+import { meniTunggu, todayWIB } from '../utils/date';
+import { money } from '../utils/format';
 import RekapAbsensiBulanan from './shared/RekapAbsensiBulanan';
 import IzinPanel from './shared/IzinPanel';
 import PengumumanPanel from './shared/PengumumanPanel';
@@ -48,7 +40,7 @@ export default function KepsekView({ user, toast, tab, syncNotif }) {
       .catch(() => {});
   }, []);
 
-  async function loadSummary() {
+  const loadSummary = useCallback(async () => {
     const [data, notifData, laporanData] = await Promise.all([
       api.dailyToday({ tanggal, cabang_id: cabangId }),
       api.notifikasi(),
@@ -58,8 +50,8 @@ export default function KepsekView({ user, toast, tab, syncNotif }) {
     setLapMeta({ tanggal: data.tanggal || tanggal, is_school_day: data.is_school_day });
     setNotif(notifData);
     setLaporan(laporanData);
-  }
-  async function loadMonitoring() {
+  }, [tanggal, cabangId, user.role]);
+  const loadMonitoring = useCallback(async () => {
     setLoadingMonitoring(true);
     try {
       const params = { cabang_id: cabangId };
@@ -74,7 +66,7 @@ export default function KepsekView({ user, toast, tab, syncNotif }) {
     } finally {
       setLoadingMonitoring(false);
     }
-  }
+  }, [cabangId]);
   async function createEarlyRelease() {
     if (!earlyForm.siswa_id || !earlyForm.alasan.trim()) {
       toast('err', 'Siswa dan alasan wajib diisi');
@@ -117,7 +109,7 @@ export default function KepsekView({ user, toast, tab, syncNotif }) {
 
   useEffect(() => {
     loadSummary().catch((e) => toast('err', e.message));
-  }, [tanggal, cabangId]);
+  }, [loadSummary, toast]);
   useEffect(() => {
     if (activeTab !== 'monitoring') return;
     loadMonitoring().catch((e) => toast('err', e.message));
@@ -131,7 +123,7 @@ export default function KepsekView({ user, toast, tab, syncNotif }) {
       } catch {}
     };
     return () => eventSource.close();
-  }, [activeTab, cabangId]);
+  }, [activeTab, loadMonitoring, toast]);
 
   const stat = useMemo(
     () => ({
@@ -294,8 +286,7 @@ function MonitoringPanel({
   onOpenEarly,
   onOpenClose,
   canCloseDay,
-  onDeleteER,
-  toast
+  onDeleteER
 }) {
   const [detailTab, setDetailTab] = useState('kelas');
   if (loading && !data)
@@ -1243,18 +1234,4 @@ function NotifRow({ item, onRead }) {
       </div>
     </button>
   );
-}
-
-function CompactStat({ label, value }) {
-  return (
-    <div className="min-w-0 rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-2 sm:px-3">
-      <div className="truncate text-[9px] font-black uppercase tracking-wider text-slate-500 sm:text-[10px]">
-        {label}
-      </div>
-      <div className="mt-0.5 truncate text-xl font-black tabular-nums text-text-main sm:text-2xl">{value}</div>
-    </div>
-  );
-}
-function money(v) {
-  return 'Rp ' + Number(v || 0).toLocaleString('id-ID');
 }

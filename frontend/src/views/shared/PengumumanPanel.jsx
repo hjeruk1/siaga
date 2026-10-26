@@ -8,7 +8,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../../api';
 import { CustomSelect, Modal } from '../../components/Shared';
 import { AlertTriangle, CheckCheck, Loader2, Megaphone, Send, Users } from 'lucide-react';
-import { useMaster } from '../admin/AdminShared';
+import { useMaster } from '../admin/useMaster';
 
 function waktu(iso) {
   if (!iso) return '-';
