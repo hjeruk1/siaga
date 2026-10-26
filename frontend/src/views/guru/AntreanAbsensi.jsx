@@ -7,7 +7,7 @@ import { baca, sinkron, subscribe } from '../../utils/absensiAntrean';
 // Komponen ini sengaja memegang sendiri logika sinkronisasi: GuruView hanya
 // perlu menambah item ke antrean, dan banner menanggapi perubahan itu. Dengan
 // begitu tidak ada dua tempat yang berlomba mengirim.
-export default function AntreanAbsensi({ user, toast }) {
+export default function AntreanAbsensi({ user, toast, onTersinkron }) {
   const [daftar, setDaftar] = useState([]);
   const [online, setOnline] = useState(() => (typeof navigator === 'undefined' ? true : navigator.onLine));
   const [sibuk, setSibuk] = useState(false);
@@ -49,10 +49,15 @@ export default function AntreanAbsensi({ user, toast }) {
         setGagal(hasil.gagal);
         toastRef.current?.('err', `${hasil.gagal.length} absensi ditolak server`);
       }
+      // Antrean yang berhasil terkirim mengubah data di server. Tanpa
+      // pemberitahuan ini, daftar absensi di layar guru tetap menampilkan
+      // status lama sampai ia melakukan hal lain — bug yang sudah ada sebelum
+      // daftar dipindah ke React Query.
+      if (hasil?.terkirim) onTersinkron?.();
     } finally {
       setSibuk(false);
     }
-  }, [user?.id, sibuk]);
+  }, [user?.id, sibuk, onTersinkron]);
 
   // Sinkron otomatis saat komponen muncul dengan antrean terisi dan perangkat
   // online — mis. guru membuka aplikasi lagi setelah sinyal kembali.

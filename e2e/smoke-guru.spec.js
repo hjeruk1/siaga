@@ -19,6 +19,10 @@ test.describe('guru', () => {
 
   test('check-in saat offline masuk antrean dan tersinkron ketika online', async ({ page, context }) => {
     await bukaAbsensiKartu(page);
+    // Jumlah tombol Check-in sebelum apa pun terjadi: satu per siswa yang belum
+    // masuk. Dipakai untuk membuktikan daftar benar-benar disegarkan setelah
+    // antrean terkirim — bukan hanya toast-nya muncul.
+    const tombolAwal = await page.getByRole('button', { name: 'Check-in' }).count();
 
     await context.setOffline(true);
     await page.getByRole('button', { name: 'Check-in' }).first().click();
@@ -40,6 +44,11 @@ test.describe('guru', () => {
       return kunci ? JSON.parse(localStorage.getItem(kunci)).length : 0;
     });
     expect(sisa).toBe(0);
+
+    // Daftar ikut menyegarkan diri: siswa yang baru check-in tidak lagi punya
+    // tombol Check-in. Sebelum perbaikan ini, layar guru tetap menampilkan
+    // status lama sampai ia melakukan hal lain.
+    await expect(page.getByRole('button', { name: 'Check-in' })).toHaveCount(tombolAwal - 1, { timeout: 20_000 });
   });
 
   test('tab galeri tersedia untuk guru', async ({ page }) => {

@@ -1468,11 +1468,12 @@ Temuan architecture map awal:
 
 ## 17b. Lapisan Data Frontend (React Query)
 
-Status: **sembilan view** sudah memakai React Query; sisanya masih pola manual
+Status: **sepuluh view** sudah memakai React Query; sisanya masih pola manual
 (`useState` + `load` + `useEffect`).
 
 Sudah pindah: LaporanTab, AuditTab, KalenderTab, CabangTab, WaliTab, StaffTab,
-SiswaTab, RombelTab, dan **KepsekView** (seluruh tab dashboard kepala sekolah).
+SiswaTab, RombelTab, **KepsekView** (seluruh tab dashboard kepala sekolah), dan
+**GuruView** (daftar daily record + daftar absensi).
 
 Infrastruktur:
 
@@ -1522,6 +1523,16 @@ Aturan yang dipakai:
 - **Beberapa permintaan yang selalu dipakai bersama = satu kunci.** Ringkasan
   kepsek memuat `daily-record/today` + `notifikasi` + `laporan` sekaligus dan
   mengembalikan satu objek; tab Laporan dan Keuangan membaca hasil yang sama.
+- **Antrean offline memberi tahu cache.** `AntreanAbsensi` memanggil
+  `onTersinkron` setelah antrean benar-benar terkirim; GuruView meneruskannya
+  ke `absensiQ.refetch()`. Sebelum ini, guru yang check-in tanpa sinyal melihat
+  status lama sampai ia melakukan hal lain — toast "terkirim" muncul, tetapi
+  daftarnya tidak berubah.
+- **Urutan deklarasi berubah saat state jadi turunan.** Nilai yang dulu
+  `useState` di atas komponen kini `const` turunan query; kode yang membaca
+  nilai itu lebih awal (mis. `ref.current = list` di baris atas) akan melempar
+  `ReferenceError` dan memutihkan halaman. Setelah memindah state, cari semua
+  pemakaian sebelum baris deklarasi baru.
 
 Hasil terukur pada percontohan: membuka Audit → pindah ke Siswa → kembali ke
 Audit turun dari 2 permintaan menjadi 1. Yang benar-benar hilang per tab adalah

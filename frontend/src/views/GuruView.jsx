@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { api } from '../api';
 import FocusThemeCalendar from './guru/FocusThemeCalendar';
 import { ConfirmActionModal, Modal, CustomSelect } from '../components/Shared';
@@ -30,14 +31,7 @@ export default function GuruView({ user, toast, tab }) {
   const tabs = ['daily', 'absensi', 'modulAjar', 'izin', 'galeri'];
   const activeTab = tabs.includes(tab) ? tab : 'daily';
   const [tanggal, setTanggal] = useState(() => todayWIB());
-  const [list, setList] = useState([]);
-  // `list` dibaca di dalam effect focus theme hanya untuk mencari satu siswa
-  // contoh. Memasukkannya ke dependensi akan mengulang effect (dan menimpa
-  // isian form) setiap daftar absensi dimuat ulang, jadi dibaca lewat ref.
-  const listRef = useRef(list);
-  listRef.current = list;
-  const [isSchoolDay, setIsSchoolDay] = useState(null);
-  const [absensi, setAbsensi] = useState([]);
+
   const [absenMode, setAbsenMode] = useState('masuk');
   // Default tampilan absensi mengikuti lebar layar: di HP guru mengabsen
   // belasan siswa, dan kartu (dengan foto besar) memaksa scroll jauh lebih
@@ -178,17 +172,33 @@ export default function GuruView({ user, toast, tab }) {
     }
   }
 
-  const load = useCallback(async () => {
-    const data = await api.dailyToday({ tanggal });
-    const rows = data.rows || data;
-    setList(rows);
-    setIsSchoolDay(data.is_school_day);
-  }, [tanggal]);
-  const loadAbsensi = useCallback(async () => {
-    const data = await api.absensiToday({ tanggal });
-    setAbsensi(data.rows || data);
-    if (data.is_school_day !== undefined) setIsSchoolDay(data.is_school_day);
-  }, [tanggal]);
+  const harianQ = useQuery({
+    queryKey: ['guru-harian', tanggal],
+    queryFn: async () => {
+      const data = await api.dailyToday({ tanggal });
+      return { rows: data.rows || data, isSchoolDay: data.is_school_day };
+    }
+  });
+  const absensiQ = useQuery({
+    queryKey: ['guru-absensi', tanggal],
+    queryFn: async () => {
+      const data = await api.absensiToday({ tanggal });
+      return { rows: data.rows || data, isSchoolDay: data.is_school_day };
+    },
+    // Tab absensi saja yang memuatnya; tab daily record tidak perlu.
+    enabled: activeTab === 'absensi'
+  });
+  const list = useMemo(() => harianQ.data?.rows ?? [], [harianQ.data]);
+  // `list` dibaca di dalam effect focus theme hanya untuk mencari satu siswa
+  // contoh. Memasukkannya ke dependensi akan mengulang effect (dan menimpa
+  // isian form) setiap daftar absensi dimuat ulang, jadi dibaca lewat ref.
+  // Penugasan ref harus SETELAH `list` ada — `list` kini const turunan query,
+  // bukan state di atas, dan membacanya lebih awal melempar ReferenceError.
+  const listRef = useRef(list);
+  listRef.current = list;
+  const absensi = useMemo(() => absensiQ.data?.rows ?? [], [absensiQ.data]);
+  // Dua endpoint sama-sama mengirim is_school_day; yang lebih spesifik menang.
+  const isSchoolDay = absensiQ.data?.isSchoolDay ?? harianQ.data?.isSchoolDay ?? null;
   const loadReminder = useCallback(async () => {
     try {
       const cfg = await api.operasionalConfig(user.cabang_id);
@@ -201,16 +211,15 @@ export default function GuruView({ user, toast, tab }) {
       setDayClosed(s.closed);
     } catch {}
   }, [user.cabang_id, tanggal]);
+  // Pengingat daily record dan status tutup hari tetap imperatif: keduanya
+  // pembacaan kecil yang hasilnya juga diubah lokal (setDayClosed), bukan daftar
+  // yang perlu cache.
   useEffect(() => {
-    load().catch((e) => toast('err', e.message));
     loadReminder();
-  }, [load, loadReminder, toast]);
+  }, [loadReminder]);
   useEffect(() => {
-    if (activeTab === 'absensi') {
-      loadAbsensi().catch((e) => toast('err', e.message));
-      loadTutupHari();
-    }
-  }, [loadAbsensi, loadTutupHari, activeTab, toast]);
+    if (activeTab === 'absensi') loadTutupHari();
+  }, [loadTutupHari, activeTab]);
   useEffect(() => {
     let alive = true;
     api
@@ -301,7 +310,7 @@ export default function GuruView({ user, toast, tab }) {
     try {
       await api.checkin(payload);
       toast('ok', 'Check-in berhasil');
-      loadAbsensi();
+      absensiQ.refetch();
     } catch (e) {
       // Tanpa status berarti gagal jaringan (fetch melempar TypeError), bukan
       // penolakan server. Yang pertama disimpan ke antrean; yang kedua
@@ -333,7 +342,7 @@ export default function GuruView({ user, toast, tab }) {
     try {
       await api.setKeterangan(payload);
       toast('ok', 'Status: ' + status);
-      loadAbsensi();
+      absensiQ.refetch();
     } catch (e) {
       if (!e.status) {
         tambahAntrean(user.id, 'keterangan', payload, `${namaSiswa(siswaId)} (${status})`);
@@ -359,7 +368,7 @@ export default function GuruView({ user, toast, tab }) {
       await api.pulangkan(ids);
       toast('ok', ids.length > 1 ? `${ids.length} siswa dipulangkan` : 'Siswa dipulangkan');
       setSelectedAbsensi([]);
-      loadAbsensi();
+      absensiQ.refetch();
     } catch (e) {
       toast('err', e.message);
     } finally {
@@ -380,7 +389,7 @@ export default function GuruView({ user, toast, tab }) {
         `Hari ditutup. ${r.remaining_count} siswa tersisa (${r.details?.filter((d) => d.status === 'Belum').length || 0} jadi Absen).`
       );
       setDayClosed(true);
-      loadAbsensi();
+      absensiQ.refetch();
     } catch (e) {
       toast('err', e.message);
     } finally {
@@ -411,7 +420,7 @@ export default function GuruView({ user, toast, tab }) {
         text: `${r.siswa?.nama || 'Siswa'}: ${action === 'pulang' ? 'Pulang' : 'Check-in'} berhasil`
       });
       setNfcToken('');
-      loadAbsensi();
+      absensiQ.refetch();
     } catch (e) {
       setNfcMsg({ type: 'err', text: e.message });
       toast('err', e.message);
@@ -673,7 +682,7 @@ export default function GuruView({ user, toast, tab }) {
       await api.saveFocusTheme(payload);
       toast('ok', 'Focus Theme kelas berhasil disimpan');
       setClassThemeOpen(false);
-      load();
+      harianQ.refetch();
     } catch (e) {
       toast('err', e.message);
     }
@@ -704,7 +713,7 @@ export default function GuruView({ user, toast, tab }) {
       toast('ok', 'Focus Theme dihapus');
       setClassThemeExists(false);
       setClassThemeForm((prev) => ({ ...prev, modul_ajar_id: '', title: '', activity_summary: '', menu_makanan: '' }));
-      load();
+      harianQ.refetch();
     } catch (e) {
       toast('err', e.message);
     }
@@ -886,7 +895,7 @@ export default function GuruView({ user, toast, tab }) {
                   onClose={() => {
                     setSelected(null);
                     setDetail(null);
-                    load();
+                    harianQ.refetch();
                   }}
                   // "Lanjut" mengisi kelas tanpa bolak-balik ke daftar: simpan
                   // isian siswa ini, lalu buka siswa berikutnya sesuai urutan
@@ -943,7 +952,7 @@ export default function GuruView({ user, toast, tab }) {
       )}
       {activeTab === 'absensi' && (
         <section className="space-y-4 w-full max-w-full">
-          <AntreanAbsensi user={user} toast={toast} />
+          <AntreanAbsensi user={user} toast={toast} onTersinkron={() => absensiQ.refetch()} />
           <div className="bg-white border border-slate-200 rounded-2xl p-3 sm:p-4 min-w-0 w-full max-w-full">
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
               <div>
@@ -977,7 +986,7 @@ export default function GuruView({ user, toast, tab }) {
                   onChange={(e) => setTanggal(e.target.value)}
                   className="input flex-1 min-w-[8.25rem] max-w-[10rem]"
                 />
-                <button onClick={loadAbsensi} className="btn-secondary">
+                <button onClick={() => absensiQ.refetch()} className="btn-secondary">
                   Refresh
                 </button>
                 <div
