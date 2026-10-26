@@ -381,7 +381,94 @@ describe('pemilihan tagihan', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Bagian 3: rute HTTP
+// Bagian 3: template pesan
+// ---------------------------------------------------------------------------
+
+describe('template pesan', () => {
+  const kandidat = {
+    tahap: 'h_sebelum',
+    nama: 'SPP Oktober 2026',
+    siswa_nama: 'Aisyah',
+    sisa: 350000,
+    jatuh_tempo: '2026-10-18',
+    hari_tersisa: 3
+  };
+
+  before(() => {
+    db.prepare("DELETE FROM setelan WHERE kunci LIKE 'pengingat_%'").run();
+  });
+
+  after(() => {
+    db.prepare("DELETE FROM setelan WHERE kunci LIKE 'pengingat_%'").run();
+  });
+
+  it('memakai template bawaan bila belum diubah', () => {
+    const t = pengingat.ambilTemplate();
+    assert.equal(t.h_sebelum.judul, pengingat.TEMPLATE_BAWAAN.h_sebelum.judul);
+    const p = pengingat.susunPesan(kandidat);
+    assert.match(p.title, /SPP Oktober 2026 jatuh tempo 3 hari lagi/);
+    assert.match(p.body, /Aisyah/);
+  });
+
+  it('template kustom menggantikan teks dan mengisi placeholder', () => {
+    pengingat.simpanSetelan(
+      {
+        template: {
+          h_sebelum: {
+            judul: 'Pengingat {tagihan}',
+            isi: 'Halo {nama_anak}, sisa {nominal} ({hari} hari, {jatuh_tempo}).'
+          }
+        }
+      },
+      { id: null }
+    );
+    const p = pengingat.susunPesan(kandidat);
+    assert.equal(p.title, 'Pengingat SPP Oktober 2026');
+    assert.equal(p.body, 'Halo Aisyah, sisa Rp 350.000 (3 hari, 18 Okt 2026).');
+  });
+
+  it('menolak placeholder asing dan teks kepanjangan', () => {
+    assert.throws(
+      () => pengingat.validasiTemplate({ h_sebelum: { judul: 'Hai {nama}', isi: 'x' } }),
+      /tidak dikenal/,
+      'placeholder salah ketik harus ditolak saat menyimpan'
+    );
+    assert.throws(
+      () => pengingat.validasiTemplate({ h_sebelum: { judul: 'x'.repeat(121), isi: 'x' } }),
+      /terlalu panjang/
+    );
+    assert.throws(
+      () => pengingat.validasiTemplate({ h_sebelum: { judul: 'x', isi: 'x'.repeat(801) } }),
+      /terlalu panjang/
+    );
+  });
+
+  it('field kosong kembali ke bawaan, bukan pesan kosong', () => {
+    pengingat.simpanSetelan({ template: { h_sebelum: { judul: '', isi: '' } } }, { id: null });
+    const t = pengingat.ambilTemplate();
+    assert.equal(t.h_sebelum.judul, pengingat.TEMPLATE_BAWAAN.h_sebelum.judul);
+    assert.ok(t.h_sebelum.isi.length > 0, 'isi tidak boleh kosong');
+  });
+
+  it('header WA memakai nama organisasi, bukan teks di kode', () => {
+    const org = db.prepare('SELECT nama FROM organisasi WHERE id=1').get();
+    assert.ok(org?.nama, 'fixture: organisasi harus punya nama');
+    const pesan = wa.formatPesan({ title: 'Uji', body: 'Isi', link: null });
+    assert.ok(pesan.startsWith(`*${org.nama}*`), `header harus nama organisasi, dapat: ${pesan.split('\n')[0]}`);
+  });
+
+  it('tautan localhost tidak dikirim ke wali', () => {
+    const lokal = wa.formatPesan({ title: 'Uji', body: 'Isi', link: 'http://localhost:3001/' });
+    assert.ok(!lokal.includes('localhost'), 'localhost tidak boleh muncul di pesan wali');
+    assert.ok(!lokal.includes('Buka aplikasi'), 'baris tautan dihilangkan seluruhnya');
+
+    const publik = wa.formatPesan({ title: 'Uji', body: 'Isi', link: 'https://siaga.sekolah.id/' });
+    assert.ok(publik.includes('https://siaga.sekolah.id/'), 'domain asli tetap disertakan');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Bagian 4: rute HTTP
 // ---------------------------------------------------------------------------
 
 describe('rute pengingat', () => {

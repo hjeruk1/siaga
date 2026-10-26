@@ -35,6 +35,38 @@ const BAWAAN = {
   jam: '08:00'
 };
 
+// Template pesan bisa diedit admin. Dua kolom per tahap (judul & isi) karena
+// judul dipakai juga oleh notifikasi in-app dan push — kalau judul dan isi
+// digabung dalam satu teks, pemisahannya jadi tambal sulam.
+//
+// Placeholder sengaja dibatasi daftar tertutup: admin boleh menyusun kalimat,
+// tetapi tidak boleh "menemukan" data baru yang tidak dikirim sistem.
+const PLACEHOLDER = ['nama_anak', 'tagihan', 'nominal', 'jatuh_tempo', 'hari'];
+
+const KUNCI_TEMPLATE = {
+  h_sebelum: { judul: 'pengingat_judul_h_sebelum', isi: 'pengingat_isi_h_sebelum' },
+  jatuh_tempo: { judul: 'pengingat_judul_jatuh_tempo', isi: 'pengingat_isi_jatuh_tempo' },
+  terlambat: { judul: 'pengingat_judul_terlambat', isi: 'pengingat_isi_terlambat' }
+};
+
+const TEMPLATE_BAWAAN = {
+  h_sebelum: {
+    judul: 'Tagihan {tagihan} jatuh tempo {hari} hari lagi',
+    isi: 'Ananda {nama_anak}: {tagihan} sebesar {nominal} jatuh tempo {jatuh_tempo}. Pembayaran dapat dilakukan melalui admin atau transfer sesuai petunjuk sekolah.'
+  },
+  jatuh_tempo: {
+    judul: 'Tagihan {tagihan} jatuh tempo hari ini',
+    isi: 'Ananda {nama_anak}: {tagihan} sebesar {nominal} jatuh tempo hari ini ({jatuh_tempo}). Pembayaran dapat dilakukan melalui admin atau transfer sesuai petunjuk sekolah.'
+  },
+  terlambat: {
+    judul: 'Tagihan {tagihan} sudah lewat jatuh tempo',
+    isi: 'Ananda {nama_anak}: {tagihan} sebesar {nominal} sudah lewat jatuh tempo {jatuh_tempo}. Mohon segera diselesaikan, atau hubungi admin bila sudah membayar.'
+  }
+};
+
+const BATAS_JUDUL = 120;
+const BATAS_ISI = 800;
+
 function tabelAda(nama) {
   return !!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(nama);
 }
@@ -79,10 +111,56 @@ function ambilSetelan() {
   };
 }
 
+// Template efektif: nilai tersimpan kalau ada isinya, kalau tidak pakai
+// bawaan. Field kosong sengaja TIDAK dianggap "kosongkan pesan" — pesan
+// tagihan tanpa isi lebih buruk daripada pesan dengan kalimat bawaan.
+function ambilTemplate() {
+  const hasil = {};
+  for (const tahap of Object.keys(TEMPLATE_BAWAAN)) {
+    const kunci = KUNCI_TEMPLATE[tahap];
+    hasil[tahap] = {
+      judul: String(getNilai(kunci.judul) || '').trim() || TEMPLATE_BAWAAN[tahap].judul,
+      isi: String(getNilai(kunci.isi) || '').trim() || TEMPLATE_BAWAAN[tahap].isi
+    };
+  }
+  return hasil;
+}
+
+function placeholderDipakai(teks) {
+  return [...String(teks || '').matchAll(/\{([a-z_]+)\}/g)].map((m) => m[1]);
+}
+
+// Validasi saat menyimpan, bukan saat mengirim: admin harus tahu sekarang
+// kalau ada placeholder yang tidak dikenal (mis. {nama} alih-alih {nama_anak}),
+// bukan setelah 60 orang tua menerima pesan dengan teks aneh.
+function validasiTemplate(masukan) {
+  if (masukan === undefined || masukan === null) return null;
+  if (typeof masukan !== 'object') throw new Error('Template harus berupa objek');
+  const bersih = {};
+  for (const tahap of Object.keys(TEMPLATE_BAWAAN)) {
+    const isiMasuk = masukan[tahap];
+    if (isiMasuk === undefined) continue;
+    if (typeof isiMasuk !== 'object' || isiMasuk === null) throw new Error(`Template ${tahap} tidak valid`);
+    const judul = String(isiMasuk.judul ?? '').trim();
+    const isi = String(isiMasuk.isi ?? '').trim();
+    if (judul.length > BATAS_JUDUL) throw new Error(`Judul ${tahap} terlalu panjang (maks ${BATAS_JUDUL})`);
+    if (isi.length > BATAS_ISI) throw new Error(`Isi ${tahap} terlalu panjang (maks ${BATAS_ISI})`);
+    const asing = [...new Set([...placeholderDipakai(judul), ...placeholderDipakai(isi)])].filter(
+      (p) => !PLACEHOLDER.includes(p)
+    );
+    if (asing.length) {
+      throw new Error(`Placeholder tidak dikenal: ${asing.map((p) => `{${p}}`).join(', ')}`);
+    }
+    bersih[tahap] = { judul, isi };
+  }
+  return bersih;
+}
+
 // Tanggal 1-28 saja: tanggal 29-31 tidak ada di semua bulan, dan pengingat
 // yang bergeser sendiri tiap Februari lebih membingungkan daripada membantu.
 function simpanSetelan(patch, aktor) {
   const lama = ambilSetelan();
+  const template = validasiTemplate(patch.template);
   const baru = {
     aktif: patch.aktif === undefined ? lama.aktif : !!patch.aktif,
     tanggal: patch.tanggal === undefined ? lama.tanggal : keAngka(patch.tanggal, lama.tanggal, 1, 28),
@@ -94,6 +172,17 @@ function simpanSetelan(patch, aktor) {
   setNilai(KUNCI.tanggal, baru.tanggal);
   setNilai(KUNCI.hariSebelum, baru.hariSebelum);
   setNilai(KUNCI.jam, baru.jam);
+  if (template) {
+    for (const tahap of Object.keys(template)) {
+      const kunci = KUNCI_TEMPLATE[tahap];
+      // String kosong = kembalikan ke bawaan: hapus kuncinya supaya
+      // ambilTemplate() memakai TEMPLATE_BAWAAN, bukan menyimpan ''.
+      if (template[tahap].judul) setNilai(kunci.judul, template[tahap].judul);
+      else db.prepare('DELETE FROM setelan WHERE kunci=?').run(kunci.judul);
+      if (template[tahap].isi) setNilai(kunci.isi, template[tahap].isi);
+      else db.prepare('DELETE FROM setelan WHERE kunci=?').run(kunci.isi);
+    }
+  }
   // Saat pertama kali diaktifkan, pasang garis start hari ini. Tanpa ini,
   // job pertama langsung mengejar SEMUA tunggakan lama dan mengirim puluhan
   // pesan "sudah lewat jatuh tempo" dalam satu pagi — cara tercepat membuat
@@ -105,7 +194,8 @@ function simpanSetelan(patch, aktor) {
       aktif: baru.aktif,
       tanggal: baru.tanggal,
       hari_sebelum: baru.hariSebelum,
-      jam: baru.jam
+      jam: baru.jam,
+      template_diubah: !!template
     }
   });
   return ambilSetelan();
@@ -162,26 +252,32 @@ function tanggalPanjang(iso) {
   }).format(new Date(t));
 }
 
-function susunPesan(kandidat) {
-  const judul = {
-    h_sebelum: `Tagihan ${kandidat.nama} jatuh tempo ${kandidat.hari_tersisa} hari lagi`,
-    jatuh_tempo: `Tagihan ${kandidat.nama} jatuh tempo hari ini`,
-    terlambat: `Tagihan ${kandidat.nama} sudah lewat jatuh tempo`
-  }[kandidat.tahap];
+// Nilai yang tersedia untuk placeholder. Dikumpulkan di satu tempat supaya
+// daftar PLACEHOLDER dan isi sebenarnya tidak bisa berbeda.
+function nilaiPlaceholder(kandidat) {
+  return {
+    nama_anak: kandidat.siswa_nama,
+    tagihan: kandidat.nama,
+    nominal: rupiah(kandidat.sisa),
+    jatuh_tempo: tanggalPanjang(kandidat.jatuh_tempo),
+    hari: String(kandidat.hari_tersisa)
+  };
+}
 
-  const kapan = {
-    h_sebelum: `jatuh tempo ${tanggalPanjang(kandidat.jatuh_tempo)}`,
-    jatuh_tempo: `jatuh tempo hari ini (${tanggalPanjang(kandidat.jatuh_tempo)})`,
-    terlambat: `sudah lewat jatuh tempo ${tanggalPanjang(kandidat.jatuh_tempo)}`
-  }[kandidat.tahap];
+function isiPlaceholder(teks, nilai) {
+  return String(teks || '').replace(/\{([a-z_]+)\}/g, (utuh, nama) =>
+    Object.prototype.hasOwnProperty.call(nilai, nama) ? String(nilai[nama] ?? '') : utuh
+  );
+}
 
-  const body =
-    `Ananda ${kandidat.siswa_nama}: ${kandidat.nama} sebesar ${rupiah(kandidat.sisa)} ${kapan}. ` +
-    (kandidat.tahap === 'terlambat'
-      ? 'Mohon segera diselesaikan, atau hubungi admin bila sudah membayar.'
-      : 'Pembayaran dapat dilakukan melalui admin atau transfer sesuai petunjuk sekolah.');
-
-  return { title: judul, body };
+function susunPesan(kandidat, template) {
+  const tpl = template || ambilTemplate();
+  const dipakai = tpl[kandidat.tahap] || TEMPLATE_BAWAAN[kandidat.tahap];
+  const nilai = nilaiPlaceholder(kandidat);
+  return {
+    title: isiPlaceholder(dipakai.judul, nilai),
+    body: isiPlaceholder(dipakai.isi, nilai)
+  };
 }
 
 // Daftar tagihan yang PERLU diingatkan sekarang, sudah dikurangi yang sudah
@@ -273,6 +369,7 @@ function catat(tagihanId, tahap, penggunaId, status, pesanError) {
 // sedangkan job harian memeriksa `aktif` sebelum memanggil fungsi ini.
 function kirimPengingat({ cabangId = null, aktor = null, tanggal = todayWIB(), abaikanMulai = false } = {}) {
   const { kandidat } = daftarKandidat({ cabangId, tanggal, abaikanMulai });
+  const template = ambilTemplate(); // sekali baca, bukan per tagihan
   const hasil = { total: kandidat.length, terkirim: 0, tanpa_wali: 0, gagal: 0, detail: [] };
 
   for (const k of kandidat) {
@@ -281,7 +378,7 @@ function kirimPengingat({ cabangId = null, aktor = null, tanggal = todayWIB(), a
       hasil.detail.push({ tagihan_id: k.tagihan_id, status: 'tanpa-wali', siswa: k.siswa_nama });
       continue;
     }
-    const { title, body } = susunPesan(k);
+    const { title, body } = susunPesan(k, template);
     try {
       // notify() menulis notifikasi in-app, lalu meneruskan ke push dan WA
       // (WA per cabang lewat cabang_id). Hasil WA tercatat di notifikasi.wa_*.
@@ -342,7 +439,10 @@ function ringkasan(cabangId = null) {
     tunggakan: { total: semua.length, nilai: semua.reduce((n, k) => n + k.sisa, 0) },
     contoh,
     riwayat: Object.fromEntries(terakhir.map((r) => [r.jenis_ingat, r.jumlah])),
-    maks_terlambat_hari: MAKS_TERLAMBAT_HARI
+    maks_terlambat_hari: MAKS_TERLAMBAT_HARI,
+    template: ambilTemplate(),
+    template_bawaan: TEMPLATE_BAWAAN,
+    placeholder: PLACEHOLDER
   };
 }
 
@@ -350,8 +450,13 @@ module.exports = {
   MAKS_TERLAMBAT_HARI,
   BAWAAN,
   KUNCI,
+  KUNCI_TEMPLATE,
+  TEMPLATE_BAWAAN,
+  PLACEHOLDER,
   ambilSetelan,
   simpanSetelan,
+  ambilTemplate,
+  validasiTemplate,
   tanggalJatuhTempo,
   selisihHari,
   tahapUntuk,

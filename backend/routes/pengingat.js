@@ -26,8 +26,14 @@ router.get('/setelan', auth(LIHAT), (req, res) => {
 // Hanya admin pusat yang boleh mengubah kebijakan: ini menentukan kapan
 // ratusan orang tua dihubungi, bukan keputusan operasional satu cabang.
 router.put('/setelan', auth(ADMIN), (req, res) => {
-  const setelan = pengingat.simpanSetelan(req.body || {}, req.user);
-  res.json({ success: true, setelan });
+  try {
+    const setelan = pengingat.simpanSetelan(req.body || {}, req.user);
+    res.json({ success: true, setelan, template: pengingat.ambilTemplate() });
+  } catch (e) {
+    // Kesalahan template (placeholder asing, terlalu panjang) adalah input
+    // admin, bukan kegagalan server — 400 dengan pesan yang bisa dibaca.
+    res.status(400).json({ error: e.message });
+  }
 });
 
 // Apa yang AKAN dikirim hari ini (tanpa mengirim). `mode=manual` menampilkan

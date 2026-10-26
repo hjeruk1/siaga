@@ -80,10 +80,37 @@ function chatIdDari(noWa) {
  * Susun pesan singkat. WhatsApp memotong pesan panjang di daftar chat, jadi
  * judul + isi + tautan login saja — detail ada di aplikasi.
  */
+// Nama sekolah untuk header pesan. Diambil dari tabel organisasi, bukan
+// ditulis di kode: kalau yayasan mengganti namanya, pesan WhatsApp ikut
+// berubah tanpa perlu deploy ulang.
+function namaSekolah() {
+  try {
+    const db = require('../db');
+    const org = db.prepare('SELECT nama FROM organisasi WHERE id=1').get();
+    return String(org?.nama || '').trim() || 'SIAGA Taruna Prima';
+  } catch {
+    return 'SIAGA Taruna Prima';
+  }
+}
+
+// Tautan localhost tidak ada artinya bagi orang tua yang membuka pesan di HP.
+// Lebih baik tidak menyertakan tautan daripada mengirim alamat yang pasti gagal.
+function tautanUntukWali(url) {
+  if (!url) return null;
+  try {
+    const u = new URL(String(url));
+    if (['localhost', '127.0.0.1', '0.0.0.0', '::1', '[::1]'].includes(u.hostname)) return null;
+  } catch {
+    return null;
+  }
+  return String(url);
+}
+
 function formatPesan({ title, body, link }) {
-  const bagian = ['*SIAGA Taruna Prima*', '', title || ''];
+  const bagian = [`*${namaSekolah()}*`, '', title || ''];
   if (body) bagian.push('', body);
-  if (link) bagian.push('', `Buka aplikasi: ${link}`);
+  const aman = tautanUntukWali(link);
+  if (aman) bagian.push('', `Buka aplikasi: ${aman}`);
   return bagian.join('\n');
 }
 

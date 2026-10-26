@@ -42,6 +42,7 @@ describe('kanal WhatsApp: normalisasi nomor', () => {
 
 describe('kanal WhatsApp: format pesan', () => {
   const wa = require('../backend/utils/wa');
+  const db = require('../backend/db');
 
   it('berisi judul, isi, dan tautan login', () => {
     const pesan = wa.formatPesan({
@@ -49,10 +50,19 @@ describe('kanal WhatsApp: format pesan', () => {
       body: 'Pembayaran Rp 234.000 telah diverifikasi.',
       link: 'https://siaga.sekolah.id'
     });
-    assert.match(pesan, /\*SIAGA Taruna Prima\*/);
+    // Header memakai nama sekolah dari tabel organisasi, bukan teks di kode:
+    // mengganti nama yayasan tidak boleh menuntut deploy ulang.
+    const org = db.prepare('SELECT nama FROM organisasi WHERE id=1').get();
+    assert.ok(pesan.startsWith(`*${org.nama}*`), `header harus nama organisasi, dapat: ${pesan.split('\n')[0]}`);
     assert.match(pesan, /Pembayaran Dikonfirmasi/);
     assert.match(pesan, /Rp 234\.000/);
     assert.match(pesan, /https:\/\/siaga\.sekolah\.id/);
+  });
+
+  it('tautan localhost tidak pernah dikirim ke wali', () => {
+    const pesan = wa.formatPesan({ title: 'Judul', body: 'Isi', link: 'http://localhost:5173/' });
+    assert.doesNotMatch(pesan, /localhost/);
+    assert.doesNotMatch(pesan, /Buka aplikasi/);
   });
 
   it('tanpa tautan tetap terbentuk (FRONTEND_URL belum diset)', () => {

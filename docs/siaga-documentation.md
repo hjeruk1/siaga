@@ -811,6 +811,22 @@ Aturan yang menentukan perilakunya:
 
 Jatuh tempo juga ditulis saat tagihan bulanan dibuat (`generate-bulanan`), memakai tanggal kebijakan yang berlaku saat itu — sehingga perilaku pengingat tidak bergantung pada tebakan saat pengiriman.
 
+#### Template pesan
+
+Judul dan isi tiap tahap bisa diedit admin di kartu Konfigurasi (seksi "Template pesan"), tersimpan di `setelan` sebagai `pengingat_judul_*` dan `pengingat_isi_*`.
+
+Placeholder yang tersedia (daftar tertutup): `{nama_anak}`, `{tagihan}`, `{nominal}`, `{jatuh_tempo}`, `{hari}`.
+
+Aturan:
+
+- Judul dipakai juga oleh notifikasi in-app dan push, jadi jangan mengandalkan isi pesan untuk konteks.
+- Placeholder asing ditolak saat menyimpan (400), bukan saat mengirim — supaya kesalahan ketik tidak baru ketahuan setelah puluhan pesan terkirim.
+- Batas: judul 120 karakter, isi 800 karakter.
+- Field yang dikosongkan kembali ke template bawaan, bukan mengirim pesan kosong. Tombol "Kembalikan ke bawaan" mengisi ulang ketiganya per tahap.
+- Template bawaan menghasilkan kalimat yang sama dengan versi sebelum fitur ini, jadi tidak ada perubahan pesan bagi sekolah yang tidak menyentuhnya.
+- Header pesan WhatsApp memakai `organisasi.nama`, bukan teks di kode.
+- Baris "Buka aplikasi" hanya disertakan bila `FRONTEND_URL` bukan localhost/127.0.0.1 — tautan localhost tidak ada artinya bagi orang tua dan hanya membuat pesan terlihat rusak.
+
 ## 10. Audit, Waktu, dan Keamanan
 
 ### 10.1 Audit Log
