@@ -295,6 +295,10 @@ export const api = {
   pengumumanPreview: (params) => req('GET', '/api/pengumuman/preview' + qs(params || {})),
   kirimPengumuman: (d) => req('POST', '/api/pengumuman', d),
   daftarPengumuman: (params) => req('GET', '/api/pengumuman' + qs(params || {})),
+  // Tanda baca: wali menandai saat benar-benar membuka, sekolah melihat siapa
+  // yang belum membaca.
+  tandaiPengumumanDibaca: (id) => req('POST', '/api/pengumuman/' + id + '/dibaca', {}),
+  pembacaPengumuman: (id) => req('GET', '/api/pengumuman/' + id + '/pembaca'),
   pengumumanWali: (limit) => req('GET', '/api/pengumuman/wali' + qs({ limit })),
 
   // Izin/sakit online: pengajuan dari wali, keputusan dari sekolah.

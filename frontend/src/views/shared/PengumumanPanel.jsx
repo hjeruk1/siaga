@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../../api';
 import { CustomSelect, Modal } from '../../components/Shared';
-import { AlertTriangle, Loader2, Megaphone, Send, Users } from 'lucide-react';
+import { AlertTriangle, CheckCheck, Loader2, Megaphone, Send, Users } from 'lucide-react';
 import { useMaster } from '../admin/AdminShared';
 
 function waktu(iso) {
@@ -36,8 +36,20 @@ export default function PengumumanPanel({ user, toast }) {
   const [konfirmasi, setKonfirmasi] = useState(false);
   const [daftar, setDaftar] = useState([]);
   const [memuatDaftar, setMemuatDaftar] = useState(true);
+  // Laporan pembaca: siapa yang sudah membuka pengumuman ini.
+  const [pembaca, setPembaca] = useState(null);
 
   const targetCabang = lingkup === 'semua' ? null : cabangId || user.cabang_id;
+
+  async function lihatPembaca(p) {
+    setPembaca({ memuat: true, judul: p.judul });
+    try {
+      setPembaca(await api.pembacaPengumuman(p.id));
+    } catch (e) {
+      toast?.('err', e.message);
+      setPembaca(null);
+    }
+  }
 
   const muatDaftar = useCallback(async () => {
     setMemuatDaftar(true);
@@ -245,9 +257,19 @@ export default function PengumumanPanel({ user, toast }) {
                   </span>
                 </div>
                 <p className="mt-1 line-clamp-2 text-[12px] leading-relaxed text-slate-600">{p.isi}</p>
-                <p className="mt-1 text-[11px] font-semibold text-slate-400">
-                  {p.jumlah_penerima} penerima · {waktu(p.sent_at || p.created_at)} · {p.pengirim || 'sekolah'}
-                </p>
+                <div className="mt-1 flex flex-wrap items-center gap-2">
+                  <p className="text-[11px] font-semibold text-slate-400">
+                    {p.jumlah_penerima} penerima · {waktu(p.sent_at || p.created_at)} · {p.pengirim || 'sekolah'}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => lihatPembaca(p)}
+                    className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2 py-0.5 text-[10px] font-black text-slate-600 hover:bg-slate-200"
+                  >
+                    <CheckCheck className="h-3 w-3" />
+                    Dibaca {p.jumlah_dibaca ?? 0}/{p.jumlah_penerima}
+                  </button>
+                </div>
               </li>
             ))}
           </ul>
@@ -288,6 +310,48 @@ export default function PengumumanPanel({ user, toast }) {
               </button>
             </div>
           </div>
+        </Modal>
+      )}
+
+      {pembaca && (
+        <Modal title="Siapa yang sudah membaca" onClose={() => setPembaca(null)} maxWidth="max-w-lg">
+          {pembaca.memuat ? (
+            <div className="flex justify-center py-8 text-slate-400">
+              <Loader2 className="h-5 w-5 animate-spin" />
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div>
+                <p className="text-[13px] font-black text-text-main">{pembaca.judul}</p>
+                <p className="mt-0.5 text-[11px] font-semibold text-slate-500">
+                  {pembaca.sudah} dari {pembaca.total} orang tua sudah membuka. Yang belum membaca ada di atas.
+                </p>
+              </div>
+              {pembaca.total === 0 ? (
+                <p className="rounded-xl border border-dashed border-slate-200 px-3 py-6 text-center text-[12px] font-semibold text-slate-500">
+                  Tidak ada wali aktif pada lingkup pengumuman ini.
+                </p>
+              ) : (
+                <ul className="max-h-80 divide-y divide-slate-100 overflow-auto rounded-xl border border-slate-200">
+                  {pembaca.penerima.map((r, i) => (
+                    <li key={i} className="flex items-center justify-between gap-2 px-3 py-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-[12px] font-bold text-text-main">{r.nama}</p>
+                        <p className="truncate text-[11px] font-semibold text-slate-400">{r.no_wa || 'tanpa nomor'}</p>
+                      </div>
+                      <span
+                        className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-black uppercase ${
+                          r.dibaca_at ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
+                        }`}
+                      >
+                        {r.dibaca_at ? 'Dibaca' : 'Belum'}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
         </Modal>
       )}
     </div>

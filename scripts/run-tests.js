@@ -38,6 +38,7 @@ const files =
         'scripts/storage.test.js',
         'scripts/absensi-offline.test.js',
         'scripts/rapor.test.js',
+        'scripts/pengumuman-read.test.js',
         'scripts/guru-lintas-cabang.test.js'
       ];
 const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'siaga-test-'));

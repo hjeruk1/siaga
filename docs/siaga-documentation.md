@@ -711,6 +711,23 @@ Aturan:
 
 Catatan teknis: rute ini memakai `auth.media()` sehingga menerima cookie HttpOnly `siaga_media`. Tautan `<a href>` adalah navigasi biasa dan tidak bisa membawa header `Authorization`; tanpa cookie, tombol unduh di portal wali akan dijawab 401. Bug yang sama juga ditemukan dan diperbaiki pada `/api/rekap/export`.
 
+### 8.9 Pengumuman dan Tanda Baca
+
+Tabel: `pengumuman`, `pengumuman_read`. Endpoint: `/api/pengumuman` (`/wali`, `/:id/dibaca`, `/:id/pembaca`).
+
+Pengumuman dikirim ke tiga kanal sekaligus (in-app, push, WhatsApp) lewat `notify()`, dan tidak bisa ditarik kembali — karena itu panel admin menampilkan jumlah penerima sebelum tombol kirim aktif.
+
+Tanda baca:
+
+- Wali menandai **saat isinya dibuka** (`POST /:id/dibaca`), bukan saat kartu muncul di layar. Kartu bisa terlewat hanya karena orang tua menggulir cepat; "dibaca" harus berarti isinya benar-benar dilihat.
+- Penandaan idempoten (`ON CONFLICT DO NOTHING`) — membuka berulang tidak menggandakan baris.
+- Wali hanya bisa menandai pengumuman yang memang terlihat olehnya. Selain itu dijawab **404**, bukan 403: keberadaan pengumuman cabang lain tidak perlu bocor.
+- Sekolah melihat laporan lewat `GET /:id/pembaca`: total penerima, jumlah sudah membaca, dan daftar per orang. Yang **belum** membaca ditaruh paling atas karena itulah yang perlu ditindaklanjuti.
+- Untuk pengumuman lingkup `semua`, `admin_cabang` tetap boleh melihat — tetapi hanya wali cabangnya. Angka sekolah-sekolah lain bukan urusannya.
+- Daftar pengumuman admin menyertakan `jumlah_dibaca` per baris.
+
+Catatan: penerima dihitung dari wali aktif yang punya anak aktif (`penerima()`), bukan dari jumlah notifikasi terkirim — sehingga laporan tetap masuk akal meski ada pengiriman WA yang gagal.
+
 ## 9. Billing dan Keuangan
 
 ### 9.1 Scope Biaya

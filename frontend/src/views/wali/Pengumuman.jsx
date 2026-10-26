@@ -45,6 +45,18 @@ export default function Pengumuman() {
   }, []);
 
   const teratas = daftar.find((p) => !sudahDitutup(p.id) && !ditutup.includes(p.id));
+  // "Dibaca" dicatat saat isinya benar-benar dibuka, bukan saat kartu muncul di
+  // layar — kartu bisa terlewat hanya karena orang tua menggulir cepat.
+  function bukaBaca() {
+    setBuka(true);
+    if (!teratas || teratas.dibaca) return;
+    api
+      .tandaiPengumumanDibaca(teratas.id)
+      .then(() => setDaftar((d) => d.map((x) => (x.id === teratas.id ? { ...x, dibaca: 1 } : x))))
+      .catch(() => {
+        // gagal menandai tidak boleh menghalangi orang tua membaca isinya
+      });
+  }
   function tutup(id) {
     tandaiDitutup(id);
     setDitutup((d) => [...d, id]);
@@ -79,7 +91,7 @@ export default function Pengumuman() {
             </div>
             <button
               type="button"
-              onClick={() => setBuka(true)}
+              onClick={bukaBaca}
               className="mt-0.5 block w-full text-left text-[13px] font-black leading-snug text-text-main"
             >
               {teratas.judul}
@@ -87,7 +99,7 @@ export default function Pengumuman() {
             <p className="mt-0.5 line-clamp-2 text-[12px] leading-relaxed text-slate-600">{teratas.isi}</p>
             <button
               type="button"
-              onClick={() => setBuka(true)}
+              onClick={bukaBaca}
               className="mt-1 text-[11px] font-black text-primary hover:underline"
             >
               Baca selengkapnya

@@ -124,7 +124,8 @@ router.get('/', auth(['admin', 'admin_cabang', 'kepsek']), (req, res) => {
   const rows = db
     .prepare(
       `SELECT p.id,p.cabang_id,p.lingkup,p.judul,p.isi,p.penting,p.status,p.jumlah_penerima,p.created_at,p.sent_at,
-              c.nama AS cabang_nama, u.display_name AS pengirim
+              c.nama AS cabang_nama, u.display_name AS pengirim,
+              (SELECT COUNT(*) FROM pengumuman_read r WHERE r.pengumuman_id=p.id) AS jumlah_dibaca
        FROM pengumuman p
        LEFT JOIN cabang c ON c.id=p.cabang_id
        LEFT JOIN pengguna u ON u.id=p.created_by
@@ -141,7 +142,8 @@ router.get('/wali', auth(['wali']), (req, res) => {
   const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 20));
   const rows = db
     .prepare(
-      `SELECT p.id,p.judul,p.isi,p.penting,p.created_at,c.nama AS cabang_nama
+      `SELECT p.id,p.judul,p.isi,p.penting,p.created_at,c.nama AS cabang_nama,
+              EXISTS(SELECT 1 FROM pengumuman_read r WHERE r.pengumuman_id=p.id AND r.pengguna_id=?) AS dibaca
        FROM pengumuman p
        LEFT JOIN cabang c ON c.id=p.cabang_id
        WHERE p.status='terkirim'
@@ -157,8 +159,80 @@ router.get('/wali', auth(['wali']), (req, res) => {
        ORDER BY p.created_at DESC, p.id DESC
        LIMIT ?`
     )
-    .all(req.user.id, limit);
+    .all(req.user.id, req.user.id, limit);
   res.json({ rows });
+});
+
+// Wali menandai pengumuman sudah dibaca. Dipanggil saat kartu/lembar dibuka,
+// bukan saat daftar dimuat: "sudah dibaca" harus berarti isinya benar-benar
+// dilihat.
+router.post('/:id/dibaca', auth(['wali']), (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'Pengumuman tidak valid' });
+  const terlihat = db
+    .prepare(
+      `SELECT p.id FROM pengumuman p
+       WHERE p.id=? AND p.status='terkirim'
+         AND (p.lingkup='semua' OR p.cabang_id IN (
+           SELECT se.cabang_id FROM wali_siswa ws
+           JOIN siswa_enrollment se ON se.siswa_id=ws.siswa_id AND se.status='aktif'
+           WHERE ws.wali_pengguna_id=? AND ws.aktif=1))`
+    )
+    .get(id, req.user.id);
+  // 404, bukan 403: wali tidak perlu tahu pengumuman cabang lain itu ada.
+  if (!terlihat) return res.status(404).json({ error: 'Pengumuman tidak ditemukan' });
+  db.prepare('INSERT INTO pengumuman_read(pengumuman_id,pengguna_id,read_at) VALUES(?,?,?) ON CONFLICT DO NOTHING').run(
+    id,
+    req.user.id,
+    nowUtc()
+  );
+  res.json({ success: true });
+});
+
+// Laporan pembaca untuk sekolah: siapa sudah, siapa belum.
+router.get('/:id/pembaca', auth(['admin', 'admin_cabang', 'kepsek']), (req, res) => {
+  const p = db.prepare('SELECT * FROM pengumuman WHERE id=?').get(Number(req.params.id));
+  if (!p) return res.status(404).json({ error: 'Pengumuman tidak ditemukan' });
+
+  // Untuk pengumuman lingkup 'semua', admin cabang tetap boleh melihat —
+  // tetapi hanya wali cabangnya, karena itu yang bisa ia tindak lanjuti.
+  let cabangFilter;
+  if (p.lingkup === 'semua') {
+    cabangFilter = req.user.role === 'admin' ? null : req.user.cabang_id;
+  } else {
+    if (!cabangDiizinkan(req.user, p.cabang_id)) return res.status(403).json({ error: 'Akses ditolak' });
+    cabangFilter = p.cabang_id;
+  }
+
+  const target = penerima(cabangFilter);
+  const ids = target.map((r) => r.id);
+  const dibaca = new Map(
+    db
+      .prepare('SELECT pengguna_id,read_at FROM pengumuman_read WHERE pengumuman_id=?')
+      .all(p.id)
+      .map((r) => [r.pengguna_id, r.read_at])
+  );
+  const profil = ids.length
+    ? db.prepare(`SELECT id,display_name,no_wa FROM pengguna WHERE id IN (${ids.map(() => '?').join(',')})`).all(...ids)
+    : [];
+  const penerimaRows = profil.map((u) => ({
+    nama: u.display_name,
+    no_wa: u.no_wa,
+    dibaca_at: dibaca.get(u.id) || null
+  }));
+  // Yang belum membaca ditaruh paling atas: itulah yang perlu ditindaklanjuti.
+  penerimaRows.sort(
+    (a, b) => Number(!!a.dibaca_at) - Number(!!b.dibaca_at) || String(a.nama).localeCompare(String(b.nama))
+  );
+
+  res.json({
+    id: p.id,
+    judul: p.judul,
+    lingkup: p.lingkup,
+    total: penerimaRows.length,
+    sudah: penerimaRows.filter((r) => r.dibaca_at).length,
+    penerima: penerimaRows
+  });
 });
 
 module.exports = router;
