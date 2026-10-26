@@ -73,14 +73,20 @@ const izinVerifikasiSchema = z.object({
 const absensiCheckinSchema = z.object({
   siswa_id: idLike,
   tanggal: tanggal.optional(),
-  manual: z.union([z.boolean(), z.number(), z.string()]).optional()
+  manual: z.union([z.boolean(), z.number(), z.string()]).optional(),
+  // Dari antrean offline: id aksi (uuid) untuk idempotensi, dan jam saat guru
+  // benar-benar menekan tombol. Jam divalidasi di route, bukan di sini, supaya
+  // nilai aneh tidak membatalkan absensi yang sah — cukup diabaikan.
+  client_id: z.string().max(64).optional(),
+  jam: z.string().max(5).optional()
 });
 
 const absensiKeteranganSchema = z.object({
   siswa_id: idLike,
   tanggal: tanggal.optional(),
   status: z.enum(['Izin', 'Sakit', 'Absen']),
-  catatan: teks.optional()
+  catatan: teks.optional(),
+  client_id: z.string().max(64).optional()
 });
 
 // --- billing ---

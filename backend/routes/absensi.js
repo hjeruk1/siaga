@@ -23,6 +23,23 @@ const {
   insertPickupLog,
   notifyKepsek
 } = require('../utils/workflow');
+const idempotensi = require('../utils/idempotensi');
+
+// Jam dari perangkat hanya dipercaya dalam batas sempit: hari ini, tidak di
+// masa depan, dan tidak lebih dari 8 jam ke belakang. Di luar itu pakai jam
+// server — absensi tetap tercatat, penyimpangan jam dicatat di audit. Tanpa
+// batas ini, perangkat dengan jam salah (atau sengaja diubah) bisa mencatat
+// "hadir tepat waktu" untuk kedatangan siang.
+const BATAS_MUNDUR_MENIT = 8 * 60;
+function jamDariKlien(jam, tanggal) {
+  const teks = String(jam || '').trim();
+  if (!/^\d{2}:\d{2}$/.test(teks)) return null;
+  if (tanggal !== todayWIB()) return null;
+  const sekarang = nowTimeWIB();
+  if (teks > sekarang) return null;
+  if (jamMenit(sekarang) - jamMenit(teks) > BATAS_MUNDUR_MENIT) return null;
+  return teks;
+}
 const { tambahKlien, hapusKlien, broadcastAbsensi } = require('../utils/absensi-stream');
 
 function configFor(e) {
@@ -144,6 +161,16 @@ router.get('/today', auth(), (req, res) => {
 
 router.post('/checkin', auth(['guru', 'admin', 'admin_cabang']), validateBody(absensiCheckinSchema), (req, res) => {
   const tanggal = req.body?.tanggal || todayWIB();
+  // Pengiriman ulang dari antrean offline: kalau aksi ini sudah pernah
+  // berhasil, kembalikan hasil yang sama tanpa mengulang efek samping.
+  const clientId =
+    String(req.body?.client_id || '')
+      .trim()
+      .slice(0, 64) || null;
+  if (clientId) {
+    const dulu = idempotensi.ambil(clientId);
+    if (dulu) return res.json({ ...dulu.hasil, idempotent: true });
+  }
   if (!rejectFutureTanggal(req, res, tanggal)) return;
   const siswaId = req.body?.siswa_id;
   const access = canAccessSiswa(req.user, siswaId, { tanggal });
@@ -158,7 +185,11 @@ router.post('/checkin', auth(['guru', 'admin', 'admin_cabang']), validateBody(ab
   const item = ensureAbsensi(siswaId, tanggal);
   if (!canMarkArrival(item.row.status))
     return res.status(400).json({ error: `Status ${item.row.status} tidak bisa diubah menjadi hadir` });
-  const jam = nowTimeWIB();
+  // Jam kiriman perangkat (dari antrean offline) dipakai bila masuk akal;
+  // kalau tidak, jam server.
+  const jamDiminta = String(req.body?.jam || '').trim();
+  const jamKlien = jamDiminta ? jamDariKlien(jamDiminta, tanggal) : null;
+  const jam = jamKlien || nowTimeWIB();
   const status = late(jam, configFor(item.enrollment)) ? 'Terlambat' : 'Hadir';
   const beforeStatus = item.row.status;
   db.prepare('UPDATE absensi SET status=?,jam_masuk=?,manual=?,updated_at=? WHERE id=?').run(
@@ -171,10 +202,17 @@ router.post('/checkin', auth(['guru', 'admin', 'admin_cabang']), validateBody(ab
   audit(req.user, 'checkin', 'absensi', item.row.id, {
     cabang_id: item.enrollment.cabang_id,
     before: { status: beforeStatus },
-    after: { status, jam_masuk: jam }
+    after: {
+      status,
+      jam_masuk: jam,
+      dari_antrean: !!jamKlien,
+      jam_diabaikan: jamDiminta && !jamKlien ? jamDiminta : null
+    }
   });
   broadcastAbsensi(item.enrollment.cabang_id);
-  res.json({ success: true, status, jam_masuk: jam });
+  const hasil = { success: true, status, jam_masuk: jam };
+  if (clientId) idempotensi.simpan(clientId, 'checkin', hasil);
+  res.json(hasil);
 });
 
 router.post(
@@ -183,6 +221,14 @@ router.post(
   validateBody(absensiKeteranganSchema),
   (req, res) => {
     const tanggal = req.body?.tanggal || todayWIB();
+    const clientId =
+      String(req.body?.client_id || '')
+        .trim()
+        .slice(0, 64) || null;
+    if (clientId) {
+      const dulu = idempotensi.ambil(clientId);
+      if (dulu) return res.json({ ...dulu.hasil, idempotent: true });
+    }
     if (!rejectFutureTanggal(req, res, tanggal)) return;
     const { siswa_id, status, catatan } = req.body || {};
     if (!['Izin', 'Sakit', 'Absen'].includes(status)) return res.status(400).json({ error: 'Status tidak valid' });
@@ -217,7 +263,9 @@ router.post(
       req.user.id
     );
     broadcastAbsensi(item.enrollment.cabang_id);
-    res.json({ success: true });
+    const hasil = { success: true, status };
+    if (clientId) idempotensi.simpan(clientId, 'keterangan', hasil);
+    res.json(hasil);
   }
 );
 

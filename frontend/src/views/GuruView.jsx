@@ -6,6 +6,8 @@ import { todayWIB } from '../utils/date';
 import KegiatanMingguanTab from './KegiatanMingguanTab';
 import IzinPanel from './shared/IzinPanel';
 import GaleriKegiatan from './shared/GaleriKegiatan';
+import AntreanAbsensi from './guru/AntreanAbsensi';
+import { tambah as tambahAntrean } from '../utils/absensiAntrean';
 
 // Helper murni, komponen absensi, dan sub-view dipisah agar file ini fokus pada
 // view induk. Impor lucide-react yang sebelumnya ada di sini ternyata tidak
@@ -270,13 +272,39 @@ export default function GuruView({ user, toast, tab }) {
     setTanggal(l.tanggal);
     open(row);
   }
+  function namaSiswa(id) {
+    return absensi.find((a) => Number(a.siswa_id) === Number(id))?.nama || `Siswa #${id}`;
+  }
+  // Jam saat guru benar-benar menekan tombol, bukan jam saat antrean terkirim.
+  // Server memvalidasi (hari ini, tidak di masa depan, maks 8 jam mundur).
+  function jamSekarang() {
+    return new Intl.DateTimeFormat('sv-SE', {
+      timeZone: 'Asia/Jakarta',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    }).format(new Date());
+  }
+
   async function checkin(siswaId) {
     if (isSchoolDay === false) return toast('err', 'Hari libur, tidak bisa check-in');
+    const payload = { siswa_id: siswaId, tanggal, jam: jamSekarang() };
+    if (!navigator.onLine) {
+      tambahAntrean(user.id, 'checkin', payload, namaSiswa(siswaId));
+      return toast('ok', 'Tanpa sinyal — absensi disimpan di perangkat');
+    }
     try {
-      await api.checkin({ siswa_id: siswaId, tanggal });
+      await api.checkin(payload);
       toast('ok', 'Check-in berhasil');
       loadAbsensi();
     } catch (e) {
+      // Tanpa status berarti gagal jaringan (fetch melempar TypeError), bukan
+      // penolakan server. Yang pertama disimpan ke antrean; yang kedua
+      // ditampilkan apa adanya supaya guru tahu alasannya.
+      if (!e.status) {
+        tambahAntrean(user.id, 'checkin', payload, namaSiswa(siswaId));
+        return toast('ok', 'Sinyal terputus — absensi disimpan di perangkat');
+      }
       toast('err', e.message);
     }
   }
@@ -292,11 +320,20 @@ export default function GuruView({ user, toast, tab }) {
     }
     const { siswaId, status } = ketModal;
     setKetModal(null);
+    const payload = { siswa_id: siswaId, tanggal, status, catatan: ketCatatan.trim() };
+    if (!navigator.onLine) {
+      tambahAntrean(user.id, 'keterangan', payload, `${namaSiswa(siswaId)} (${status})`);
+      return toast('ok', 'Tanpa sinyal — status disimpan di perangkat');
+    }
     try {
-      await api.setKeterangan({ siswa_id: siswaId, tanggal, status, catatan: ketCatatan.trim() });
+      await api.setKeterangan(payload);
       toast('ok', 'Status: ' + status);
       loadAbsensi();
     } catch (e) {
+      if (!e.status) {
+        tambahAntrean(user.id, 'keterangan', payload, `${namaSiswa(siswaId)} (${status})`);
+        return toast('ok', 'Sinyal terputus — status disimpan di perangkat');
+      }
       toast('err', e.message);
     }
   }
@@ -901,6 +938,7 @@ export default function GuruView({ user, toast, tab }) {
       )}
       {activeTab === 'absensi' && (
         <section className="space-y-4 w-full max-w-full">
+          <AntreanAbsensi user={user} toast={toast} />
           <div className="bg-white border border-slate-200 rounded-2xl p-3 sm:p-4 min-w-0 w-full max-w-full">
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
               <div>

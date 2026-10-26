@@ -527,6 +527,24 @@ Aturan:
 - Route/launch parameter kiosk hanya menyederhanakan UI, bukan bypass role atau pickup rules.
 - Tambahkan online/offline indicator sebelum unattended kiosk.
 
+### 7.6 Absensi dari Antrean Offline
+
+Guru di kelas sering kehilangan sinyal. Tanpa antrean, ketukan "hadir" hilang dan absensi dicatat manual di kertas.
+
+Alur:
+
+1. Guru menekan check-in / keterangan.
+2. Bila perangkat offline (atau `fetch` gagal jaringan), aksi disimpan di `localStorage` per pengguna, lengkap dengan `client_id` (uuid) dan **jam saat tombol ditekan**.
+3. Banner di tab Absensi menampilkan jumlah yang menunggu + tombol "Kirim sekarang".
+4. Saat perangkat kembali online, antrean dikirim berurutan otomatis.
+
+Aturan yang membuat ini aman:
+
+- **Idempotensi** (`utils/idempotensi.js`, tabel `absensi_idempotensi`): hasil pertama per `client_id` disimpan 48 jam. Pengiriman ulang mengembalikan hasil yang sama, tanpa mengulang audit, notifikasi, atau siaran SSE. Tanpa ini, request yang sebenarnya sudah berhasil tapi responsnya hilang akan dijawab "Status Hadir tidak bisa diubah menjadi hadir" — guru mengira gagal.
+- **Jam dari perangkat** dipakai hanya bila masuk akal: tanggal harus hari ini, jam tidak di masa depan, dan tidak lebih dari 8 jam ke belakang. Di luar itu dipakai jam server, dan penyimpangannya dicatat di audit (`jam_diabaikan`). Batas ini mencegah perangkat dengan jam salah mencatat kedatangan siang sebagai "tepat waktu".
+- **Kegagalan 4xx bersifat permanen**: item dibuang dari antrean dan alasannya ditampilkan (mis. hari libur, hari sudah ditutup, akses ditolak). Kegagalan jaringan menghentikan pengiriman dan menyisakan item untuk dicoba lagi — antrean tidak boleh menggantung tanpa kabar, juga tidak boleh hilang diam-diam.
+- Antrean dikunci per `pengguna.id`: tablet yang dipakai bergantian tidak mewarisi antrean guru sebelumnya.
+
 ## 8. Daily Record dan Portal Wali
 
 ### 8.1 Scope Portal Wali Fase Awal
