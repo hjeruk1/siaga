@@ -402,7 +402,9 @@ router.get('/', auth(), (req, res) => {
   });
 });
 
-router.get('/export', auth(), (req, res) => {
+// auth.media: tautan "Unduh PDF" di portal wali adalah navigasi biasa,
+// jadi token datang lewat cookie HttpOnly, bukan header Authorization.
+router.get('/export', auth.media(), (req, res) => {
   const format = req.query.format || 'pdf';
   const rombel_id = req.query.rombel_id ? Number(req.query.rombel_id) : null;
   const siswa_id = req.query.siswa_id ? Number(req.query.siswa_id) : null;

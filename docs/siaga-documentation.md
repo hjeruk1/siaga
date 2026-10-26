@@ -693,6 +693,24 @@ Catatan keamanan: foto anak tidak boleh dapat diakses lewat URL langsung. `route
 
 `App.jsx` mempertahankan parameter `?tab=` untuk view yang tidak punya submenu (wali, gerbang), karena view itulah yang membacanya saat mount. Tanpa ini, tautan notifikasi push (`/?view=wali&tab=tagihan`) selalu mendarat di tab pertama — termasuk pengingat tagihan.
 
+### 8.8 Rapor Perkembangan Bulanan
+
+Endpoint `GET /api/rapor/:siswaId/pdf?bulan=YYYY-MM`, tombol **Rapor bulanan** di tab Laporan portal wali.
+
+Isi satu halaman A4: kop yayasan, identitas anak, ringkasan kehadiran (Hadir / Terlambat / Izin+Sakit / Tanpa keterangan + hari efektif + persen), catatan guru, izin-sakit, tagihan bulan itu, dan kolom tanda tangan.
+
+Aturan:
+
+- Bedanya dengan rekap absensi: rekap menjawab "berapa hari hadir", rapor menjawab "bagaimana anak saya bulan ini". Keduanya tetap tersedia karena dipakai untuk keperluan berbeda.
+- **Hanya catatan `published`** yang masuk. Draft guru tidak pernah muncul di dokumen orang tua.
+- Hari efektif = jumlah baris `absensi` pada bulan itu (hari sekolah yang sudah diproses), bukan jumlah hari kalender — libur tidak dihitung sebagai ketidakhadiran.
+- Narasi dibatasi 12 entri terbaru, tiap catatan dipotong 260 karakter. Rapor 40 halaman tidak akan dibaca siapa pun.
+- Bulan tidak valid jatuh ke bulan berjalan, bukan error — tautan lama tetap menghasilkan dokumen yang masuk akal.
+- Akses: wali pemilik anak (`canWaliAccessSiswa`), guru pengampu, admin cabang, kepsek, admin pusat. Selain itu 403.
+- Siswa tanpa enrollment aktif dijawab 404 ("belum punya kelas") — bukan 403, karena masalahnya bukan izin.
+
+Catatan teknis: rute ini memakai `auth.media()` sehingga menerima cookie HttpOnly `siaga_media`. Tautan `<a href>` adalah navigasi biasa dan tidak bisa membawa header `Authorization`; tanpa cookie, tombol unduh di portal wali akan dijawab 401. Bug yang sama juga ditemukan dan diperbaiki pada `/api/rekap/export`.
+
 ## 9. Billing dan Keuangan
 
 ### 9.1 Scope Biaya

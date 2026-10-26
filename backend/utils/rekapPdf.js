@@ -387,6 +387,9 @@ function renderLaporanSiswa(doc, ctx) {
 
 module.exports = {
   BULAN,
+  WARNA,
+  LEBAR,
+  KIRI,
   namaBerkas,
   periodeLabel,
   renderLaporanSiswa,

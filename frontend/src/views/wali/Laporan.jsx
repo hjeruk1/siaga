@@ -1,6 +1,6 @@
 // Tab Laporan: unduh PDF rekap absensi bulanan per anak dan bagikan ringkasan.
 import { useMemo } from 'react';
-import { CalendarDays, ChevronLeft, ChevronRight, Download, MessageCircle } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, Download, FileText, MessageCircle } from 'lucide-react';
 import { Card, CopyButton, InfoNote, SectionTitle, StatTile } from './ui.jsx';
 import {
   bulanPanjang,
@@ -82,6 +82,16 @@ export default function Laporan({ siswa, bulan, onGantiBulan, rekap, memuat = fa
               <Download className="w-4 h-4" aria-hidden="true" /> Unduh PDF
             </a>
           ) : null}
+          {siswa ? (
+            <a
+              href={`/api/rapor/${siswa.id}/pdf?bulan=${bulan}`}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex h-11 items-center gap-1.5 rounded-xl border border-primary/25 bg-primary-container px-4 text-xs font-black text-primary-active hover:opacity-90"
+            >
+              <FileText className="w-4 h-4" aria-hidden="true" /> Rapor bulanan
+            </a>
+          ) : null}
           <CopyButton teks={ringkasan} label="Salin ringkasan" toast={toast} />
           <a
             href={waUrl(null, teksBagikan)}
@@ -105,7 +115,9 @@ export default function Laporan({ siswa, bulan, onGantiBulan, rekap, memuat = fa
       </Card>
 
       <InfoNote>
-        Laporan PDF berisi ringkasan dan tabel harian per anak, sama dengan yang digunakan staf sekolah.
+        Dua dokumen berbeda: <b>Unduh PDF</b> berisi rekap kehadiran harian (sama dengan yang dipakai staf sekolah),
+        sedangkan <b>Rapor bulanan</b> merangkum kehadiran, catatan guru, izin, dan status tagihan bulan itu dalam satu
+        halaman untuk dibaca keluarga.
       </InfoNote>
     </div>
   );
