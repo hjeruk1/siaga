@@ -1,4 +1,5 @@
-import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from './api';
 import { daftarkanPenanganError } from './lib/queryClient';
 import LoginView from './views/LoginView';
@@ -97,9 +98,35 @@ const submenuMap = {
 };
 
 export default function App() {
+  // Rute: path = view, query `?tab=` = sub-tab.
+  //
+  // Tab sengaja TIDAK ikut ke dalam path. Portal wali dan gerbang mengelola
+  // tabnya sendiri dan membacanya dari `?tab=` saat mount (itu yang membuat
+  // deep link notifikasi push mendarat di bagian yang benar), jadi memindahkan
+  // tab ke path berarti menyeragamkan state internal ketiga view sekaligus.
+  //
+  // Yang berubah dari versi lama: URL kini sumber kebenaran. Sebelumnya view
+  // dan tab adalah state yang disalin dua arah ke URL lewat replaceState tanpa
+  // pushState, sehingga tombol Back tidak punya riwayat untuk dikembalikan.
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
   const [user, setUser] = useState(null);
-  const [view, setView] = useState('');
   const [checking, setChecking] = useState(true);
+
+  const nav = useMemo(() => (user ? navFor(user) : []), [user]);
+  // Path yang tidak dikenal peran ini menghasilkan view kosong → dialihkan ke
+  // view bawaan. Ini yang menjaga `must_change_password` dan pembatasan peran
+  // tetap utuh walau URL diketik manual.
+  const viewDariUrl = (location.pathname.replace(/^\/+/, '').split('/')[0] || '').toLowerCase();
+  const view = nav.some((n) => n.id === viewDariUrl) ? viewDariUrl : '';
+  const tabDariUrl = searchParams.get('tab') || '';
+  const activeTab = useMemo(() => {
+    const sub = submenuMap[view];
+    if (!sub) return '';
+    return sub.some((s) => s.id === tabDariUrl) ? tabDariUrl : sub[0].id;
+  }, [view, tabDariUrl]);
   const [toasts, setToasts] = useState([]);
   // Identitas toast harus stabil. Sebelumnya fungsi ini dibuat ulang setiap
   // render, sehingga view yang memasukkannya ke dependensi effect memuat ulang
@@ -125,7 +152,6 @@ export default function App() {
       return false;
     }
   });
-  const [activeTab, setActiveTab] = useState('');
   const [expandedMenus, setExpandedMenus] = useState({});
   const sidebarRef = useRef(null);
   const [theme, setTheme] = useState(() => {
@@ -185,68 +211,28 @@ export default function App() {
   useEffect(() => {
     api
       .me()
-      .then((u) => {
-        setUser(u);
-        const searchParams = new URLSearchParams(window.location.search);
-        const urlView = searchParams.get('view');
-        const urlTab = searchParams.get('tab');
-        const nav = navFor(u);
-        let targetView = urlView;
-        if (!urlView || !nav.some((n) => n.id === urlView)) {
-          targetView = defaultView(u);
-        }
-        setView(targetView);
-        const sub = submenuMap[targetView];
-        if (sub) {
-          const targetTab = sub.some((s) => s.id === urlTab) ? urlTab : sub[0].id;
-          setActiveTab(targetTab);
-          setExpandedMenus((prev) => ({ ...prev, [targetView]: true }));
-        } else {
-          setActiveTab('');
-        }
-      })
+      .then(setUser)
       .catch(() => {})
       .finally(() => setChecking(false));
   }, []);
   useEffect(() => {
     function handleUnauthorized() {
       setUser(null);
-      setView('');
-      setActiveTab('');
       setNotif([]);
       setShowNotif(false);
-      window.history.replaceState(null, '', window.location.pathname);
+      navigate('/', { replace: true });
       toast('err', 'Sesi berakhir. Silakan masuk kembali.');
     }
     window.addEventListener('siaga:unauthorized', handleUnauthorized);
     return () => window.removeEventListener('siaga:unauthorized', handleUnauthorized);
-  }, [toast]);
+  }, [toast, navigate]);
+  // URL sudah menjadi sumber kebenaran, jadi tidak ada lagi penyalinan dua
+  // arah. Yang tersisa hanya efek tampilan: menu yang sedang dibuka ikut
+  // terbuka, dan laci sidebar ditutup setiap kali view berganti.
   useEffect(() => {
-    if (view) {
-      const searchParams = new URLSearchParams(window.location.search);
-      let changed = false;
-      if (searchParams.get('view') !== view) {
-        searchParams.set('view', view);
-        changed = true;
-      }
-      const sub = submenuMap[view];
-      if (sub && activeTab) {
-        if (searchParams.get('tab') !== activeTab) {
-          searchParams.set('tab', activeTab);
-          changed = true;
-        }
-      }
-      // View tanpa submenu (portal wali, gerbang) mengelola tabnya sendiri dan
-      // membaca ?tab= saat mount. Parameternya JANGAN dihapus: itulah yang
-      // membuat tautan notifikasi push ("?view=wali&tab=tagihan") mendarat di
-      // tab yang benar. Menghapusnya di sini membuat semua deep link jatuh ke
-      // tab pertama.
-      if (changed) {
-        window.history.replaceState(null, '', `?${searchParams.toString()}`);
-      }
-    }
+    if (view) setExpandedMenus((prev) => (prev[view] ? prev : { ...prev, [view]: true }));
     setSidebarOpen(false);
-  }, [view, activeTab]);
+  }, [view]);
   useEffect(() => {
     if (user && !user.must_change_password)
       api
@@ -254,48 +240,32 @@ export default function App() {
         .then(setNotif)
         .catch(() => {});
   }, [user, view]);
+  // Satu pintu untuk berpindah view: URL yang menentukan, bukan state.
+  function bukaView(viewId, tab) {
+    const sub = submenuMap[viewId];
+    const targetTab = sub ? (sub.some((x) => x.id === tab) ? tab : sub[0].id) : '';
+    navigate(`/${viewId}${targetTab ? `?tab=${targetTab}` : ''}`);
+    setSidebarOpen(false);
+  }
   function login(u) {
+    // Rute sudah ada di URL (termasuk deep link notifikasi). Cukup pasang
+    // pengguna; sisa validasi peran dilakukan saat menurunkan `view`.
     setUser(u);
-    const searchParams = new URLSearchParams(window.location.search);
-    const urlView = searchParams.get('view');
-    const urlTab = searchParams.get('tab');
-    const nav = navFor(u);
-    let targetView = urlView;
-    if (!urlView || !nav.some((n) => n.id === urlView)) {
-      targetView = defaultView(u);
-    }
-    setView(targetView);
-    const sub = submenuMap[targetView];
-    if (sub) {
-      const targetTab = sub.some((s) => s.id === urlTab) ? urlTab : sub[0].id;
-      setActiveTab(targetTab);
-      setExpandedMenus((prev) => ({ ...prev, [targetView]: true }));
-    } else {
-      setActiveTab('');
-    }
+    setExpandedMenus((prev) => ({ ...prev, [defaultView(u)]: true }));
   }
   function handleMainMenuClick(viewId) {
     const sub = submenuMap[viewId];
     if (sub) {
       setExpandedMenus((prev) => ({ ...prev, [viewId]: !prev[viewId] }));
     }
-    if (view !== viewId) {
-      setView(viewId);
-      if (sub) {
-        setActiveTab(sub[0].id);
-        setExpandedMenus((prev) => ({ ...prev, [viewId]: true }));
-      } else {
-        setActiveTab('');
-      }
-    }
+    if (view !== viewId) bukaView(viewId);
   }
   function logout() {
     api.logout().catch(() => {});
     api.clearToken();
     setUser(null);
-    setView('');
     setNotif([]);
-    window.history.replaceState(null, '', window.location.pathname);
+    navigate('/', { replace: true });
   }
   async function markAllRead() {
     try {
@@ -331,7 +301,20 @@ export default function App() {
       </>
     );
   }
-  const nav = navFor(user);
+  if (!view) {
+    // Dua kasus bermuara di sini, dan keduanya harus tetap bekerja:
+    //   1. tautan notifikasi push lama berbentuk `/?view=wali&tab=tagihan`;
+    //   2. path yang tidak dikenal peran ini (salah ketik, atau peran lain).
+    // Keduanya dialihkan ke rute yang benar, membawa `?tab=` bila ada.
+    const viewLama = searchParams.get('view') || '';
+    const tujuan = nav.some((n) => n.id === viewLama) ? viewLama : defaultView(user);
+    // View tanpa submenu (wali, gerbang) mengelola tabnya sendiri, jadi `?tab=`
+    // diteruskan apa adanya — termasuk tautan lama `/?tab=galeri` yang tidak
+    // membawa `?view=` sama sekali. Untuk view bersubmenu, tab divalidasi.
+    const sub = submenuMap[tujuan];
+    const tab = sub ? (sub.some((x) => x.id === tabDariUrl) ? tabDariUrl : sub[0].id) : tabDariUrl;
+    return <Navigate to={`/${tujuan}${tab ? `?tab=${tab}` : ''}`} replace />;
+  }
   const activeViewLabel = nav.find((n) => n.id === view)?.label || 'Dashboard';
   const unreadCount = notif.filter((n) => !n.read_at).length;
   return (
@@ -435,11 +418,7 @@ export default function App() {
                       return (
                         <button
                           key={sub.id}
-                          onClick={() => {
-                            setView(n.id);
-                            setActiveTab(sub.id);
-                            setSidebarOpen(false);
-                          }}
+                          onClick={() => bukaView(n.id, sub.id)}
                           className={`w-full text-left rounded-lg text-[11px] font-bold px-3 py-1.5 transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 ${
                             isSubActive ? 'bg-primary-container text-primary' : 'text-slate-500 hover:bg-slate-50'
                           }`}

@@ -29,6 +29,7 @@
 | 6.2 | E2E alur kritikal (wajib ganti password, bayar→FIFO, QR penjemput) | Selesai |
 | 5.3 | Konsolidasi design token — `index.css` satu sumber, perantara JSON dihapus | Selesai |
 | — | Lint 57 warning → 0 (unused, entitas JSX, fast-refresh, deps effect) | Selesai |
+| 4.3 | React Router (path = view, `?tab=` = sub-tab, redirect tautan lama) | Selesai |
 
 **Belum dikerjakan** — lihat §12 untuk alasan dan rencananya:
 
@@ -36,9 +37,9 @@
 |------|---------|
 | 5.1 lanjutan | `BillingTab.jsx` (2698 baris) — seluruhnya satu komponen 2611 baris, tidak ada fungsi murni untuk diekstrak. Butuh refactor bertahap, bukan pemindahan mekanis. |
 | 4.2 | TanStack Query — 10 view selesai; ~24 berkas view belum |
-| 4.3 | React Router — mengubah routing custom di `App.jsx` |
 
-**Angka akhir:** 405 test lulus (315 backend + 90 frontend) + 13 E2E,
+
+**Angka akhir:** 405 test lulus (315 backend + 90 frontend) + 18 E2E,
 lint 0 error dan **0 warning**, build hijau, `npm audit` 0 vulnerabilities (root + frontend).
 Backend masih 3 moderate dari rantai `mammoth → argparse → sprintf-js`
 (advisory mencakup semua versi sprintf-js; kode terdampak adalah CLI argparse
@@ -275,14 +276,26 @@ Pendekatan yang disarankan (bertahap, satu commit per langkah):
 
 ### 4.3 React Router
 
-Mengubah URL aplikasi. Butuh verifikasi di browser, bukan hanya build:
+**Selesai** — dengan satu keputusan yang berbeda dari rencana awal: sub-tab
+tetap di query (`?tab=`), bukan di path (`/admin/siswa`). Alasannya, portal
+wali dan gerbang mengelola tabnya sendiri dan membacanya dari `?tab=` saat
+mount; memindahkan tab ke path berarti menyeragamkan state internal ketiga view
+sekaligus, tanpa manfaat yang sebanding.
 
-- Petakan view per role yang sekarang ditangani `navFor(user)` di `App.jsx`.
-- Tentukan struktur rute (`/admin/siswa`, `/guru/absensi`, dst.) dan rute default
-  per role.
-- Perhatikan `must_change_password`: rute wajib ganti password harus tidak bisa
-  dilewati lewat URL langsung.
-- Uji manual: deep-link, tombol back, refresh di tengah alur, dan perpindahan role.
+Yang dikerjakan:
+
+- `BrowserRouter` di `main.jsx`; `view` dan `activeTab` diturunkan dari URL,
+  bukan state yang disalin dua arah.
+- `must_change_password` tetap dirender sebelum rute apa pun, dan path yang
+  tidak ada di `navFor(user)` dialihkan ke view bawaan — `/admin` sebagai wali
+  tidak membuka apa pun.
+- **Redirect tautan lama dipertahankan.** Notifikasi push yang sudah terkirim
+  berbentuk `/?view=wali&tab=tagihan`; bentuk itu tidak bisa ditarik dari HP
+  orang tua. Backend sengaja tidak diubah supaya jalur kompatibilitas ini terus
+  teruji.
+- Tombol Back kini berfungsi (dulu `replaceState` tanpa `pushState` membuat
+  Back keluar dari aplikasi).
+- `e2e/rute.spec.js`: tautan lama, tombol Back, dan refresh di path dalam.
 
 ### 4.2 TanStack Query
 

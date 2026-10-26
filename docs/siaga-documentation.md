@@ -1466,6 +1466,48 @@ Temuan architecture map awal:
 - Ada runtime artifacts di repo tree seperti SQLite DB dan uploaded images. Ini dianggap runtime state, bukan source architecture.
 - Pada scan awal belum ada dedicated test file di source tree; sekarang sudah ada `scripts/test.js` dan `scripts/workflow-regression.test.js`.
 
+## 17a. Rute (React Router)
+
+Status: **selesai**. `BrowserRouter` dipasang di `main.jsx`; `App.jsx` membaca
+rute dari URL, bukan menyimpannya sebagai state.
+
+Bentuk URL:
+
+| URL | Arti |
+|---|---|
+| `/admin?tab=siswa` | view `admin`, sub-tab `siswa` |
+| `/wali?tab=tagihan` | portal wali, tab Tagihan |
+| `/gerbang` | pos gerbang (tanpa tab) |
+| `/` atau path tak dikenal | dialihkan ke view bawaan peran |
+
+Kenapa **tab tetap di query, bukan di path**: portal wali dan gerbang mengelola
+tabnya sendiri dan membacanya dari `?tab=` saat mount (itulah yang membuat
+deep link notifikasi push mendarat di bagian yang benar). Memindahkan tab ke
+path berarti menyeragamkan state internal ketiga view sekaligus — pekerjaan
+besar tanpa manfaat sebanding.
+
+Yang berubah dari versi lama:
+
+- **Tombol Back berfungsi.** Dulu navigasi hanya memakai `history.replaceState`
+  tanpa `pushState`/`popstate`, jadi Back keluar dari aplikasi alih-alih
+  kembali ke tab sebelumnya.
+- **URL adalah sumber kebenaran.** `view` dan `activeTab` diturunkan dari
+  `location`/`searchParams`; tidak ada lagi penyalinan dua arah state → URL
+  yang bisa berselisih.
+- **Validasi peran tetap di jalur.** Path yang tidak ada di `navFor(user)`
+  menghasilkan view kosong → dialihkan ke view bawaan. Mengetik `/admin` sebagai
+  wali tidak membuka apa pun. Gerbang `must_change_password` tetap dirender
+  sebelum rute apa pun.
+
+**Kompatibilitas tautan lama (wajib).** Notifikasi push yang sudah terkirim
+berbentuk `/?view=wali&tab=tagihan`. Bentuk itu tidak bisa ditarik kembali dari
+HP orang tua, jadi redirect-nya dipertahankan selamanya: `?view=` yang valid
+dialihkan ke `/<view>?tab=<tab>`, dan `?tab=` tanpa `?view=` (mis. shortcut PWA
+`/?tab=galeri`) tetap diteruskan ke view bawaan peran. Backend sengaja **tidak**
+diubah agar jalur kompatibilitas ini terus teruji setiap hari.
+
+Uji: `e2e/rute.spec.js` (tautan lama, tombol Back, refresh di path dalam).
+
 ## 17b. Lapisan Data Frontend (React Query)
 
 Status: **sepuluh view** sudah memakai React Query; sisanya masih pola manual
