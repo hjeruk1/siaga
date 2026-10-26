@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { api } from '../../api';
 import { ActionButton, Modal, CustomSelect, CustomDatePicker } from '../../components/Shared';
 import { todayWIB } from '../../utils/date';
@@ -9,7 +10,6 @@ import { SiswaDetailPanel } from './siswa/SiswaDetailPanel';
 
 export default function SiswaTab({ user, toast }) {
   const m = useMaster(user);
-  const [list, setList] = useState([]);
   const today = todayWIB();
   const nextYearStart = new Date().getMonth() >= 6 ? new Date().getFullYear() + 1 : new Date().getFullYear();
   const empty = {
@@ -59,12 +59,11 @@ export default function SiswaTab({ user, toast }) {
     setSelectedFotoUrl('');
   }
 
-  const load = useCallback(async () => {
-    setList(await api.siswa({ cabang_id: m.cabangId, status: 'semua' }));
-  }, [m.cabangId]);
-  useEffect(() => {
-    load().catch((e) => toast('err', e.message));
-  }, [load, toast]);
+  const { data, isPending, refetch } = useQuery({
+    queryKey: ['siswa', m.cabangId || ''],
+    queryFn: () => api.siswa({ cabang_id: m.cabangId, status: 'semua' })
+  });
+  const list = useMemo(() => data ?? [], [data]);
 
   // Client-side filtering logic
   const filteredList = useMemo(() => {
@@ -139,7 +138,7 @@ export default function SiswaTab({ user, toast }) {
       }
       toast('ok', 'Siswa tersimpan');
       closeForm();
-      load();
+      refetch();
     } catch (e) {
       toast('err', e.message);
     }
@@ -155,7 +154,7 @@ export default function SiswaTab({ user, toast }) {
   async function refreshDetail(id = selected?.id) {
     if (!id) return;
     setDetail(await api.siswaDetail(id));
-    load();
+    refetch();
   }
   function itemFromPreview(p) {
     return {
@@ -236,7 +235,7 @@ export default function SiswaTab({ user, toast }) {
         `${r.results.length} siswa diproses: ${s.naik || 0} naik, ${s.tinggal || 0} tinggal, ${s.lulus || 0} lulus`
       );
       setKenaikanPreview(null);
-      load();
+      refetch();
     } catch (e) {
       toast('err', e.message);
     }
@@ -442,7 +441,7 @@ export default function SiswaTab({ user, toast }) {
         {/* Desktop View */}
         <div className="hidden md:block">
           <SiswaTable list={filteredList} selected={selected} open={open} />
-          {filteredList.length === 0 && (
+          {!isPending && filteredList.length === 0 && (
             <div className="bg-slate-50 border border-dashed border-slate-200 rounded-2xl p-8 text-center text-slate-400 text-sm font-bold">
               Tidak ada data siswa yang ditemukan.
             </div>
@@ -454,7 +453,7 @@ export default function SiswaTab({ user, toast }) {
           {filteredList.map((s) => (
             <SiswaCard key={s.id} siswa={s} active={selected?.id === s.id} open={open} />
           ))}
-          {filteredList.length === 0 && (
+          {!isPending && filteredList.length === 0 && (
             <div className="bg-slate-50 border border-dashed border-slate-200 rounded-2xl p-8 text-center text-slate-400 text-sm font-bold">
               Tidak ada data siswa yang ditemukan.
             </div>

@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { api } from '../../api';
 import { ActionButton, ConfirmActionModal, IconButton, Modal, CustomSelect } from '../../components/Shared';
 import {
@@ -22,7 +23,6 @@ import { useMaster } from './useMaster';
 
 export default function StaffTab({ user, toast }) {
   const m = useMaster(user);
-  const [list, setList] = useState([]);
   const [form, setForm] = useState({ display_name: '', username: '', role: 'guru', cabang_id: '' });
   const [edit, setEdit] = useState(null);
   const [tempPw, setTempPw] = useState(null);
@@ -73,12 +73,11 @@ export default function StaffTab({ user, toast }) {
     };
   }, [editFotoUrl]);
 
-  const load = useCallback(async () => {
-    setList(await api.staff(m.cabangId));
-  }, [m.cabangId]);
-  useEffect(() => {
-    load().catch((e) => toast('err', e.message));
-  }, [load, toast]);
+  const { data, isPending, refetch } = useQuery({
+    queryKey: ['staff', m.cabangId || ''],
+    queryFn: () => api.staff(m.cabangId)
+  });
+  const list = useMemo(() => data ?? [], [data]);
 
   // Client-side filtering logic
   const filteredList = useMemo(() => {
@@ -125,7 +124,7 @@ export default function StaffTab({ user, toast }) {
       }
       setTempPw(r.temporary_password);
       closeAddForm();
-      load();
+      refetch();
     } catch (e) {
       toast('err', e.message);
     }
@@ -143,7 +142,7 @@ export default function StaffTab({ user, toast }) {
     try {
       await api.updateStaff(s.id, { display_name: s.display_name, role: s.role, cabang_id: s.cabang_id, status });
       toast('ok', status === 'nonaktif' ? 'Staff dinonaktifkan' : 'Staff diaktifkan');
-      load();
+      refetch();
     } catch (e) {
       toast('err', e.message);
     }
@@ -163,7 +162,7 @@ export default function StaffTab({ user, toast }) {
       await api.updateStaff(edit.id, payload);
       toast('ok', 'Staff diperbarui');
       closeEditForm();
-      load();
+      refetch();
     } catch (e) {
       toast('err', e.message);
     }
@@ -183,7 +182,7 @@ export default function StaffTab({ user, toast }) {
       toast('ok', 'Staff dihapus permanen');
       setDeleteConfirm(null);
       setDeleteConfirmText('');
-      load();
+      refetch();
     } catch (e) {
       toast('err', e.message);
     }
@@ -356,7 +355,7 @@ export default function StaffTab({ user, toast }) {
               </tr>
             ))}
           </Table>
-          {filteredList.length === 0 && (
+          {!isPending && filteredList.length === 0 && (
             <div className="mt-3 bg-slate-50 border border-dashed border-slate-200 rounded-2xl p-8 text-center text-slate-400 text-sm font-bold">
               Tidak ada data staff yang ditemukan.
             </div>
@@ -376,7 +375,7 @@ export default function StaffTab({ user, toast }) {
               canDelete={canDeleteStaff(s)}
             />
           ))}
-          {filteredList.length === 0 && (
+          {!isPending && filteredList.length === 0 && (
             <div className="bg-slate-50 border border-dashed border-slate-200 rounded-2xl p-8 text-center text-slate-400 text-sm font-bold">
               Tidak ada data staff yang ditemukan.
             </div>

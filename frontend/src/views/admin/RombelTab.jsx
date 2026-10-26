@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { api } from '../../api';
 import { ActionButton, ConfirmActionModal, IconButton, Modal, CustomSelect } from '../../components/Shared';
 import { Pencil, Plus, RefreshCw, Save, Search, Settings, Trash2, UserMinus, UserPlus, Users, X } from 'lucide-react';
@@ -9,11 +10,9 @@ import { GuruAvatarStack } from './billing/GuruAvatarStack';
 export default function RombelTab({ user, toast }) {
   const m = useMaster(user);
   const [form, setForm] = useState({ nama: '', jenjang_id: '', cabang_id: '' });
-  const [staff, setStaff] = useState([]);
   const [openForm, setOpenForm] = useState(false);
   const [assignModalOpen, setAssignModalOpen] = useState(false);
   const [assignForm, setAssignForm] = useState({ cabang_id: '', rombel_id: '', pengguna_id: '', role: 'bantu' });
-  const [assignRombel, setAssignRombel] = useState([]);
   const [guruDetailRombel, setGuruDetailRombel] = useState(null);
   const [roleConfirm, setRoleConfirm] = useState(null);
   const [editingRombel, setEditingRombel] = useState(null);
@@ -21,25 +20,25 @@ export default function RombelTab({ user, toast }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterJenjang, setFilterJenjang] = useState('');
   const [filterOpen, setFilterOpen] = useState(false);
-  useEffect(() => {
-    api
-      .staff(user.role === 'admin' ? '' : m.cabangId)
-      .then(setStaff)
-      .catch((e) => toast('err', e.message));
-  }, [m.cabangId, user.role, toast]);
-  useEffect(() => {
-    if (user.role === 'admin') {
-      api
-        .rombel('')
-        .then(setAssignRombel)
-        .catch((e) => toast('err', e.message));
-    } else {
-      setAssignRombel(m.rombel);
-    }
-  }, [user.role, m.rombel, toast]);
+  // Kunci `staff` sama dengan StaffTab: keduanya memuat daftar yang sama, jadi
+  // berpindah antar tab tidak memicu permintaan baru.
+  const staffQ = useQuery({
+    queryKey: ['staff', m.cabangId || ''],
+    queryFn: () => api.staff(user.role === 'admin' ? '' : m.cabangId)
+  });
+  const staff = useMemo(() => staffQ.data ?? [], [staffQ.data]);
+
+  // Admin butuh seluruh rombel (lintas cabang) untuk modal penugasan; peran
+  // lain cukup memakai rombel cabangnya dari useMaster.
+  const rombelSemuaQ = useQuery({
+    queryKey: ['rombel-semua'],
+    queryFn: () => api.rombel(''),
+    enabled: user.role === 'admin'
+  });
+  const assignRombel = user.role === 'admin' ? (rombelSemuaQ.data ?? []) : m.rombel;
+
   async function refreshRombelData() {
-    await m.load();
-    if (user.role === 'admin') setAssignRombel(await api.rombel(''));
+    await Promise.all([m.load(), staffQ.refetch(), user.role === 'admin' ? rombelSemuaQ.refetch() : null]);
   }
   function openAssignModal() {
     const cabangId = user.role === 'admin' ? m.cabangId || '' : m.cabangId;

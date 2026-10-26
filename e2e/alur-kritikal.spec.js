@@ -42,6 +42,11 @@ test.describe('alur kritikal', () => {
     expect(sementara.length).toBeGreaterThan(5);
     await page.keyboard.press('Escape');
 
+    // Akun baru harus langsung muncul di daftar. Ini yang membuktikan jalur
+    // "simpan lalu muat ulang" benar-benar jalan setelah daftar pindah ke
+    // React Query (refetch menggantikan pemanggilan load manual).
+    await expect(page.getByText('Petugas Uji').first()).toBeVisible({ timeout: 20_000 });
+
     // Keluar lewat tombol sidebar, bukan menghapus token: yang diuji adalah
     // jalur yang benar-benar dipakai admin.
     await page.getByRole('button', { name: 'Keluar' }).first().click();

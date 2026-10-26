@@ -35,7 +35,7 @@
 | Item | Catatan |
 |------|---------|
 | 5.1 lanjutan | `BillingTab.jsx` (2698 baris) — seluruhnya satu komponen 2611 baris, tidak ada fungsi murni untuk diekstrak. Butuh refactor bertahap, bukan pemindahan mekanis. |
-| 4.2 | TanStack Query — percontohan 3 tab selesai; 31 berkas view belum |
+| 4.2 | TanStack Query — 8 tab selesai; ~26 berkas view belum |
 | 4.3 | React Router — mengubah routing custom di `App.jsx` |
 
 **Angka akhir:** 405 test lulus (315 backend + 90 frontend) + 13 E2E,
@@ -296,9 +296,12 @@ Yang sudah ada:
   lokal dilaporkan ke satu handler yang didaftarkan `App.jsx` → `toast`.
   Klien sengaja singleton di tingkat modul karena provider harus membungkus
   App (termasuk layar login), sedangkan `toast` hidup di dalam App.
-- Tab yang sudah pindah: **LaporanTab**, **AuditTab**, **KalenderTab** —
-  dipilih karena mewakili tiga bentuk berbeda: daftar berfilter + detail,
-  daftar sederhana, dan daftar + state tampilan turunan (bulan terlipat).
+- Tab yang sudah pindah (8): **LaporanTab**, **AuditTab**, **KalenderTab**
+  (tiga bentuk berbeda — daftar berfilter + detail, daftar sederhana, daftar +
+  state tampilan turunan), lalu **CabangTab**, **WaliTab**, **StaffTab**,
+  **SiswaTab**, **RombelTab**.
+- **ConfigTab sengaja belum** — datanya disunting di tempat (`cfg`, `org`)
+  sebelum disimpan; query + salinan lokal hanya menambah upacara.
 
 Yang hilang per tab: state `rows` + `setRows`, `load` useCallback beserta
 dependensinya, `useEffect` pemanggilnya, `try/catch` + `toast('err', …)`, dan

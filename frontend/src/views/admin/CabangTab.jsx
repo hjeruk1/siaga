@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { api } from '../../api';
 import { ActionButton, ConfirmActionModal, IconButton, Modal, CustomSelect } from '../../components/Shared';
 import { Pencil, Plus, Power, PowerOff, Save, X } from 'lucide-react';
@@ -6,24 +7,23 @@ import { BranchMetricRow, Panel, Input } from './AdminShared';
 
 export default function CabangTab({ user, toast }) {
   const empty = { nama: '', kode: '', alamat: '', kontak: '', aktif: 1 };
-  const [list, setList] = useState([]);
   const [form, setForm] = useState(empty);
   const [editing, setEditing] = useState(null);
   const [openForm, setOpenForm] = useState(false);
   const [cabangConfirm, setCabangConfirm] = useState(null);
-  const load = useCallback(async () => {
-    setList(await api.cabang());
-  }, []);
-  useEffect(() => {
-    load().catch((e) => toast('err', e.message));
-  }, [load, toast]);
+
+  const { data, isPending, refetch } = useQuery({
+    queryKey: ['cabang'],
+    queryFn: () => api.cabang()
+  });
+  const list = useMemo(() => data ?? [], [data]);
   async function add() {
     try {
       await api.createCabang(form);
       toast('ok', 'Cabang dibuat');
       setForm(empty);
       setOpenForm(false);
-      load();
+      refetch();
     } catch (e) {
       toast('err', e.message);
     }
@@ -33,7 +33,7 @@ export default function CabangTab({ user, toast }) {
       await api.updateCabang(editing.id, editing);
       toast('ok', 'Cabang diperbarui');
       setEditing(null);
-      load();
+      refetch();
     } catch (e) {
       toast('err', e.message);
     }
@@ -45,7 +45,7 @@ export default function CabangTab({ user, toast }) {
         try {
           await api.updateCabang(c.id, { ...c, aktif: c.aktif ? 0 : 1 });
           toast('ok', c.aktif ? 'Cabang dinonaktifkan' : 'Cabang diaktifkan');
-          load();
+          refetch();
         } catch (e) {
           toast('err', e.message);
         }
@@ -128,7 +128,7 @@ export default function CabangTab({ user, toast }) {
           </div>
         ))}
       </div>
-      {list.length === 0 && (
+      {!isPending && list.length === 0 && (
         <div className="mt-3 rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center text-sm font-bold text-slate-400">
           Belum ada cabang terdaftar.
         </div>

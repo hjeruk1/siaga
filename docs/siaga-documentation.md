@@ -1468,8 +1468,11 @@ Temuan architecture map awal:
 
 ## 17b. Lapisan Data Frontend (React Query)
 
-Status: **percontohan**. Infrastruktur dan tiga tab sudah memakai React Query;
-tab lain masih memakai pola manual (`useState` + `load` + `useEffect`).
+Status: **delapan tab admin** sudah memakai React Query; sisanya masih pola
+manual (`useState` + `load` + `useEffect`).
+
+Sudah pindah: LaporanTab, AuditTab, KalenderTab, CabangTab, WaliTab, StaffTab,
+SiswaTab, RombelTab.
 
 Infrastruktur:
 
@@ -1504,6 +1507,13 @@ Aturan yang dipakai:
 - **Mutasi belum memakai `useMutation`.** Simpan/hapus tetap imperatif lalu
   `refetch()`. Alasannya: jumlahnya sedikit dan alurnya bercabang (konfirmasi,
   PIN, antrean offline absensi).
+- **Kunci dibagi antar tab bila endpoint-nya sama.** `StaffTab` dan
+  `RombelTab` sama-sama memakai `['staff', cabangId]`, jadi berpindah di antara
+  keduanya tidak memicu permintaan baru.
+- **Data yang diedit lokal tidak dipaksa masuk cache.** `ConfigTab`
+  (`cfg`, `org`) sengaja belum dipindah: isinya disunting di tempat sebelum
+  disimpan, sehingga query + salinan lokal hanya menambah upacara tanpa
+  menghapus boilerplate.
 
 Hasil terukur pada percontohan: membuka Audit → pindah ke Siswa → kembali ke
 Audit turun dari 2 permintaan menjadi 1. Yang benar-benar hilang per tab adalah

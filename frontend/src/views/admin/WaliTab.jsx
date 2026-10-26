@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { api } from '../../api';
 import {
   ActionButton,
@@ -28,8 +29,6 @@ import { useMaster } from './useMaster';
 
 export default function WaliTab({ user, toast }) {
   const m = useMaster(user);
-  const [siswa, setSiswa] = useState([]);
-  const [wali, setWali] = useState([]);
   const [form, setForm] = useState({ display_name: '', no_wa: '', siswa_id: '', relasi: '' });
   const [tempPw, setTempPw] = useState(null);
   const [editing, setEditing] = useState(null);
@@ -40,17 +39,20 @@ export default function WaliTab({ user, toast }) {
   const [filterStatus, setFilterStatus] = useState('');
   const [filterOpen, setFilterOpen] = useState(false);
 
-  const load = useCallback(async () => {
-    const [siswaData, waliData] = await Promise.all([
-      api.siswa({ cabang_id: m.cabangId, status: 'semua' }),
-      api.wali(m.cabangId)
-    ]);
-    setSiswa(siswaData);
-    setWali(waliData);
-  }, [m.cabangId]);
-  useEffect(() => {
-    load().catch((e) => toast('err', e.message));
-  }, [load, toast]);
+  // Dua permintaan yang selalu dipakai bersama → satu kunci cache. Kalau
+  // dipisah, daftar wali bisa tampil dengan pilihan siswa yang belum termuat.
+  const { data, isPending, refetch } = useQuery({
+    queryKey: ['wali', m.cabangId || ''],
+    queryFn: async () => {
+      const [siswaData, waliData] = await Promise.all([
+        api.siswa({ cabang_id: m.cabangId, status: 'semua' }),
+        api.wali(m.cabangId)
+      ]);
+      return { siswa: siswaData, wali: waliData };
+    }
+  });
+  const siswa = useMemo(() => data?.siswa ?? [], [data]);
+  const wali = useMemo(() => data?.wali ?? [], [data]);
   async function add() {
     if (!form.display_name.trim() || !form.no_wa.trim() || !form.siswa_id) {
       toast('err', 'Nama wali, nomor WA, dan siswa wajib diisi');
@@ -65,7 +67,7 @@ export default function WaliTab({ user, toast }) {
       }
       setForm({ display_name: '', no_wa: '', siswa_id: '', relasi: '' });
       setOpenForm(false);
-      load();
+      refetch();
     } catch (e) {
       toast('err', e.message);
     }
@@ -82,7 +84,7 @@ export default function WaliTab({ user, toast }) {
     try {
       await api.updateWali(w.id, { display_name: w.display_name, no_wa: w.no_wa, status });
       toast('ok', status === 'nonaktif' ? 'Akun wali dinonaktifkan' : 'Akun wali diaktifkan');
-      load();
+      refetch();
     } catch (e) {
       toast('err', e.message);
     }
@@ -96,7 +98,7 @@ export default function WaliTab({ user, toast }) {
       });
       toast('ok', 'Akun wali diperbarui');
       setEditing(null);
-      load();
+      refetch();
     } catch (e) {
       toast('err', e.message);
     }
@@ -254,7 +256,7 @@ export default function WaliTab({ user, toast }) {
               </tr>
             ))}
           </Table>
-          {filteredWali.length === 0 && (
+          {!isPending && filteredWali.length === 0 && (
             <div className="mt-3 bg-slate-50 border border-dashed border-slate-200 rounded-2xl p-8 text-center text-slate-400 text-sm font-bold">
               Tidak ada akun wali yang ditemukan.
             </div>
@@ -270,7 +272,7 @@ export default function WaliTab({ user, toast }) {
               onStatusToggle={setStatusConfirm}
             />
           ))}
-          {filteredWali.length === 0 && (
+          {!isPending && filteredWali.length === 0 && (
             <div className="bg-slate-50 border border-dashed border-slate-200 rounded-2xl p-8 text-center text-slate-400 text-sm font-bold">
               Tidak ada akun wali yang ditemukan.
             </div>
