@@ -30,3 +30,19 @@ jobs:
         run: node scripts/run-frontend-tests.js
       - name: Build frontend
         run: npm run build --prefix frontend
+      # Uji E2E memakai build produksi yang disajikan backend, dengan database
+      # sementara. Dua regresi nyata (modal Billing yang selalu terbuka dan
+      # tautan PDF 401) hanya muncul di mode ini, bukan di dev server.
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run E2E tests
+        run: npm run test:e2e
+      - name: Upload E2E artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-artifacts
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 7

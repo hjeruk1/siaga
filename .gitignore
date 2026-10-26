@@ -30,3 +30,8 @@ backend/*.db.bak*
 # Jangan pernah di-commit; kalau terlanjur, cabut sesi lewat
 # WhatsApp -> Perangkat Tertaut -> logout perangkat, lalu ganti nomor.
 *.data.json
+
+# Uji E2E: database sementara + artefak Playwright
+.e2e/
+test-results/
+playwright-report/

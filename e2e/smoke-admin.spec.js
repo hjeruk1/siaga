@@ -1,0 +1,53 @@
+// Uji asap panel admin.
+//
+// Dua regresi yang pernah lolos ke produksi dan kini dijaga di sini:
+//   1. Modal "Catat Pembayaran" terbuka sendiri setiap kali tab Billing dibuka
+//      (dirender tanpa gerbang), menutupi seluruh halaman.
+//   2. Tautan PDF dijawab 401 karena rutenya tidak menerima cookie media.
+const { test, expect } = require('@playwright/test');
+const fs = require('fs');
+const { masuk } = require('./helpers');
+
+test.describe('admin', () => {
+  test.beforeEach(async ({ page }) => {
+    await masuk(page, 'admin');
+  });
+
+  test('tab Billing terbuka tanpa modal yang menutupi halaman', async ({ page }) => {
+    await page.goto('/?view=admin&tab=billing');
+    await expect(page.getByText('Ekspor untuk pembukuan')).toBeVisible({ timeout: 25_000 });
+    await expect(page.locator('div.fixed.inset-0')).toHaveCount(0);
+
+    // Modal tetap bisa dibuka lewat tombolnya sendiri.
+    await page.getByText('Catat Pembayaran', { exact: true }).first().click();
+    await expect(page.locator('div.fixed.inset-0')).toHaveCount(1);
+    await page.keyboard.press('Escape');
+    await expect(page.locator('div.fixed.inset-0')).toHaveCount(0);
+  });
+
+  test('ekspor tagihan mengunduh CSV yang benar', async ({ page }) => {
+    await page.goto('/?view=admin&tab=billing');
+    await expect(page.locator('#ekspor-periode')).toBeVisible({ timeout: 25_000 });
+    await page.fill('#ekspor-periode', '2026-09');
+
+    const kartu = page
+      .locator('div')
+      .filter({ has: page.locator('#ekspor-periode') })
+      .last();
+    const [unduhan] = await Promise.all([
+      page.waitForEvent('download'),
+      kartu.getByRole('button', { name: 'Tagihan', exact: true }).click()
+    ]);
+    expect(unduhan.suggestedFilename()).toMatch(/^Keuangan_Tagihan_2026-09.*\.csv$/);
+
+    const isi = fs.readFileSync(await unduhan.path(), 'utf8');
+    expect(isi).toContain('"Cabang","Siswa","Rombel","Periode"');
+    expect(isi).toContain('Belum dibayar');
+  });
+
+  test('kartu pengingat dan penyimpanan tampil di Konfigurasi', async ({ page }) => {
+    await page.goto('/?view=admin&tab=config');
+    await expect(page.getByText('Pengingat tagihan')).toBeVisible({ timeout: 25_000 });
+    await expect(page.getByText('Penyimpanan server')).toBeVisible();
+  });
+});

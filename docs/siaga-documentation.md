@@ -1338,6 +1338,23 @@ npm test
 npm run test:workflow
 ```
 
+### 14.1 Uji E2E (Playwright)
+
+```powershell
+npx playwright install chromium   # sekali per mesin
+npm run test:e2e
+```
+
+Cara kerjanya:
+
+- `e2e/playwright.config.js` menjalankan `npm run build` lalu `scripts/e2e-server.js` sebagai webServer.
+- `scripts/e2e-server.js` membuat database sementara di `.e2e/` (dihapus setiap run), menjalankan `init.js`, `migrate.js`, lalu `scripts/e2e-seed.js` (guru1, wali `081200000000`, 3 siswa, 1 tagihan), lalu menyalakan server dengan **NODE_ENV=production**.
+- Mode produksi itu disengaja: hanya di sana `frontend/dist` disajikan, cookie media bersifat `Secure`, dan CORS ketat — persis kondisi sekolah. Dua regresi nyata (tautan PDF dijawab 401, modal "Catat Pembayaran" selalu terbuka) tidak muncul di dev server.
+- Semua uji berbagi satu server dan satu database, jadi dijalankan `workers: 1`.
+- Artefak kegagalan (trace, screenshot) masuk `test-results/` dan diunggah CI saat gagal.
+
+Cakupan saat ini (10 uji): login tiga peran; tab Billing bebas modal + ekspor CSV benar-benar terunduh; kartu pengingat & penyimpanan; absensi memuat daftar; check-in offline masuk antrean lalu tersinkron; galeri guru; portal wali (tab, deep link `?tab=`, rapor PDF lewat cookie media, galeri).
+
 Hasil terakhir yang dicatat setelah repair wave 1:
 
 - `npm run build`: pass.
