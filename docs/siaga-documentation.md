@@ -897,6 +897,20 @@ Action penting:
 - Admin default wajib ganti password setelah setup.
 - Minimal satu admin aktif perlu diproteksi kuat. Status saat ini: sebagian, masih backlog.
 
+### 10.4 Pemakaian Penyimpanan
+
+Endpoint `GET /api/storage` (hanya `admin`), kartu "Penyimpanan server" di Konfigurasi.
+
+Isi:
+
+- **Disk**: total, terpakai, sisa, dan persen — dibaca dari `fs.statfsSync`, jadi angka sebenarnya di server, bukan perkiraan dari ukuran berkas. Peringatan muncul di ≥85%.
+- **Folder unggahan**: rincian per folder (`bukti`, `foto`, `laporan`, `kegiatan`, `izin`) berisi jumlah berkas dan ukuran.
+- **Database**: ukuran `siaga.db` dan `siaga.db-wal` terpisah. WAL yang membengkak sering tidak terlihat padahal ikut di-backup.
+- **Backup lokal**: ukuran folder `BACKUP_DIR` bila ada. Di server produksi folder ini dibuat oleh timer backup; kalau kosong, kartu melaporkan "belum ada di folder ini" apa adanya.
+- **Galeri**: jumlah foto, total ukuran, rata-rata per foto, dan jumlah bulan berjalan.
+
+Catatan: angka ini milik seluruh server, karena itu `admin_cabang` ditolak (403) — bukan informasi satu cabang.
+
 ## 11. UI/UX dan Workflow Audit 2026-05-17
 
 ### 11.1 Metode Audit

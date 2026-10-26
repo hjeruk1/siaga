@@ -236,6 +236,8 @@ export const api = {
     return upload('/api/kegiatan', f);
   },
   kegiatanHapus: (id) => req('DELETE', '/api/kegiatan/' + id),
+  // Pemakaian penyimpanan server (admin pusat).
+  storage: () => req('GET', '/api/storage'),
   generateKegiatan: (d) => req('POST', '/api/billing/generate-kegiatan', d),
   generateKegiatanPreview: (d) => req('POST', '/api/billing/generate-kegiatan/preview', d),
   tagihan: (p) => req('GET', '/api/billing/tagihan' + qs(p || {})),
