@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../../api';
 import { ActionButton, Modal } from '../../components/Shared';
-import { Camera, ChevronLeft, ChevronRight, ImagePlus, Loader2, Trash2 } from 'lucide-react';
+import { Archive, Camera, ChevronLeft, ChevronRight, ImagePlus, Loader2, Trash2 } from 'lucide-react';
 
 // Galeri foto kegiatan — dipakai wali (melihat) dan guru/admin (mengunggah).
 //
@@ -205,6 +205,18 @@ export default function GaleriKegiatan({ toast, bisaUnggah = false }) {
                       loading="lazy"
                       className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-105"
                     />
+                    {/* Foto yang sudah melewati batas retensi hanya menyisakan
+                        thumbnail. Penandanya kecil tetapi penting: wali yang
+                        membuka foto lama tidak mengira fotonya rusak. */}
+                    {f.diarsipkan && (
+                      <span
+                        className="absolute bottom-1 right-1 inline-flex items-center gap-0.5 rounded bg-slate-900/70 px-1 py-0.5 text-[9px] font-black uppercase tracking-wide text-white"
+                        title="Versi resolusi penuh sudah diarsipkan"
+                      >
+                        <Archive className="h-2.5 w-2.5" />
+                        Arsip
+                      </span>
+                    )}
                   </button>
                 ))}
               </div>
@@ -252,6 +264,12 @@ export default function GaleriKegiatan({ toast, bisaUnggah = false }) {
                 {tanggalPanjang(lihat.album.tanggal)} · {lihat.album.rombel_nama}
                 {lihat.album.keterangan ? ` · ${lihat.album.keterangan}` : ''}
               </p>
+              {lihat.album.foto[lihat.index].diarsipkan && (
+                <p className="flex items-center gap-1 text-[11px] font-bold text-amber-700">
+                  <Archive className="h-3 w-3" />
+                  Versi resolusi penuh sudah diarsipkan — yang tersisa versi kecil.
+                </p>
+              )}
               {lihat.album.foto[lihat.index].boleh_hapus && (
                 <ActionButton
                   icon={Trash2}

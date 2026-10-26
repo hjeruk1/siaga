@@ -158,8 +158,9 @@ export default function PenyimpananCard({ toast }) {
       )}
 
       <p className="mt-2 text-[11px] font-semibold text-slate-500">
-        Galeri: {data.galeri.foto} foto ({ukuran(data.galeri.bytes)}), {data.galeri.bulan_ini} di antaranya bulan ini.
-        Semua berkas unggahan ikut backup otomatis.
+        Galeri: {data.galeri.foto} foto ({ukuran(data.galeri.bytes)}), {data.galeri.bulan_ini} di antaranya bulan ini
+        {data.galeri.diarsip ? `, ${data.galeri.diarsip} sudah diarsipkan` : ''}. Semua berkas unggahan ikut backup
+        otomatis.
       </p>
     </section>
   );

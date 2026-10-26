@@ -200,6 +200,7 @@ app.use('/api/billing', require('./routes/billing'));
 app.use('/api/pengingat', require('./routes/pengingat'));
 app.use('/api/kegiatan', require('./routes/kegiatan'));
 app.use('/api/storage', require('./routes/storage'));
+app.use('/api/retensi', require('./routes/retensi'));
 app.use('/api/rapor', require('./routes/rapor'));
 app.use('/api/rekap', require('./routes/rekap'));
 app.use('/api/push', require('./routes/push'));
@@ -283,6 +284,39 @@ const server = app.listen(port, '0.0.0.0', () => {
     }
   } catch (e) {
     logger.warn(`Pengingat tagihan tidak aktif: ${e.message}`);
+  }
+  // Retensi galeri: diperiksa tiap jam, tetapi hanya bekerja sekali per tanggal
+  // WIB. Retensi bukan pekerjaan mendesak, jadi tidak perlu presisi menit —
+  // yang penting tidak terlewat bila server sempat mati.
+  // RETENSI=off dipakai harness tes supaya job latar tidak menyentuh folder
+  // unggahan saat tes sedang memeriksa berkas.
+  try {
+    if (process.env.RETENSI !== 'off') {
+      const retensi = require('./utils/retensi');
+      const timer = setInterval(
+        () => {
+          try {
+            const hasil = retensi.jalanHarian();
+            if (hasil.status === 'jalan') {
+              logger.info(
+                {
+                  diarsip: hasil.diarsip.foto,
+                  dihapus: hasil.dihapus.foto,
+                  yatim: hasil.yatim.berkas
+                },
+                'retensi galeri dijalankan'
+              );
+            }
+          } catch (e) {
+            logger.warn(`Retensi galeri gagal: ${e.message}`);
+          }
+        },
+        60 * 60 * 1000
+      );
+      timer.unref();
+    }
+  } catch (e) {
+    logger.warn(`Retensi galeri tidak aktif: ${e.message}`);
   }
 });
 server.requestTimeout = 30_000;

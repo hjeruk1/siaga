@@ -95,6 +95,9 @@ function ringkas() {
   const bulanIni = `${todayWIB().slice(0, 7)}-01`;
   const galeri = db.prepare('SELECT COUNT(*) c, COALESCE(SUM(size_bytes),0) b FROM kegiatan_foto').get();
   const galeriBulanIni = db.prepare('SELECT COUNT(*) c FROM kegiatan_foto WHERE tanggal>=?').get(bulanIni).c;
+  // Foto yang sudah diarsipkan hanya menyisakan thumbnail: size_bytes-nya 0,
+  // jadi angka `bytes` di atas adalah ruang yang benar-benar terpakai sekarang.
+  const diarsip = db.prepare('SELECT COUNT(*) c FROM kegiatan_foto WHERE diarsipkan=1').get().c;
 
   return {
     disk: ringkasDisk(),
@@ -109,7 +112,8 @@ function ringkas() {
       foto: galeri.c,
       bytes: galeri.b,
       rata_rata: galeri.c ? Math.round(galeri.b / galeri.c) : 0,
-      bulan_ini: galeriBulanIni
+      bulan_ini: galeriBulanIni,
+      diarsip
     },
     waktu: new Date().toISOString()
   };

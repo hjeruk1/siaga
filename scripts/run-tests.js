@@ -5,8 +5,16 @@ const { spawn, spawnSync } = require('child_process');
 
 const root = path.resolve(__dirname, '..');
 const suite = process.argv[2] || 'main';
-const files =
-  suite === 'workflow'
+// TEST_ONLY mempersempit jalannya tes ke berkas tertentu saat menelusuri satu
+// kegagalan: `TEST_ONLY=scripts/retensi.test.js npm test`. Server uji dan
+// penyiapan database tetap sama, jadi hasilnya tidak berbeda dari suite penuh.
+const hanya = (process.env.TEST_ONLY || '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+const files = hanya.length
+  ? hanya
+  : suite === 'workflow'
     ? ['scripts/workflow-regression.test.js']
     : [
         'scripts/test.js',
@@ -40,7 +48,8 @@ const files =
         'scripts/rapor.test.js',
         'scripts/pengumuman-read.test.js',
         'scripts/billing-export.test.js',
-        'scripts/guru-lintas-cabang.test.js'
+        'scripts/guru-lintas-cabang.test.js',
+        'scripts/retensi.test.js'
       ];
 const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'siaga-test-'));
 const dbPath = path.join(tempDir, 'siaga.db');
@@ -67,6 +76,9 @@ const env = {
   WA_DELAY_MS: '0',
   // Pemantau WA dimatikan di server uji: tes memanggil cekSekarang() sendiri.
   WA_MONITOR: 'off',
+  // Job retensi dimatikan: tes memanggil jalankan() sendiri, dan job latar bisa
+  // menghapus berkas uji di tengah pemeriksaan.
+  RETENSI: 'off',
   WA_TIPE_AKTIF: 'daily_published,guru_reply,payment_verified,payment_rejected,invoice_issued',
   // Kode OTP ditulis ke berkas ini supaya tes bisa menyelesaikan alur pemulihan
   // password. Hanya diset di harness — server sungguhan tidak pernah menulis

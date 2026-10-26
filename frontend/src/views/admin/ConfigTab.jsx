@@ -20,6 +20,7 @@ import { useMaster, CabangFilter, Panel, Input } from './AdminShared';
 import WaSettings from './WaSettings';
 import PengingatTagihanCard from './PengingatTagihanCard';
 import PenyimpananCard from './PenyimpananCard';
+import RetensiCard from './RetensiCard';
 
 export default function ConfigTab({ user, toast }) {
   const m = useMaster(user, { autoDefaultCabang: true });
@@ -321,6 +322,9 @@ export default function ConfigTab({ user, toast }) {
       {/* Pemakaian penyimpanan hanya untuk admin pusat: angkanya mencakup
           seluruh server, bukan milik satu cabang. */}
       {user.role === 'admin' && <PenyimpananCard toast={toast} />}
+      {/* Retensi diletakkan tepat di bawah pemakaian penyimpanan: keputusannya
+          baru masuk akal setelah admin melihat folder mana yang membengkak. */}
+      {user.role === 'admin' && <RetensiCard toast={toast} />}
 
       {orgOpen && org && (
         <Modal title="Data Taruna Prima & Rekening" onClose={() => setOrgOpen(false)} maxWidth="max-w-3xl">

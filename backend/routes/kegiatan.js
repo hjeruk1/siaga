@@ -138,7 +138,17 @@ router.get('/', auth(LIHAT), (req, res) => {
        LIMIT ${limit}`
     )
     .all(...params);
-  res.json(rows.map((r) => ({ ...r, boleh_hapus: bolehHapus(req.user, r) })));
+  res.json(
+    rows.map((r) => ({
+      ...r,
+      // Foto yang sudah diarsipkan tidak punya berkas penuh lagi. Mengirim url
+      // aslinya akan menghasilkan 404 di modal pratinjau, jadi url diarahkan ke
+      // thumbnail: yang dilihat wali tetap fotonya, hanya beresolusi kecil.
+      url: r.diarsipkan ? r.thumb_url : r.url,
+      diarsipkan: !!r.diarsipkan,
+      boleh_hapus: bolehHapus(req.user, r)
+    }))
+  );
 });
 
 router.post('/', auth(UNGGAH), uploadImage.array('foto', MAKS_SEKALI_UNGGAH), async (req, res) => {

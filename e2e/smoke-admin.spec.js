@@ -45,9 +45,14 @@ test.describe('admin', () => {
     expect(isi).toContain('Belum dibayar');
   });
 
-  test('kartu pengingat dan penyimpanan tampil di Konfigurasi', async ({ page }) => {
+  test('kartu pengingat, penyimpanan, dan retensi tampil di Konfigurasi', async ({ page }) => {
     await page.goto('/?view=admin&tab=config');
     await expect(page.getByText('Pengingat tagihan')).toBeVisible({ timeout: 25_000 });
     await expect(page.getByText('Penyimpanan server')).toBeVisible();
+    // Kartu retensi memuat pratinjau dari server; kalau endpoint-nya rusak,
+    // kartunya berhenti di "Membaca kebijakan retensi" dan uji ini gagal.
+    await expect(page.getByText('Retensi galeri')).toBeVisible();
+    await expect(page.getByText('Akan diarsipkan')).toBeVisible();
+    await expect(page.getByText('Jalankan sekarang')).toBeVisible();
   });
 });

@@ -984,6 +984,29 @@ Isi:
 
 Catatan: angka ini milik seluruh server, karena itu `admin_cabang` ditolak (403) — bukan informasi satu cabang.
 
+### 10.5 Retensi Galeri
+
+Endpoint `GET/PUT /api/retensi` dan `POST /api/retensi/jalankan` (hanya `admin`), kartu "Retensi galeri" di Konfigurasi — tepat di bawah pemakaian penyimpanan.
+
+Dua tingkat umur, dipilih admin:
+
+| Tingkat | Yang terjadi | Yang dilihat wali |
+|---|---|---|
+| **Arsip** (`retensi_arsip_bulan`, bawaan 12) | Berkas penuh 1280px dihapus, thumbnail 480px dipertahankan; baris diberi `diarsipkan=1`, `ukuran_asli` menyimpan ukuran sebelum arsip | Album tetap ada, foto tetap bisa dibuka (resolusi kecil), ada penanda "Arsip" |
+| **Hapus** (`retensi_hapus_bulan`, bawaan 0 = tidak pernah) | Baris dan kedua berkas dibuang | Album hilang dari galeri |
+
+Aturan:
+
+- Patokan umur adalah `kegiatan_foto.tanggal` (tanggal kegiatan), bukan `created_at` — guru kadang mengunggah foto lama.
+- `hapusBulan` wajib lebih besar dari `arsipBulan`; kalau tidak, foto akan terhapus total padahal admin mengira memilih "arsip".
+- Nilai `0` berarti tingkat itu tidak pernah dijalankan.
+- Job berjalan otomatis sekali per tanggal WIB (diperiksa tiap jam, `RETENSI=off` mematikannya di harness tes). Server yang sempat mati tetap menjalankan retensi saat hidup lagi.
+- Satu putaran dibatasi 400 foto (better-sqlite3 dan `unlink` sinkron; 3.000 foto sekaligus membekukan server beberapa detik). Sisanya dikerjakan putaran berikutnya.
+- **Berkas yatim** (ada di folder, tidak dirujuk baris mana pun) ikut dibersihkan, tetapi hanya yang cocok pola nama unggahan (`<rombel>-<epoch>-<hex>.jpg`) dan berumur > 24 jam, supaya unggahan yang sedang berjalan tidak tersapu. Penyapuan dilewati bila tabel galeri kosong — itu tanda restore tidak lengkap, bukan sampah.
+- Setiap putaran dicatat di `retensi_log` (diarsip/dihapus/yatim + byte) dan `audit_log`, sehingga "disk tiba-tiba lega" selalu bisa ditelusuri.
+
+Pratinjau di layar memakai batas dan query yang sama dengan pelaksana, jadi angka "akan diarsipkan / akan dihapus / berkas tanpa data" tidak bisa berbeda dari yang benar-benar terjadi saat tombol ditekan.
+
 ## 11. UI/UX dan Workflow Audit 2026-05-17
 
 ### 11.1 Metode Audit
