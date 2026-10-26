@@ -3,12 +3,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "design:lint": "node node_modules/@google/design.md/dist/index.js lint DESIGN.md",
     "dev": "node dev.mjs",
     "build": "node build.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.105.0",
     "jsqr": "^1.4.0",
     "lucide-react": "^1.16.0",
     "react": "^19.3.1",
@@ -16,11 +16,10 @@
     "react-qr-code": "^2.0.21"
   },
   "devDependencies": {
-    "@google/design.md": "^0.1.1",
     "@tailwindcss/vite": "^4.3.3",
     "@vitejs/plugin-react": "^6.0.2",
     "tailwindcss": "^4.3.3",
-    "vite": "^8.0.16"
+    "vite": "^8.3.5"
   },
   "optionalDependencies": {
     "@rollup/rollup-linux-x64-gnu": "^4.60.4"

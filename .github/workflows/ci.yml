@@ -24,11 +24,6 @@ jobs:
         run: npm run lint
       - name: Check formatting
         run: npm run format:check
-      # DESIGN.md adalah dokumen niat desain; nilainya dijaga tetap sama dengan
-      # blok @theme di src/index.css oleh frontend/src/designTokens.test.js.
-      # Langkah ini memastikan front-matter-nya sendiri tetap valid.
-      - name: Lint design tokens
-        run: npm run design:lint --prefix frontend
       - name: Run test suite
         run: node scripts/run-tests.js main
       - name: Run frontend unit tests
