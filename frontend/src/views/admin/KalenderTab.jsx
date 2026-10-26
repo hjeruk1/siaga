@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { api } from '../../api';
 import { ActionButton, ConfirmActionModal, IconButton, Modal, CustomSelect } from '../../components/Shared';
 import { AlertCircle, CalendarPlus, ChevronDown, Trash2, X } from 'lucide-react';
@@ -8,29 +9,30 @@ import { useMaster } from './useMaster';
 export default function KalenderTab({ user, toast }) {
   const m = useMaster(user);
   const [tahun, setTahun] = useState(new Date().getFullYear().toString());
-  const [events, setEvents] = useState([]);
   const [collapsedMonths, setCollapsedMonths] = useState(new Set());
   const [form, setForm] = useState({ tanggal: '', tipe: 'libur', nama: '', scope: 'yayasan', cabang_id: '' });
   const [openForm, setOpenForm] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const { data, isPending, refetch } = useQuery({
+    queryKey: ['kalender', m.cabangId || '', tahun],
+    queryFn: () => api.kalender({ cabang_id: m.cabangId, tahun }),
+    enabled: !!m.cabangId || user.role === 'admin'
+  });
+  const events = useMemo(() => data ?? [], [data]);
+
+  // Bulan tanpa event dilipat supaya daftar tetap ringkas. Ini state tampilan,
+  // bukan data server — karena itu dihitung di effect, bukan di dalam fetcher
+  // seperti sebelumnya.
   useEffect(() => {
-    if (m.cabangId || user.role === 'admin')
-      api
-        .kalender({ cabang_id: m.cabangId, tahun })
-        .then((r) => {
-          setEvents(r);
-          // Collapse months with no events to keep the list compact.
-          const monthsWithEvents = new Set(r.map((e) => e.tanggal.slice(0, 7)));
-          setCollapsedMonths(
-            new Set(
-              ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12']
-                .map((mm) => `${tahun}-${mm}`)
-                .filter((key) => !monthsWithEvents.has(key))
-            )
-          );
-        })
-        .catch((e) => toast('err', e.message));
-  }, [m.cabangId, tahun, user.role, toast]);
+    const monthsWithEvents = new Set(events.map((e) => String(e.tanggal).slice(0, 7)));
+    setCollapsedMonths(
+      new Set(
+        ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12']
+          .map((mm) => `${tahun}-${mm}`)
+          .filter((key) => !monthsWithEvents.has(key))
+      )
+    );
+  }, [events, tahun]);
   async function add() {
     if (!form.tanggal || !form.nama.trim()) {
       toast('err', 'Tanggal dan nama event wajib diisi');
@@ -47,8 +49,7 @@ export default function KalenderTab({ user, toast }) {
       toast('ok', 'Event ditambahkan');
       setForm({ tanggal: '', tipe: 'libur', nama: '', scope: 'yayasan', cabang_id: '' });
       setOpenForm(false);
-      const r = await api.kalender({ cabang_id: m.cabangId, tahun });
-      setEvents(r);
+      refetch();
     } catch (e) {
       toast('err', e.message);
     }
@@ -57,7 +58,7 @@ export default function KalenderTab({ user, toast }) {
     try {
       await api.deleteKalender(id);
       toast('ok', 'Event dihapus');
-      setEvents(events.filter((e) => e.id !== id));
+      refetch();
     } catch (e) {
       toast('err', e.message);
     }
@@ -122,6 +123,7 @@ export default function KalenderTab({ user, toast }) {
           <span>Masuk</span>
           <b>{totalMasuk}</b>
         </div>
+        {isPending && <div className="calendar-compact-stat text-slate-400">Memuat…</div>}
       </div>
       <div className="calendar-scroll custom-scrollbar">
         <div className="calendar-board grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3">

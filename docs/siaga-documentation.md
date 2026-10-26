@@ -1466,6 +1466,51 @@ Temuan architecture map awal:
 - Ada runtime artifacts di repo tree seperti SQLite DB dan uploaded images. Ini dianggap runtime state, bukan source architecture.
 - Pada scan awal belum ada dedicated test file di source tree; sekarang sudah ada `scripts/test.js` dan `scripts/workflow-regression.test.js`.
 
+## 17b. Lapisan Data Frontend (React Query)
+
+Status: **percontohan**. Infrastruktur dan tiga tab sudah memakai React Query;
+tab lain masih memakai pola manual (`useState` + `load` + `useEffect`).
+
+Infrastruktur:
+
+- `frontend/src/lib/queryClient.js` — satu klien untuk seluruh aplikasi.
+  `staleTime` 30 detik, `retry: 1`, `refetchOnWindowFocus: false`.
+- `main.jsx` membungkus `<App />` dengan `QueryClientProvider`.
+- `App.jsx` mendaftarkan penangan error global (`daftarkanPenanganError`), jadi
+  kegagalan query muncul sebagai toast tanpa `try/catch` di setiap view.
+  Error 401 dilewati — `api.js` sudah menanganinya (sesi berakhir + login).
+
+Pola satu tab:
+
+```jsx
+const { data, isPending, isFetching, refetch } = useQuery({
+  queryKey: ['laporan-harian', m.cabangId || '', tanggal || '', rombelId || ''],
+  queryFn: () =>
+    api.dailyAdminHistory({ cabang_id: m.cabangId, tanggal: tanggal || undefined, rombel_id: rombelId || undefined }),
+  enabled: !!m.cabangId || user.role === 'admin'
+});
+const rows = data ?? [];
+```
+
+Aturan yang dipakai:
+
+- **Kunci query = seluruh input yang menentukan isi**, termasuk filter kosong
+  (`|| ''`), supaya "semua cabang" punya entri cache sendiri.
+- **`enabled`** menggantikan penjaga `if (!cabangId) return` di dalam fetcher.
+- **`data ?? []` dibungkus `useMemo`** bila hasilnya menjadi dependensi
+  `useMemo` lain; tanpa itu nilainya dianggap berubah setiap render.
+- **State tampilan turunan** (mis. bulan terlipat di Kalender) dihitung di
+  effect dari `data`, bukan di dalam `queryFn` seperti sebelumnya.
+- **Mutasi belum memakai `useMutation`.** Simpan/hapus tetap imperatif lalu
+  `refetch()`. Alasannya: jumlahnya sedikit dan alurnya bercabang (konfirmasi,
+  PIN, antrean offline absensi).
+
+Hasil terukur pada percontohan: membuka Audit → pindah ke Siswa → kembali ke
+Audit turun dari 2 permintaan menjadi 1. Yang benar-benar hilang per tab adalah
+state daftar, `load` beserta dependensinya, effect pemanggilnya, dan
+`try/catch` + `toast` — sekaligus seluruh kelas bug yang menyertainya (closure
+basi, dependensi terlewat, permintaan ganda, balapan saat filter diubah cepat).
+
 ## 18. Quick Orientation untuk Developer Baru
 
 Baca berurutan:

@@ -35,7 +35,7 @@
 | Item | Catatan |
 |------|---------|
 | 5.1 lanjutan | `BillingTab.jsx` (2698 baris) — seluruhnya satu komponen 2611 baris, tidak ada fungsi murni untuk diekstrak. Butuh refactor bertahap, bukan pemindahan mekanis. |
-| 4.2 | TanStack Query — menyentuh ~160 endpoint di seluruh view |
+| 4.2 | TanStack Query — percontohan 3 tab selesai; 31 berkas view belum |
 | 4.3 | React Router — mengubah routing custom di `App.jsx` |
 
 **Angka akhir:** 405 test lulus (315 backend + 90 frontend) + 13 E2E,
@@ -286,9 +286,37 @@ Mengubah URL aplikasi. Butuh verifikasi di browser, bukan hanya build:
 
 ### 4.2 TanStack Query
 
-Menyentuh hampir seluruh view. Kerjakan setelah 4.3 agar pola rute sudah stabil.
-Mulai dari satu tab (mis. `LaporanTab`) sebagai percontohan, ukur berapa banyak
-boilerplate loading/error yang hilang, baru sebarkan.
+**Percontohan selesai, penyebaran belum.** Infrastruktur dan tiga tab pertama
+sudah jalan; sisanya dikerjakan bertahap dengan pola yang sama.
+
+Yang sudah ada:
+
+- `frontend/src/lib/queryClient.js` — satu klien, `staleTime` 30 detik,
+  `retry: 1`, `refetchOnWindowFocus: false`. Error query yang tidak ditangani
+  lokal dilaporkan ke satu handler yang didaftarkan `App.jsx` → `toast`.
+  Klien sengaja singleton di tingkat modul karena provider harus membungkus
+  App (termasuk layar login), sedangkan `toast` hidup di dalam App.
+- Tab yang sudah pindah: **LaporanTab**, **AuditTab**, **KalenderTab** —
+  dipilih karena mewakili tiga bentuk berbeda: daftar berfilter + detail,
+  daftar sederhana, dan daftar + state tampilan turunan (bulan terlipat).
+
+Yang hilang per tab: state `rows` + `setRows`, `load` useCallback beserta
+dependensinya, `useEffect` pemanggilnya, `try/catch` + `toast('err', …)`, dan
+pemanggilan ulang manual setelah mutasi. Yang muncul: satu blok `useQuery`
+yang sekaligus menyatakan kunci cache-nya.
+
+Angka yang terukur: membuka Audit → pindah ke Siswa → kembali ke Audit
+sebelumnya menghasilkan **2 permintaan**, sekarang **1** (cache 30 detik).
+Jumlah baris nyaris tidak berubah (+8 untuk tiga tab, termasuk komentar dan
+status memuat) — keuntungannya bukan pada panjang berkas, melainkan pada
+hilangnya seluruh kelas bug: closure basi, dependensi effect yang terlewat,
+permintaan ganda saat mount, dan balapan saat filter diubah cepat.
+
+Urutan penyebaran yang disarankan: satu tab per commit, mulai dari yang
+bentuknya paling mirip percontohan (daftar berfilter). Mutasi (simpan, hapus,
+verifikasi) belum dipindah ke `useMutation` — untuk sekarang tetap imperatif
+lalu `refetch()`, karena jumlahnya sedikit dan alurnya bercabang (konfirmasi,
+PIN, antrean offline).
 
 ### 6.2 E2E Playwright
 

@@ -1,4 +1,5 @@
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { api } from '../../api';
 import { CustomSelect } from '../../components/Shared';
 import { ChevronRight, Search, X } from 'lucide-react';
@@ -122,17 +123,18 @@ function JsonRows({ label, value }) {
   );
 }
 
-export default function AuditTab({ user, toast }) {
+export default function AuditTab({ user }) {
   const m = useMaster(user);
-  const [rows, setRows] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [filter, setFilter] = useState('semua');
-  useEffect(() => {
-    api
-      .auditLog({ cabang_id: m.cabangId, limit: 150 })
-      .then(setRows)
-      .catch((e) => toast('err', e.message));
-  }, [m.cabangId, toast]);
+
+  const { data, isPending } = useQuery({
+    queryKey: ['audit-log', m.cabangId || ''],
+    queryFn: () => api.auditLog({ cabang_id: m.cabangId, limit: 150 })
+  });
+  // `data ?? []` membuat array baru setiap render; dibungkus useMemo supaya
+  // useMemo turunan di bawah tidak dihitung ulang tanpa alasan.
+  const rows = useMemo(() => data ?? [], [data]);
 
   const searched = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
@@ -247,8 +249,14 @@ export default function AuditTab({ user, toast }) {
         </div>
 
         <div className="overflow-hidden rounded-xl border border-slate-200">
-          {groups.length === 0 && (
-            <div className="p-6 text-center text-sm font-bold text-slate-400">Tidak ada log audit yang ditemukan.</div>
+          {isPending ? (
+            <div className="p-6 text-center text-sm font-bold text-slate-400">Memuat log audit…</div>
+          ) : (
+            groups.length === 0 && (
+              <div className="p-6 text-center text-sm font-bold text-slate-400">
+                Tidak ada log audit yang ditemukan.
+              </div>
+            )
           )}
           {groups.map((g) => (
             <div key={g.dateKey}>

@@ -1,5 +1,6 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import { api } from './api';
+import { daftarkanPenanganError } from './lib/queryClient';
 import LoginView from './views/LoginView';
 import { ActionButton, IconButton, Modal } from './components/Shared';
 import KeamananStaffCard from './views/shared/KeamananStaffCard';
@@ -108,6 +109,11 @@ export default function App() {
     setToasts((t) => [...t, { id, type, msg }]);
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 3500);
   }, []);
+  // Query yang gagal tanpa penanganan lokal melapor ke sini, bukan ke setiap
+  // view satu per satu — itulah alasan utama memakai React Query di proyek ini.
+  useEffect(() => {
+    daftarkanPenanganError((e) => toast('err', e.message));
+  }, [toast]);
   const [notif, setNotif] = useState([]);
   const [showNotif, setShowNotif] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);

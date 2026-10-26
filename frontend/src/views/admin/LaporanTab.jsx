@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { api } from '../../api';
 import { ActionButton, IconButton, Modal, CustomSelect, CustomDatePicker, EmptyState } from '../../components/Shared';
-import { FilePenLine, Moon, RefreshCw, Save, X } from 'lucide-react';
+import { FilePenLine, Loader2, Moon, RefreshCw, Save, X } from 'lucide-react';
 import { CabangFilter, Panel } from './AdminShared';
 import { useMaster } from './useMaster';
 import { fmtTime } from '../../utils/format';
@@ -42,30 +43,29 @@ function RatingRow({ label, value, options, onPick }) {
 
 export default function LaporanTab({ user, toast }) {
   const m = useMaster(user);
-  const [rows, setRows] = useState([]);
   const [tanggal, setTanggal] = useState('');
   const [rombelId, setRombelId] = useState('');
   const [detail, setDetail] = useState(null);
   const [edits, setEdits] = useState(null);
-  const load = useCallback(async () => {
-    // Penjaga cabang ikut di dalam load: dengan begitu effect cukup bergantung
-    // pada identitas load, bukan mengulang syarat yang sama di dua tempat.
-    if (!m.cabangId && user.role !== 'admin') return;
-    try {
-      const r = await api.dailyAdminHistory({
+
+  // Kunci query = seluruh filter yang menentukan isi daftar. React Query yang
+  // mengurus pemuatan, cache, dan pembatalan permintaan lama saat filter
+  // berubah cepat — sebelumnya itu harus ditulis tangan di setiap tab.
+  const { data, isPending, isFetching, refetch } = useQuery({
+    queryKey: ['laporan-harian', m.cabangId || '', tanggal || '', rombelId || ''],
+    queryFn: () =>
+      api.dailyAdminHistory({
         cabang_id: m.cabangId,
         tanggal: tanggal || undefined,
         rombel_id: rombelId || undefined,
         limit: 150
-      });
-      setRows(r);
-    } catch (e) {
-      toast('err', e.message);
-    }
-  }, [m.cabangId, user.role, tanggal, rombelId, toast]);
-  useEffect(() => {
-    load();
-  }, [load]);
+      }),
+    // Admin tanpa cabang terpilih tetap boleh melihat semua cabang; peran lain
+    // baru memuat setelah cabangnya diketahui.
+    enabled: !!m.cabangId || user.role === 'admin'
+  });
+  const rows = data ?? [];
+
   useEffect(() => {
     setRombelId('');
   }, [m.cabangId]);
@@ -114,7 +114,7 @@ export default function LaporanTab({ user, toast }) {
       });
       toast('ok', 'Laporan dikoreksi');
       setDetail(null);
-      load();
+      refetch();
     } catch (e) {
       toast('err', e.message);
     }
@@ -157,8 +157,8 @@ export default function LaporanTab({ user, toast }) {
           karena kelas dasar ActionButton (inline-flex) menang di cascade, sehingga di mobile
           muncul dua tombol Refresh. Kelas responsif di sini menghasilkan tampilan yang sama. */}
       <ActionButton
-        icon={RefreshCw}
-        onClick={load}
+        icon={isFetching ? Loader2 : RefreshCw}
+        onClick={() => refetch()}
         variant="secondary"
         className="w-full px-2 text-xs xl:w-auto xl:px-4 xl:text-sm"
       >
@@ -213,7 +213,7 @@ export default function LaporanTab({ user, toast }) {
               </div>
             </button>
           ))}
-          {rows.length === 0 && (
+          {!isPending && rows.length === 0 && (
             <EmptyState
               icon="clipboard"
               title="Belum Ada Laporan"
@@ -266,7 +266,7 @@ export default function LaporanTab({ user, toast }) {
             </tbody>
           </table>
         </div>
-        {rows.length === 0 && (
+        {!isPending && rows.length === 0 && (
           <div className="hidden md:block">
             <EmptyState
               icon="clipboard"
