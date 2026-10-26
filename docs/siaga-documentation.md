@@ -1371,12 +1371,21 @@ npm run test:e2e
 Cara kerjanya:
 
 - `e2e/playwright.config.js` menjalankan `npm run build` lalu `scripts/e2e-server.js` sebagai webServer.
-- `scripts/e2e-server.js` membuat database sementara di `.e2e/` (dihapus setiap run), menjalankan `init.js`, `migrate.js`, lalu `scripts/e2e-seed.js` (guru1, wali `081200000000`, 3 siswa, 1 tagihan), lalu menyalakan server dengan **NODE_ENV=production**.
+- `scripts/e2e-server.js` membuat database sementara di `.e2e/` (dihapus setiap run), menjalankan `init.js`, `migrate.js`, lalu `scripts/e2e-seed.js` (guru1, gerbang1, wali `081200000000`, siswa siap jemput + QR `E2E-PICKUP-1`, dua tagihan), lalu menyalakan server dengan **NODE_ENV=production**.
 - Mode produksi itu disengaja: hanya di sana `frontend/dist` disajikan, cookie media bersifat `Secure`, dan CORS ketat — persis kondisi sekolah. Dua regresi nyata (tautan PDF dijawab 401, modal "Catat Pembayaran" selalu terbuka) tidak muncul di dev server.
 - Semua uji berbagi satu server dan satu database, jadi dijalankan `workers: 1`.
+- `reuseExistingServer: false` — uji alur kritikal **mengubah data** (membuat akun staff, melunasi tagihan). Memakai ulang server lama membuat jalan kedua menemukan data yang sudah berubah, dan hasilnya tidak lagi bisa dipercaya.
 - Artefak kegagalan (trace, screenshot) masuk `test-results/` dan diunggah CI saat gagal.
 
-Cakupan saat ini (10 uji): login tiga peran; tab Billing bebas modal + ekspor CSV benar-benar terunduh; kartu pengingat & penyimpanan; absensi memuat daftar; check-in offline masuk antrean lalu tersinkron; galeri guru; portal wali (tab, deep link `?tab=`, rapor PDF lewat cookie media, galeri).
+Cakupan saat ini (13 uji):
+
+- **Uji asap**: login tiga peran; tab Billing bebas modal + ekspor CSV benar-benar terunduh; kartu pengingat, penyimpanan & retensi; absensi memuat daftar; check-in offline masuk antrean lalu tersinkron; galeri guru; portal wali (tab, deep link `?tab=`, rapor PDF lewat cookie media, galeri).
+- **Alur kritikal** (`e2e/alur-kritikal.spec.js`) — jalur yang paling mahal kalau rusak diam-diam:
+  1. admin membuat staff → password sementara dibaca dari dialog → staff login → **wajib ganti password** → dashboard;
+  2. pembayaran tunai → pratinjau alokasi **FIFO** (tagihan terlama dipelunasi dulu) → tersimpan dengan nomor kuitansi → tagihannya berubah **Lunas**;
+  3. petugas gerbang mengetik QR penjemput → siswa berstatus **menunggu dijemput**.
+
+Catatan: dua tagihan di-seed untuk dua uji yang saling bertentangan — uji pembayaran melunasi periode `2026-08`, sedangkan uji ekspor CSV memeriksa periode `2026-09` yang harus tetap "Belum dibayar". Satu tagihan untuk keduanya membuat keduanya rapuh.
 
 Hasil terakhir yang dicatat setelah repair wave 1:
 

@@ -26,6 +26,7 @@
 | 5.1 | Pecah GuruView (2895→1341), SiswaTab (1943→1009) | Sebagian |
 | 5.2 | Rename `admin/shared.jsx` → `AdminShared.jsx` | Selesai |
 | 6.1 | Test unit frontend (37 test) | Selesai |
+| 6.2 | E2E alur kritikal (wajib ganti password, bayar→FIFO, QR penjemput) | Selesai |
 
 **Belum dikerjakan** — lihat §12 untuk alasan dan rencananya:
 
@@ -35,7 +36,6 @@
 | 5.3 | Konsolidasi design token (`DESIGN.md` → `tailwind.theme.json` → `index.css`) |
 | 4.2 | TanStack Query — menyentuh ~160 endpoint di seluruh view |
 | 4.3 | React Router — mengubah routing custom di `App.jsx` |
-| 6.2 | E2E Playwright (login, check-in, pembayaran) |
 | Lain | `useMaster` terduplikasi di `KegiatanMingguanTab.jsx` dan `admin/AdminShared.jsx` |
 
 **Angka akhir:** 144 test lulus (96 backend + 11 workflow + 37 frontend),
@@ -292,11 +292,20 @@ boilerplate loading/error yang hilang, baru sebarkan.
 
 ### 6.2 E2E Playwright
 
-Alur kritikal yang layak ditutup lebih dulu:
-1. Login staff + wajib ganti password.
-2. Check-in absensi dan set keterangan.
-3. Buat pembayaran tunai → verifikasi alokasi FIFO ke tagihan.
-4. Scan QR penjemput → pulangkan siswa.
+**Selesai.** `e2e/alur-kritikal.spec.js` menutup tiga jalur yang paling mahal
+kalau rusak diam-diam, di atas 10 uji asap yang sudah ada:
 
-Ketiganya sudah punya cakupan API (lihat `scripts/*.test.js`); E2E menambahkan
-lapisan UI yang saat ini sama sekali belum teruji.
+1. Login staff + wajib ganti password — admin membuat akun lewat UI, password
+   sementara dibaca dari dialog, lalu staff dipaksa mengganti sebelum masuk.
+2. Check-in absensi — sudah tercakup sejak awal (termasuk jalur offline).
+3. Pembayaran tunai → pratinjau alokasi FIFO → tersimpan → tagihan jadi Lunas.
+4. Scan QR penjemput → siswa berstatus menunggu dijemput.
+
+Dua hal yang ditemukan saat mengerjakan:
+
+- `reuseExistingServer` harus `false`. Uji ini membuat akun dan melunasi
+  tagihan; memakai server lama membuat jalan kedua menemukan data yang sudah
+  berubah. CI sudah `false`; lokal disamakan.
+- Uji pembayaran dan uji ekspor CSV saling bertentangan kalau memakai tagihan
+  yang sama (satu melunasi, satu mengharapkan "Belum dibayar"). Seeder kini
+  membuat dua tagihan dengan periode berbeda.

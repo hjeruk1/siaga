@@ -97,4 +97,52 @@ if (siswaPertama && !db.prepare('SELECT 1 FROM tagihan WHERE periode=?').get(PER
   ).run(siswaPertama.id, cabang.id, jenjang.id, rombel.id, PERIODE, now(), now());
 }
 
+// Tagihan KEDUA, sengaja periode lain dan siswa lain: uji pembayaran melunasi
+// yang ini, sedangkan uji ekspor CSV memeriksa periode 2026-09 yang harus
+// tetap berstatus belum dibayar. Satu tagihan untuk dua uji yang saling
+// bertentangan akan membuat keduanya rapuh.
+const siswaKedua = db.prepare('SELECT id FROM siswa ORDER BY id LIMIT 1 OFFSET 1').get();
+if (siswaKedua && !db.prepare("SELECT 1 FROM tagihan WHERE periode='2026-08'").get()) {
+  db.prepare(
+    `INSERT INTO tagihan(siswa_id,cabang_id,jenjang_id,rombel_id,paket,tahun_ajaran,periode,jenis,nama,
+      nominal_awal,diskon_amount,nominal_final,jatuh_tempo,status,created_by,created_at,updated_at)
+     VALUES(?,?,?,?,'reguler','2026/2027','2026-08','spp','SPP Agustus 2026',650000,0,650000,'2026-08-10','open',NULL,?,?)`
+  ).run(siswaKedua.id, cabang.id, jenjang.id, rombel.id, now(), now());
+}
+
 console.log('[e2e-seed] data uji siap (guru1, wali 081200000000, 3 siswa, 1 tagihan)');
+
+// --- Petugas gerbang + siswa siap dijemput (alur scan QR) ---
+//
+// Uji alur penjemputan butuh tiga hal yang tidak dibuat init.js: akun berperan
+// gerbang, siswa yang SUDAH check-in hari ini, dan penjemput terdaftar dengan
+// QR yang bisa diketik. Nama siswa sengaja bukan salah satu dari tiga di atas
+// supaya uji absensi guru (yang menekan kartu pertama) tidak bertabrakan
+// dengan status yang sudah diisi di sini.
+akunStaff('gerbang1', 'gerbang', cabang.id, 'Petugas Gerbang');
+
+// Uji berjalan pukul berapa pun, sedangkan jam pulang reguler 11:00 — tanpa
+// pickup_fleksibel, scan akan ditolak "Belum waktu pulang" saat pagi.
+db.prepare('UPDATE operasional_config SET pickup_fleksibel=1 WHERE cabang_id=? AND jenjang_id=? AND paket=?').run(
+  cabang.id,
+  jenjang.id,
+  'reguler'
+);
+
+const hariIni = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Jakarta' }).format(new Date());
+const QR_UJI = 'E2E-PICKUP-1';
+if (!db.prepare('SELECT 1 FROM penjemput WHERE qr_code=?').get(QR_UJI)) {
+  const siswaJemput = siswaBaru('Bintang Uji', null);
+  db.prepare(
+    `INSERT INTO absensi(siswa_id,cabang_id,jenjang_id,rombel_id,paket,tanggal,status,jam_masuk,created_at,updated_at)
+     VALUES(?,?,?,?,'reguler',?,'Hadir','07:30',?,?)`
+  ).run(siswaJemput, cabang.id, jenjang.id, rombel.id, hariIni, now(), now());
+  db.prepare('INSERT INTO penjemput(siswa_id,nama,relasi,qr_code,aktif) VALUES(?,?,?,?,1)').run(
+    siswaJemput,
+    'Bapak Uji',
+    'Ayah',
+    QR_UJI
+  );
+}
+
+console.log('[e2e-seed] siap jemput: Bintang Uji (QR E2E-PICKUP-1), akun gerbang1');

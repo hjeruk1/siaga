@@ -659,7 +659,11 @@ export default function StaffTab({ user, toast }) {
               Password sementara telah dibuat. Salin dan bagikan kepada pengguna:
             </div>
             <div className="bg-slate-100 border border-slate-200 rounded-xl p-4 text-center">
-              <span className="text-2xl font-black text-text-main tracking-widest select-all">{tempPw}</span>
+              {/* id dipakai uji E2E: password sementara hanya tampil di sini,
+                  jadi tanpa penanda stabil uji harus menebak dari kelas CSS. */}
+              <span id="staff-temp-password" className="text-2xl font-black text-text-main tracking-widest select-all">
+                {tempPw}
+              </span>
             </div>
             <ActionButton
               icon={Copy}

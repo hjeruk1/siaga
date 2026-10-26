@@ -34,7 +34,11 @@ module.exports = defineConfig({
     cwd: path.resolve(__dirname, '..'),
     url: `${BASE}/api/health`,
     timeout: 240_000,
-    reuseExistingServer: !process.env.CI,
+    // Selalu server baru, termasuk di mesin lokal. Uji alur kritikal membuat
+    // akun staff dan melunasi tagihan — kalau server lama dipakai ulang, jalan
+    // kedua menemukan datanya sudah berubah dan hasilnya tidak lagi bisa
+    // dipercaya. Efek sampingnya juga bagus: dist basi tidak mungkin diuji.
+    reuseExistingServer: false,
     stdout: 'ignore',
     stderr: 'pipe'
   }
