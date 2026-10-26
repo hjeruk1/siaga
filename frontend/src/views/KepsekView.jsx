@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { api } from '../api';
+import { queryClient } from '../lib/queryClient';
 import { ActionButton, Chip, CustomSelect, CustomDatePicker, LiveClock, Modal, Spinner } from '../components/Shared';
 import { meniTunggu, todayWIB } from '../utils/date';
 import { money } from '../utils/format';
@@ -18,55 +20,64 @@ const TABS = [
 export default function KepsekView({ user, toast, tab, syncNotif }) {
   const activeTab = TABS.some((t) => t.id === tab) ? tab : 'monitoring';
   const [tanggal, setTanggal] = useState(todayWIB());
-  const [cabang, setCabang] = useState([]);
   const [cabangId, setCabangId] = useState(user.role === 'admin' ? '' : user.cabang_id);
-  const [rows, setRows] = useState([]);
-  const [lapMeta, setLapMeta] = useState({ tanggal: null, is_school_day: null });
-  const [notif, setNotif] = useState([]);
-  const [laporan, setLaporan] = useState(null);
-  const [monitoring, setMonitoring] = useState(null);
-  const [loadingMonitoring, setLoadingMonitoring] = useState(true);
-  const [earlyReleases, setEarlyReleases] = useState([]);
-  const [dayClose, setDayClose] = useState(null);
   const [earlyOpen, setEarlyOpen] = useState(false);
   const [closeOpen, setCloseOpen] = useState(false);
   const [earlyForm, setEarlyForm] = useState({ siswa_id: '', alasan: '' });
   const [actionBusy, setActionBusy] = useState(false);
 
-  useEffect(() => {
-    api
-      .cabang()
-      .then(setCabang)
-      .catch(() => {});
-  }, []);
+  const cabangQ = useQuery({ queryKey: ['cabang'], queryFn: () => api.cabang() });
+  const cabang = useMemo(() => cabangQ.data ?? [], [cabangQ.data]);
 
-  const loadSummary = useCallback(async () => {
-    const [data, notifData, laporanData] = await Promise.all([
-      api.dailyToday({ tanggal, cabang_id: cabangId }),
-      api.notifikasi(),
-      user.role === 'admin' || cabangId ? api.laporan({ cabang_id: cabangId }).catch(() => null) : Promise.resolve(null)
-    ]);
-    setRows(data.rows || data);
-    setLapMeta({ tanggal: data.tanggal || tanggal, is_school_day: data.is_school_day });
-    setNotif(notifData);
-    setLaporan(laporanData);
-  }, [tanggal, cabangId, user.role]);
-  const loadMonitoring = useCallback(async () => {
-    setLoadingMonitoring(true);
-    try {
+  // Satu kunci untuk satu layar: ringkasan harian dipakai bersama oleh tab
+  // Laporan dan Keuangan, jadi tiga permintaan yang saling bergantung dimuat
+  // sebagai satu hasil — bukan tiga state yang bisa tampil tidak sinkron.
+  const summaryQ = useQuery({
+    queryKey: ['kepsek-ringkasan', cabangId || '', tanggal],
+    queryFn: async () => {
+      const [data, notifData, laporanData] = await Promise.all([
+        api.dailyToday({ tanggal, cabang_id: cabangId }),
+        api.notifikasi(),
+        user.role === 'admin' || cabangId
+          ? api.laporan({ cabang_id: cabangId }).catch(() => null)
+          : Promise.resolve(null)
+      ]);
+      return {
+        rows: data.rows || data,
+        lapMeta: { tanggal: data.tanggal || tanggal, is_school_day: data.is_school_day },
+        notif: notifData,
+        laporan: laporanData
+      };
+    }
+  });
+  const rows = useMemo(() => summaryQ.data?.rows ?? [], [summaryQ.data]);
+  const lapMeta = summaryQ.data?.lapMeta ?? { tanggal: null, is_school_day: null };
+  const notif = summaryQ.data?.notif ?? [];
+  const laporan = summaryQ.data?.laporan ?? null;
+
+  // Hanya dimuat saat tab Monitoring dibuka; SSE di bawah menyegarkannya lewat
+  // invalidateQueries, bukan dengan memanggil ulang fungsi pemuat.
+  const monitoringQ = useQuery({
+    queryKey: ['kepsek-monitoring', cabangId || ''],
+    queryFn: async () => {
       const params = { cabang_id: cabangId };
       const [monData, erData, closeData] = await Promise.all([
         api.dashboard(params),
         api.earlyRelease(params).catch(() => null),
         api.tutupHariStatus(params).catch(() => null)
       ]);
-      setMonitoring(monData);
-      setEarlyReleases(monData.earlyReleases || (Array.isArray(erData) ? erData : erData?.rows || []));
-      setDayClose(monData.dayCloseStatus || closeData || null);
-    } finally {
-      setLoadingMonitoring(false);
-    }
-  }, [cabangId]);
+      return {
+        monitoring: monData,
+        earlyReleases: monData.earlyReleases || (Array.isArray(erData) ? erData : erData?.rows || []),
+        dayClose: monData.dayCloseStatus || closeData || null
+      };
+    },
+    enabled: activeTab === 'monitoring'
+  });
+  const monitoring = monitoringQ.data?.monitoring ?? null;
+  const earlyReleases = monitoringQ.data?.earlyReleases ?? [];
+  const dayClose = monitoringQ.data?.dayClose ?? null;
+  const loadingMonitoring = monitoringQ.isPending && activeTab === 'monitoring';
   async function createEarlyRelease() {
     if (!earlyForm.siswa_id || !earlyForm.alasan.trim()) {
       toast('err', 'Siswa dan alasan wajib diisi');
@@ -82,7 +93,7 @@ export default function KepsekView({ user, toast, tab, syncNotif }) {
       toast('ok', 'Izin pulang dini dibuat');
       setEarlyOpen(false);
       setEarlyForm({ siswa_id: '', alasan: '' });
-      await loadMonitoring();
+      await monitoringQ.refetch();
     } catch (e) {
       toast('err', e.message);
     } finally {
@@ -99,7 +110,7 @@ export default function KepsekView({ user, toast, tab, syncNotif }) {
       await api.tutupHari({ tanggal: todayWIB(), cabang_id: cabangId });
       toast('ok', 'Hari operasional ditutup');
       setCloseOpen(false);
-      await Promise.all([loadMonitoring(), loadSummary()]);
+      await Promise.all([monitoringQ.refetch(), summaryQ.refetch()]);
     } catch (e) {
       toast('err', e.message);
     } finally {
@@ -107,23 +118,21 @@ export default function KepsekView({ user, toast, tab, syncNotif }) {
     }
   }
 
-  useEffect(() => {
-    loadSummary().catch((e) => toast('err', e.message));
-  }, [loadSummary, toast]);
+  // Absensi berubah → tandai cache monitoring basi. React Query yang memutuskan
+  // kapan memuat ulang, jadi stream tidak perlu tahu soal state komponen.
   useEffect(() => {
     if (activeTab !== 'monitoring') return;
-    loadMonitoring().catch((e) => toast('err', e.message));
     const eventSource = new EventSource('/api/absensi/stream');
     eventSource.onmessage = (event) => {
       try {
         const payload = JSON.parse(event.data);
         if (payload.type === 'absensi_changed') {
-          loadMonitoring().catch(() => {});
+          queryClient.invalidateQueries({ queryKey: ['kepsek-monitoring', cabangId || ''] });
         }
       } catch {}
     };
     return () => eventSource.close();
-  }, [activeTab, loadMonitoring, toast]);
+  }, [activeTab, cabangId]);
 
   const stat = useMemo(
     () => ({
@@ -180,7 +189,7 @@ export default function KepsekView({ user, toast, tab, syncNotif }) {
             try {
               await api.deleteEarlyRelease(id);
               toast('ok', 'Izin pulang dini dihapus');
-              loadMonitoring();
+              monitoringQ.refetch();
             } catch (e) {
               toast('err', e.message);
             }

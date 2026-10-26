@@ -120,6 +120,8 @@ console.log('[e2e-seed] data uji siap (guru1, wali 081200000000, 3 siswa, 1 tagi
 // supaya uji absensi guru (yang menekan kartu pertama) tidak bertabrakan
 // dengan status yang sudah diisi di sini.
 akunStaff('gerbang1', 'gerbang', cabang.id, 'Petugas Gerbang');
+// Kepala sekolah: satu-satunya peran yang dashboardnya belum punya uji E2E.
+akunStaff('kepsek1', 'kepsek', cabang.id, 'Siti Kepsek');
 
 // Uji berjalan pukul berapa pun, sedangkan jam pulang reguler 11:00 — tanpa
 // pickup_fleksibel, scan akan ditolak "Belum waktu pulang" saat pagi.

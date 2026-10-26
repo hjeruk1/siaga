@@ -8,6 +8,7 @@ const AKUN = {
   admin: { username: 'admin', password: 'admin123' },
   guru: { username: 'guru1', password: 'admin123' },
   gerbang: { username: 'gerbang1', password: 'admin123' },
+  kepsek: { username: 'kepsek1', password: 'admin123' },
   wali: { no_wa: '081200000000', password: 'admin123' }
 };
 

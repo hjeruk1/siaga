@@ -1468,11 +1468,11 @@ Temuan architecture map awal:
 
 ## 17b. Lapisan Data Frontend (React Query)
 
-Status: **delapan tab admin** sudah memakai React Query; sisanya masih pola
-manual (`useState` + `load` + `useEffect`).
+Status: **sembilan view** sudah memakai React Query; sisanya masih pola manual
+(`useState` + `load` + `useEffect`).
 
 Sudah pindah: LaporanTab, AuditTab, KalenderTab, CabangTab, WaliTab, StaffTab,
-SiswaTab, RombelTab.
+SiswaTab, RombelTab, dan **KepsekView** (seluruh tab dashboard kepala sekolah).
 
 Infrastruktur:
 
@@ -1514,6 +1514,14 @@ Aturan yang dipakai:
   (`cfg`, `org`) sengaja belum dipindah: isinya disunting di tempat sebelum
   disimpan, sehingga query + salinan lokal hanya menambah upacara tanpa
   menghapus boilerplate.
+- **Realtime lewat `invalidateQueries`, bukan pemanggilan fungsi.** Dashboard
+  kepsek membuka SSE absensi; saat `absensi_changed` masuk, yang ditandai basi
+  adalah kuncinya (`['kepsek-monitoring', cabangId]`), lalu React Query yang
+  memuat ulang. Stream tidak perlu tahu apa pun soal state komponen, dan
+  effect-nya tidak lagi bergantung pada fungsi pemuat.
+- **Beberapa permintaan yang selalu dipakai bersama = satu kunci.** Ringkasan
+  kepsek memuat `daily-record/today` + `notifikasi` + `laporan` sekaligus dan
+  mengembalikan satu objek; tab Laporan dan Keuangan membaca hasil yang sama.
 
 Hasil terukur pada percontohan: membuka Audit → pindah ke Siswa → kembali ke
 Audit turun dari 2 permintaan menjadi 1. Yang benar-benar hilang per tab adalah
