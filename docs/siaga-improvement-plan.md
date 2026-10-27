@@ -23,7 +23,7 @@
 | 3.2 | Otomasi backup (systemd timer) | Selesai |
 | 3.3 | Readiness check | Selesai |
 | 4.1 | React 18 → 19 + pemisahan vendor chunk | Selesai |
-| 5.1 | Pecah GuruView (2895→1341), SiswaTab (1943→1009) | Sebagian |
+| 5.1 | Pecah GuruView (2895→1341), SiswaTab (1943→1009), BillingTab (2408→1219) | Selesai |
 | 5.2 | Rename `admin/shared.jsx` → `AdminShared.jsx` | Selesai |
 | 6.1 | Test unit frontend (37 test) | Selesai |
 | 6.2 | E2E alur kritikal (wajib ganti password, bayar→FIFO, QR penjemput) | Selesai |
@@ -31,16 +31,16 @@
 | — | Lint 57 warning → 0 (unused, entitas JSX, fast-refresh, deps effect) | Selesai |
 | 4.3 | React Router (path = view, `?tab=` = sub-tab, redirect tautan lama) | Selesai |
 
-**Belum dikerjakan** — lihat §12 untuk alasan dan rencananya:
+**Selesai dengan pengecualian tertulis** — alasannya di §12:
 
 | Item | Catatan |
 |------|---------|
-| 5.1 lanjutan | `BillingTab.jsx` — **berjalan bertahap**. 2.408 → 2.329 baris: `PreviewGenerateModal` sudah keluar. Sisa bagian terbesar: `renderTagihanTab` (444 baris), `renderPembayaranTab` (257), `renderTarifTab` (218), `renderInvoiceTab` (139), `renderRingkasanTab` (83), dan modal tarif/diskon/edit. Setiap bagian punya 8–20 dependensi state induk, jadi satu bagian per commit dengan verifikasi browser. |
 | 4.2 | TanStack Query — 17 komponen selesai (pengecualian di §12) |
 
 
-**Angka akhir:** 405 test lulus (315 backend + 90 frontend) + 19 E2E,
-lint 0 error dan **0 warning**, build hijau.
+**Angka akhir:** 405 test lulus (315 backend + 90 frontend) + **53 E2E**
+(20 alur asap/kritikal + 33 uji deep-load), lint 0 error dan **0 warning**,
+build hijau.
 
 `npm audit`: root + frontend **0 vulnerability**; backend **0 high**
 (`body-parser` dan `multer` sudah dinaikkan lewat `npm audit fix`). Sisa **19
@@ -215,7 +215,7 @@ regresi nyata pada sistem yang sudah dipakai. **Jangan dikerjakan tanpa staging/
 
 | # | Tugas | Risiko | Dampak |
 |---|-------|--------|--------|
-| 5.1 | Pecah `BillingTab.jsx` (107 KB), `GuruView.jsx` (105 KB), `SiswaTab.jsx` (66 KB) | Sedang | Bisa di-maintain |
+| 5.1 | Pecah `BillingTab.jsx` (2408→1219), `GuruView.jsx` (2895→1341), `SiswaTab.jsx` (1943→1009) | Selesai | Bisa di-maintain |
 | 5.2 | Rename `views/admin/shared.jsx` → `AdminShared.jsx` | Nol | Hilangkan kebingungan nama |
 | 5.3 | Konsolidasi design token (`DESIGN.md` → `tailwind.theme.json` → `index.css`) | Rendah | Satu sumber kebenaran |
 
@@ -263,25 +263,35 @@ Sebuah fase dianggap selesai bila:
 
 ---
 
-## 12. Sisa Pekerjaan — Rencana Konkret
+## 12. Catatan Pengerjaan Terperinci
 
-### 5.1 lanjutan — `BillingTab.jsx` (2698 baris)
+### 5.1 lanjutan — `BillingTab.jsx` (SELESAI)
 
-Berbeda dari GuruView dan SiswaTab, file ini **tidak punya fungsi murni maupun
-komponen terpisah** untuk dipindahkan. Seluruh 2611 baris berada dalam satu
-komponen. Pemindahan mekanis tidak bisa dilakukan tanpa membaca dan memahami
-alur state-nya lebih dulu.
+**2.408 → 1.219 baris.** Berbeda dari GuruView dan SiswaTab, berkas ini tidak
+punya fungsi murni atau komponen terpisah untuk dipindahkan: seluruh isinya satu
+komponen. Yang bisa dikeluarkan hanya blok render, dan itu yang dikerjakan —
+satu blok per commit, masing-masing diverifikasi build + lint + E2E.
 
-Pendekatan yang disarankan (bertahap, satu commit per langkah):
+Hasilnya di `views/admin/billing/`: `RingkasanTab`, `TagihanTab`,
+`PembayaranTab`, `TarifTab`, `InvoiceTab`, plus `PreviewGenerateModal` yang
+sudah keluar lebih dulu. Pola yang dipakai seragam: induk tetap memegang state
+dan mutasi, anak menerima props dan murni tampilan.
 
-1. Petakan state dan turunannya — daftar `useState`/`useMemo` dan siapa memakai apa.
-2. Identifikasi blok render yang mandiri (mis. modal konfirmasi, tabel tagihan,
-   form pembayaran) dan ubah menjadi komponen anak yang menerima props.
-3. Pindahkan helper murni yang muncul ke `admin/billing/helpers.js` — lalu tulis
-   test seperti yang sudah dilakukan untuk `guru/helpers.js`.
-4. Verifikasi build + lint setiap langkah. Perhatikan: lint akan menangkap
-   variabel tak terdefinisi yang lolos dari build (lihat catatan di commit
-   `4bc369c`).
+Dua hal yang membuat pemecahan ini tidak mekanis:
+
+1. **Dependensi tersembunyi.** Tiap blok memakai 8–20 nilai dari lingkup induk
+   (`billingStats`, `groupedTarif`, `canSelectBill`, …). Daftarnya dipetakan
+   dengan memindai nama yang benar-benar muncul di blok, bukan ditebak; tanpa
+   itu `build` lolos tetapi halaman putih saat tab dibuka.
+2. **Helper ikut terbawa.** `blankTarifForm` dipakai di dalam blok Tarif, jadi
+   ia harus jadi prop, bukan disalin — salinan akan menyimpang dari induk.
+
+Sisa di induk (±500 baris) adalah state, mutasi, dan modal tarif/diskon/edit.
+Modal-modal itu **sengaja belum dipindah**: isinya form dengan state yang
+dikendalikan induk (`tarifForm`, `diskonForm`, `payForm`, flag dirty), jadi
+memindahkannya berarti memindahkan state juga — keuntungannya kecil, risikonya
+justru besar. Ukuran berkas 1.219 baris sudah di bawah ambang yang menyulitkan
+navigasi.
 
 ### 4.3 React Router
 
@@ -373,3 +383,17 @@ Dua hal yang ditemukan saat mengerjakan:
 - Uji pembayaran dan uji ekspor CSV saling bertentangan kalau memakai tagihan
   yang sama (satu melunasi, satu mengharapkan "Belum dibayar"). Seeder kini
   membuat dua tagihan dengan periode berbeda.
+
+**Tambahan: `e2e/deep-load.spec.js` (33 kasus).** Selama migrasi React Query dan
+pemecahan BillingTab, empat kali kode yang lolos `build`, lint, dan seluruh uji
+unit tetap **memutihkan halaman** — `ReferenceError: Cannot access 'x' before
+initialization`, karena nilai yang dulu `useState` di atas komponen berpindah ke
+bawah sebagai turunan query sementara pemakaiannya tertinggal di atas. Build
+tidak menangkapnya (itu error runtime), dan navigasi klik tidak selalu: sebagian
+hanya muncul saat halaman dimuat dari nol di path dalam.
+
+Uji ini membuka setiap view dan tab lewat URL-nya langsung, lalu memeriksa dua
+hal: nol `pageerror`, dan isi tab benar-benar dirender (bukan dialihkan ke view
+bawaan). Ia langsung menemukan bug nyata: `KepsekView.TABS` tidak memuat `izin`
+dan `pengumuman` padahal sidebar menautkannya — menu itu selalu mendarat di
+Monitoring. Menambah tab baru berarti menambah satu baris di tabel `KASUS`.

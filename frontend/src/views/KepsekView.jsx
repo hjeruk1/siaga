@@ -9,11 +9,17 @@ import RekapAbsensiBulanan from './shared/RekapAbsensiBulanan';
 import IzinPanel from './shared/IzinPanel';
 import PengumumanPanel from './shared/PengumumanPanel';
 import { ChevronRight, DoorClosed, Plus, Save, X } from 'lucide-react';
+// Daftar ini menentukan tab mana yang VALID dibuka; tanpa entri di sini,
+// `?tab=izin` jatuh kembali ke monitoring. Izin dan Pengumuman pernah
+// terlewat: sidebar menautkannya, panelnya sudah dirender di bawah, tetapi
+// keduanya tidak pernah bisa dibuka — menu yang diklik mendarat di Monitoring.
 const TABS = [
   { id: 'monitoring', label: 'Monitoring' },
   { id: 'laporan', label: 'Laporan' },
   { id: 'rekap', label: 'Rekap Absensi' },
   { id: 'keuangan', label: 'Keuangan' },
+  { id: 'izin', label: 'Izin & Sakit' },
+  { id: 'pengumuman', label: 'Pengumuman' },
   { id: 'notifikasi', label: 'Notifikasi' }
 ];
 

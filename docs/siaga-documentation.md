@@ -1508,6 +1508,31 @@ diubah agar jalur kompatibilitas ini terus teruji setiap hari.
 
 Uji: `e2e/rute.spec.js` (tautan lama, tombol Back, refresh di path dalam).
 
+## 17c. Uji Deep-Load (penjaga halaman putih)
+
+`e2e/deep-load.spec.js` membuka **setiap view dan tab lewat URL-nya langsung**
+(33 kasus: 14 tab admin, 5 guru, 7 kepsek, 6 portal wali, 1 gerbang) dan
+memeriksa dua hal:
+
+1. **nol `pageerror`** selama halaman dimuat;
+2. isi tab benar-benar dirender (judul panel, atau tab aktif untuk portal wali),
+   dan URL tidak teralihkan ke view bawaan.
+
+Kenapa ada. Selama migrasi React Query, empat kali kode yang lolos `build`,
+lint, dan seluruh uji unit tetap **memutihkan halaman** karena
+`ReferenceError: Cannot access 'x' before initialization` — nilai yang dulu
+`useState` di atas komponen dipindah ke bawah sebagai turunan query, sementara
+pemakaiannya tertinggal di atas. Build tidak menangkapnya (itu error runtime),
+dan navigasi klik tidak selalu: sebagian hanya muncul saat halaman dimuat dari
+nol di path dalam.
+
+Uji ini juga langsung menemukan bug nyata: `KepsekView.TABS` tidak memuat
+`izin` dan `pengumuman`, padahal sidebar menautkannya — menu itu selalu
+mendarat di Monitoring. Panelnya sudah dirender di bawah, tetapi tidak pernah
+bisa dibuka.
+
+Menambah tab baru berarti menambah satu baris di tabel `KASUS` berkas itu.
+
 ## 17b. Lapisan Data Frontend (React Query)
 
 Status: **sebelas view + tiga panel bersama** sudah memakai React Query;

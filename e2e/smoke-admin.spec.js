@@ -63,6 +63,37 @@ test.describe('admin', () => {
     await expect(page.getByText('KEHADIRAN')).toBeVisible();
   });
 
+  // Pratinjau generate adalah satu-satunya tempat admin melihat apa yang AKAN
+  // ditagihkan sebelum menekan konfirmasi. Modal ini pernah dipindah ke
+  // berkasnya sendiri tanpa uji; di sini jalurnya dikunci.
+  test('pratinjau generate tagihan tampil sebelum konfirmasi', async ({ page }) => {
+    await page.goto('/admin?tab=billing');
+    await page.getByRole('button', { name: 'Tagihan', exact: true }).first().click();
+
+    await page
+      .getByRole('button', { name: /Generate Tagihan/ })
+      .first()
+      .click();
+
+    // Admin wajib memilih cabang dulu — tanpa itu `previewBulanan` menolak
+    // dengan toast, bukan membuka pratinjau.
+    await page.getByRole('combobox').filter({ hasText: 'Pilih Cabang...' }).click();
+    await page.getByRole('option', { name: 'Godean' }).click();
+
+    await page.getByRole('button', { name: 'Pilih bulan' }).click();
+    await page.getByRole('button', { name: 'Okt', exact: true }).click();
+    await page.getByRole('button', { name: 'Bulanan', exact: true }).click();
+
+    const pratinjau = page.getByRole('dialog', { name: /Preview Generate/ });
+    await expect(pratinjau).toBeVisible({ timeout: 25_000 });
+    // Isinya harus menjelaskan hasilnya, bukan sekadar kerangka kosong.
+    await expect(pratinjau.getByText(/Tagihan baru|sudah ada dan akan dilewati|Tidak ada tagihan/)).toBeVisible();
+
+    // Batal = tidak ada yang dibuat.
+    await pratinjau.getByRole('button', { name: 'Batal' }).click();
+    await expect(pratinjau).toHaveCount(0);
+  });
+
   test('kartu pengingat, penyimpanan, dan retensi tampil di Konfigurasi', async ({ page }) => {
     await page.goto('/?view=admin&tab=config');
     await expect(page.getByText('Pengingat tagihan')).toBeVisible({ timeout: 25_000 });
