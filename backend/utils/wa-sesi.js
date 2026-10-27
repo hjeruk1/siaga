@@ -73,8 +73,67 @@ function startSesi(sid) {
   return panggil(`/api/sessions/${encodeURIComponent(sid)}/start`, { method: 'POST' });
 }
 
-function hapusSesi(sid) {
-  return panggil(`/api/sessions/${encodeURIComponent(sid)}`, { method: 'DELETE' });
+async function hapusSesi(sid) {
+  const hasil = await panggil(`/api/sessions/${encodeURIComponent(sid)}`, { method: 'DELETE' });
+  // Kepemilikan baru dihapus sesudah instance membenarkan penghapusan; kalau
+  // instance gagal, sesi hidup harus tetap bisa dikelola pemiliknya.
+  hapusPending(sid);
+  return hasil;
+}
+
+// ---------------------------------------------------------------------------
+// Kepemilikan sesi yang belum disimpan (migrasi 021)
+// ---------------------------------------------------------------------------
+// Sesi dicatat milik satu cabang sejak dibuat. Tanpa catatan ini, rute QR dan
+// pairing tidak bisa membedakan sesi milik cabang sendiri dari sesi cabang
+// lain, padahal QR adalah kredensial hidup.
+
+function catatPending(sid, cabangId, penggunaId) {
+  if (!sid) return;
+  try {
+    db.prepare(
+      `INSERT INTO wa_sesi_pending(session_id,cabang_id,dibuat_oleh,created_at)
+       VALUES(?,?,?,?)
+       ON CONFLICT(session_id) DO NOTHING`
+    ).run(
+      String(sid),
+      cabangId === '' || cabangId === null || cabangId === undefined ? null : Number(cabangId),
+      penggunaId || null,
+      new Date().toISOString()
+    );
+  } catch {
+    // Tabel belum ada di database yang belum menjalankan migrasi 021: sesi
+    // tetap dibuat, dan hanya admin pusat yang bisa mengelolanya sesudah itu.
+  }
+}
+
+function hapusPending(sid) {
+  try {
+    db.prepare('DELETE FROM wa_sesi_pending WHERE session_id=?').run(String(sid));
+  } catch {
+    // Tabel belum ada di database yang belum menjalankan migrasi 021.
+  }
+}
+
+function pendingUntukSesi(sid) {
+  try {
+    return db.prepare('SELECT * FROM wa_sesi_pending WHERE session_id=?').get(String(sid)) || null;
+  } catch {
+    return null;
+  }
+}
+
+// Admin pusat: semua sesi. Admin cabang: hanya sesi pending milik cabangnya
+// atau sesi yang sudah tersimpan sebagai akun cabangnya. Sesi tanpa catatan
+// kepemilikan (dibuat sebelum migrasi 021) hanya untuk admin pusat.
+function sesiDiizinkan(user, sid) {
+  if (!user) return false;
+  if (user.role === 'admin') return true;
+  if (user.role !== 'admin_cabang') return false;
+  const pending = pendingUntukSesi(sid);
+  if (pending) return pending.cabang_id !== null && Number(pending.cabang_id) === Number(user.cabang_id);
+  const akun = akunUntukSesi(sid);
+  return !!akun && akun.cabang_id !== null && Number(akun.cabang_id) === Number(user.cabang_id);
 }
 
 // QR dengan cache 3 detik. Dashboard open-wa mem-poll tiap 5 detik; beberapa
@@ -179,6 +238,7 @@ async function simpanSebagaiAkun(sid, { cabang_id, label }, aktor) {
     reason: 'sesi open-wa dihubungkan mandiri lewat SIAGA',
     after: { session_id: sid, cabang_id: cabang_id ?? null, nomor: nomorTampilan(sesi.phone) }
   });
+  hapusPending(sid);
   return { id, nomor: nomorTampilan(sesi.phone), pushName: sesi.pushName || null };
 }
 
@@ -198,5 +258,9 @@ module.exports = {
   sudahTerhubung,
   akunUntukSesi,
   simpanSebagaiAkun,
+  catatPending,
+  hapusPending,
+  pendingUntukSesi,
+  sesiDiizinkan,
   PAIRING_JEDA_MS
 };

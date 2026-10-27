@@ -102,7 +102,7 @@ Variabel penting:
 
 - `PORT`
 - `JWT_SECRET`
-- `WA_SECRET_KEY` (opsional; kalau tidak diset, kunci enkripsi rahasia — kredensial WhatsApp & secret TOTP — diturunkan dari `JWT_SECRET`. Menyetelnya memisahkan kunci enkripsi dari kunci JWT.)
+- `SECRET_ENCRYPTION_KEY` (disarankan; nama lama `WA_SECRET_KEY` tetap diterima. Kalau keduanya tidak diset, kunci enkripsi rahasia — kredensial WhatsApp & secret TOTP — diturunkan dari `JWT_SECRET` sebagai jalur legacy, dan data lama tetap terbaca.)
 - `NODE_ENV`
 - `FRONTEND_URL`
 - `DB_PATH`
@@ -127,7 +127,7 @@ Catatan:
 - Scope role dan cabang ditegakkan melalui middleware auth dan helper workflow.
 - `pengguna` adalah tabel akun umum untuk staff dan wali.
 - Verifikasi dua faktor (2FA) untuk akun staff memakai TOTP (RFC 6238): setelah password benar, server menerbitkan token tantangan (HMAC, 5 menit, tanpa state); penukaran ke JWT butuh kode 6 angka dari aplikasi authenticator. Endpoint: `/api/auth/2fa/{status,setup,enable,verify,recovery,recovery/regenerate}` dan `DELETE /api/auth/2fa`.
-- Secret TOTP disimpan terenkripsi AES-256-GCM; kunci diturunkan dari `WA_SECRET_KEY`/`JWT_SECRET` dan tidak ikut backup cloud. Klien tidak pernah menerima nilai rahasia, hanya penanda ada/tidak.
+- Secret TOTP disimpan terenkripsi AES-256-GCM; kunci diturunkan dari `SECRET_ENCRYPTION_KEY`/`WA_SECRET_KEY`, atau `JWT_SECRET` (legacy) dan tidak ikut backup cloud. Klien tidak pernah menerima nilai rahasia, hanya penanda ada/tidak.
 - Kode pemulihan: 8 kode sekali pakai, disimpan sebagai hash SHA-256, ditampilkan sekali saat pengaktifan (dapat disalin/diunduh sebagai .txt).
 
 ### 3.2 Master Data

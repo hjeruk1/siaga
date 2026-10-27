@@ -1,5 +1,8 @@
 {
   "name": "siaga-frontend",
+  "engines": {
+    "node": "22.x"
+  },
   "private": true,
   "type": "module",
   "scripts": {

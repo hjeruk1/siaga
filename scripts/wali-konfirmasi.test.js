@@ -5,14 +5,15 @@
 // (tanpa seed demo).
 const { describe, it, before } = require('node:test');
 const assert = require('node:assert');
-const fs = require('fs');
-const path = require('path');
 const db = require('../backend/db');
 const bcrypt = require('../backend/node_modules/bcryptjs');
+const sharp = require('../backend/node_modules/sharp');
 
 const BASE = process.env.TEST_URL || 'http://127.0.0.1:3999';
 const NYAWA = Date.now();
-const buktiAsli = fs.readFileSync(path.join(__dirname, '..', 'backend', 'uploads', 'foto', 'siswa-demo-1.jpg'));
+// Bukti dibuat sendiri: membaca backend/uploads/foto/siswa-demo-*.jpg membuat
+// tes ini gagal di checkout bersih (folder uploads tidak di-commit).
+let buktiAsli = null;
 const nowIso = () => new Date().toISOString();
 const today = () => nowIso().slice(0, 10);
 
@@ -94,6 +95,11 @@ describe('wali konfirmasi pembayaran', () => {
   let tagihanId;
 
   before(async () => {
+    buktiAsli = await sharp({
+      create: { width: 8, height: 8, channels: 3, background: { r: 200, g: 200, b: 200 } }
+    })
+      .jpeg()
+      .toBuffer();
     const login = await req('POST', '/api/auth/login', { username: 'admin', password: 'admin123' });
     assert.equal(login.status, 200, 'login admin server uji');
     adminToken = login.body.token;

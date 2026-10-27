@@ -89,8 +89,11 @@ function ringkas() {
   }
   folder.sort((a, b) => b.bytes - a.bytes);
 
-  const dbUtama = path.join(__dirname, '../siaga.db');
-  const dbWal = `${dbUtama}-wal`;
+  // Ikuti DB_PATH yang sama dengan backend/db.js: server uji memakai database
+  // sementara, jadi path hardcoded ke backend/siaga.db membaca 0 di sana (dan
+  // di checkout bersih yang belum punya database lokal).
+  const dbFile = process.env.DB_PATH ? path.resolve(process.env.DB_PATH) : path.join(__dirname, '../siaga.db');
+  const dbWal = `${dbFile}-wal`;
 
   const bulanIni = `${todayWIB().slice(0, 7)}-01`;
   const galeri = db.prepare('SELECT COUNT(*) c, COALESCE(SUM(size_bytes),0) b FROM kegiatan_foto').get();
@@ -102,7 +105,7 @@ function ringkas() {
   return {
     disk: ringkasDisk(),
     uploads: { files: totalFiles, bytes: totalBytes, folder },
-    database: { utama: ukuranBerkas(dbUtama), wal: ukuranBerkas(dbWal) },
+    database: { utama: ukuranBerkas(dbFile), wal: ukuranBerkas(dbWal) },
     backup: {
       folder: BACKUP_DIR,
       ada: fs.existsSync(BACKUP_DIR),

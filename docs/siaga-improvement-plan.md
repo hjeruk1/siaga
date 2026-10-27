@@ -43,6 +43,21 @@
 + **53 E2E** (20 alur asap/kritikal + 33 uji deep-load), lint 0 error dan
 **0 warning**, build hijau.
 
+**Koreksi verifikasi independen (27 Okt 2026):** angka di atas tidak lolos
+pemeriksaan ulang di checkout bersih. Suite backend sebenarnya 309 test
+dengan 2 gagal: `storage` membaca path database hardcoded (mengabaikan
+`DB_PATH`, jadi lulus hanya di mesin yang punya `backend/siaga.db`), dan
+`wali-konfirmasi` membaca fixture foto seed yang tidak di-commit. Keduanya
+sudah diperbaiki, ditambah: otorisasi kepemilikan sesi WhatsApp (migrasi 021,
+sebelumnya admin cabang bisa membuka QR sesi cabang lain), enkripsi rahasia
+gagal-keras di production dengan kunci khusus + jalur legacy, batas OTP per IP
+disamakan dengan dokumentasinya (10/jam), CI kini berjalan di semua branch,
+dan versi Node dipatok (`.nvmrc` + `engines` 22.x). Angka terverifikasi
+sesudah perbaikan: **428 test** (323 backend + 90 frontend + 15 workflow),
+**53 E2E**, lint dan format bersih, build hijau. Rehearsal migrasi di salinan
+database produksi: 0 baris terhapus oleh migrasi 003, `integrity_check` ok,
+restore drill lulus, hash database asli tidak berubah.
+
 `npm audit`: root + frontend **0 vulnerability**; backend **0 high**
 (`body-parser` dan `multer` sudah dinaikkan lewat `npm audit fix`). Sisa **19
 moderate** berasal dari rantai `@sentry/node → @opentelemetry/*` dan

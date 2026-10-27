@@ -28,6 +28,7 @@ const files = hanya.length
         'scripts/index-usage.test.js',
         'scripts/maintenance.test.js',
         'scripts/push.test.js',
+        'scripts/rahasia.test.js',
         'scripts/wali-konfirmasi.test.js',
         'scripts/wa.test.js',
         'scripts/backup.test.js',

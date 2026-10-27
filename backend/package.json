@@ -1,5 +1,8 @@
 {
   "name": "siaga-backend",
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
     "dev": "node --watch server.js",
     "dev:stable": "node server.js",

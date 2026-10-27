@@ -33,18 +33,37 @@ function galat(res, e) {
   return res.status(400).json({ error: e.message });
 }
 
+const PESAN_SESI_DITOLAK = 'Anda hanya boleh mengelola sesi nomor cabang sendiri.';
+
+// Sesi tanpa catatan kepemilikan (dibuat sebelum migrasi 021) hanya boleh
+// dibuka admin pusat; admin cabang harus lewat sesi yang ia buat sendiri.
+function sesiBoleh(req, res) {
+  if (sesi.sesiDiizinkan(req.user, req.params.id)) return true;
+  res.status(403).json({ error: PESAN_SESI_DITOLAK });
+  return false;
+}
+
 // Daftar sesi di instance (untuk "pakai sesi yang sudah ada").
 router.get('/', auth(KELOLA), async (req, res) => {
   if (!sesi.instanceSiap())
     return res.status(400).json({ error: 'Instance OpenWA belum dikonfigurasi di server (WA_API_URL/WA_API_KEY).' });
   try {
-    res.json({ rows: await sesi.daftarSesi() });
+    const rows = await sesi.daftarSesi();
+    // Admin cabang hanya melihat sesi milik cabangnya; daftar mentah dari
+    // instance memuat sesi semua cabang. Bentuk balasan yang tidak dikenal
+    // diperlakukan sebagai daftar kosong, jangan diteruskan mentah.
+    if (req.user.role === 'admin_cabang') {
+      const milik = Array.isArray(rows) ? rows.filter((r) => sesi.sesiDiizinkan(req.user, r.id)) : [];
+      return res.json({ rows: milik });
+    }
+    res.json({ rows });
   } catch (e) {
     galat(res, e);
   }
 });
 
 router.get('/:id', auth(KELOLA), async (req, res) => {
+  if (!sesiBoleh(req, res)) return;
   try {
     res.json(await sesi.detailSesi(req.params.id));
   } catch (e) {
@@ -60,6 +79,8 @@ router.post('/', auth(KELOLA), async (req, res) => {
     return res.status(403).json({ error: 'Anda hanya boleh mengelola nomor cabang sendiri.' });
   try {
     const s = await sesi.buatSesi(nama);
+    // Catat kepemilikan sekarang: rute detail/QR/pairing memeriksanya.
+    sesi.catatPending(s.id, cabang_id, req.user.id);
     audit(req.user, 'wa_sesi_dibuat', 'wa_akun', null, {
       after: { session_id: s.id, nama: s.name, cabang_id: cabang_id ?? null }
     });
@@ -70,6 +91,7 @@ router.post('/', auth(KELOLA), async (req, res) => {
 });
 
 router.post('/:id/start', auth(KELOLA), async (req, res) => {
+  if (!sesiBoleh(req, res)) return;
   try {
     res.json(await sesi.startSesi(req.params.id));
   } catch (e) {
@@ -79,6 +101,7 @@ router.post('/:id/start', auth(KELOLA), async (req, res) => {
 
 // QR sesi (data-URL PNG). Cache 3 detik ada di util.
 router.get('/:id/qr', auth(KELOLA), async (req, res) => {
+  if (!sesiBoleh(req, res)) return;
   try {
     res.json(await sesi.qrSesi(req.params.id));
   } catch (e) {
@@ -88,6 +111,7 @@ router.get('/:id/qr', auth(KELOLA), async (req, res) => {
 
 // Kode pairing untuk nomor cabang (alternatif scan QR).
 router.post('/:id/pairing', auth(KELOLA), async (req, res) => {
+  if (!sesiBoleh(req, res)) return;
   try {
     const { nomor } = req.body || {};
     const hasil = await sesi.kodePairing(req.params.id, nomor);
@@ -105,6 +129,7 @@ router.post('/:id/simpan', auth(KELOLA), async (req, res) => {
   const { cabang_id, label } = req.body || {};
   if (!cabangDiizinkan(req.user, cabang_id))
     return res.status(403).json({ error: 'Anda hanya boleh mengelola nomor cabang sendiri.' });
+  if (!sesiBoleh(req, res)) return;
   try {
     const hasil = await sesi.simpanSebagaiAkun(req.params.id, { cabang_id, label }, req.user);
     res.status(201).json({ success: true, ...hasil });

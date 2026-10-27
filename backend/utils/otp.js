@@ -28,7 +28,7 @@ const TTL_MS = 5 * 60 * 1000;
 const MAX_PERCOBAAN = 5;
 const MAX_KIRIM_IDENTITAS = 3;
 const JENDELA_IDENTITAS_MS = 15 * 60 * 1000;
-const MAX_KIRIM_IP = 30;
+const MAX_KIRIM_IP = 10;
 const JENDELA_IP_MS = 60 * 60 * 1000;
 
 // Hash tiruan: dipakai saat akun tidak ditemukan agar waktu bcrypt.compareSync

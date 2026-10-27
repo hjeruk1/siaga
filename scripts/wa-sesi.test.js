@@ -47,8 +47,8 @@ function handler(url, body, method) {
       id: sid,
       name: 'wa-godean',
       status: keadaan[sid],
-      phone: terhubung ? '6285172124543' : null,
-      pushName: terhubung ? 'Syifa' : null
+      phone: terhubung ? '6281200000001' : null,
+      pushName: terhubung ? 'Nomor Uji' : null
     }
   };
 }
@@ -75,6 +75,7 @@ function bersihkanDb() {
     dibuat = [];
   }
   db.prepare("DELETE FROM wa_akun WHERE label LIKE 'Uji Sesi%'").run();
+  db.prepare('DELETE FROM wa_sesi_pending').run();
   db.prepare("DELETE FROM audit_log WHERE action LIKE 'wa_sesi%'").run();
 }
 
@@ -143,7 +144,7 @@ describe('util manajemen sesi open-wa', () => {
     assert.equal(sesi.nomorPairing('12345'), null);
     assert.equal(sesi.nomorPairing('08123'), null);
     assert.equal(sesi.nomorPairing(''), null);
-    assert.equal(sesi.nomorTampilan('6285172124543'), '085172124543');
+    assert.equal(sesi.nomorTampilan('6281200000001'), '081200000001');
     assert.equal(sesi.nomorTampilan(null), null);
   });
 
@@ -196,12 +197,12 @@ describe('util manajemen sesi open-wa', () => {
     const cabang = db.prepare('SELECT id FROM cabang ORDER BY id LIMIT 1').get();
     const hasil = await sesi.simpanSebagaiAkun(SESI, { cabang_id: cabang.id, label: 'Uji Sesi Godean' }, { id: null });
     assert.ok(hasil.id);
-    assert.equal(hasil.nomor, '085172124543');
+    assert.equal(hasil.nomor, '081200000001');
 
     const row = db.prepare('SELECT * FROM wa_akun WHERE id=?').get(hasil.id);
     assert.equal(row.session_id, SESI);
     assert.equal(row.provider, 'openwa');
-    assert.equal(row.nomor, '085172124543');
+    assert.equal(row.nomor, '081200000001');
     assert.match(row.api_key, /^enc:v1:/, 'API key instance harus terenkripsi');
     assert.ok(!row.api_key.includes('kunci-uji-sesi'), 'kunci polos tidak boleh ada di DB');
     assert.ok(
@@ -278,6 +279,34 @@ describe('rute sesi — hak akses', () => {
   it('admin cabang tidak boleh menyimpan sesi untuk cabang lain', async () => {
     const r = await req('POST', `/api/wa/sesi/${SESI}/simpan`, { cabang_id: cabangB, label: 'X' }, tokenCabang);
     assert.equal(r.status, 403);
+  });
+
+  it('admin cabang tidak boleh membuka QR/detail/pairing sesi tanpa kepemilikan cabangnya', async () => {
+    // Sesi belum tercatat milik cabang mana pun: hanya admin pusat yang boleh.
+    for (const [method, p, body] of [
+      ['GET', `/api/wa/sesi/${SESI}`, null],
+      ['GET', `/api/wa/sesi/${SESI}/qr`, null],
+      ['POST', `/api/wa/sesi/${SESI}/start`, {}],
+      ['POST', `/api/wa/sesi/${SESI}/pairing`, { nomor: '081200000000' }]
+    ]) {
+      const r = await req(method, p, body, tokenCabang);
+      assert.equal(r.status, 403, `${method} ${p} harus 403 untuk admin cabang`);
+    }
+    // Sesi tercatat milik cabang LAIN: tetap 403.
+    db.prepare('INSERT INTO wa_sesi_pending(session_id,cabang_id,dibuat_oleh,created_at) VALUES(?,?,NULL,?)').run(
+      SESI,
+      cabangB,
+      new Date().toISOString()
+    );
+    const rLain = await req('GET', `/api/wa/sesi/${SESI}/qr`, null, tokenCabang);
+    assert.equal(rLain.status, 403);
+    // Sesi milik cabangnya sendiri: lolos otorisasi, gagal di instance yang
+    // belum dikonfigurasi (400) — bukti guard tidak menolak semuanya.
+    db.prepare('UPDATE wa_sesi_pending SET cabang_id=? WHERE session_id=?').run(cabangA, SESI);
+    const rSendiri = await req('GET', `/api/wa/sesi/${SESI}/qr`, null, tokenCabang);
+    assert.equal(rSendiri.status, 400);
+    assert.match(rSendiri.body.error, /WA_API_KEY|OpenWA/);
+    db.prepare('DELETE FROM wa_sesi_pending WHERE session_id=?').run(SESI);
   });
 
   it('hapus sesi hanya untuk admin pusat', async () => {
