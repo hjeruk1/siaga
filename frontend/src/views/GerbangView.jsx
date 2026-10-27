@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import jsQR from 'jsqr';
 import { api } from '../api';
+import { queryClient } from '../lib/queryClient';
 import { ActionButton, IconButton, Modal } from '../components/Shared';
 import { AlertCircle, Check, Clock, RefreshCw, ScanLine, UserPlus, Video, VideoOff } from 'lucide-react';
 
@@ -8,7 +10,6 @@ export default function GerbangView({ toast }) {
   const [qr, setQr] = useState('');
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
-  const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [camera, setCamera] = useState(false);
   const [cameraError, setCameraError] = useState(null);
@@ -35,20 +36,21 @@ export default function GerbangView({ toast }) {
   // mount-only — EventSource dibuka sekali — jadi pelepasan kamera dipanggil
   // lewat ref agar tidak memaksa effect dibangun ulang tiap render.
   const stopCameraRef = useRef(() => {});
-  const load = useCallback(async () => {
-    try {
-      const data = await api.absensiToday({});
-      setRows(data.rows || data);
-    } catch {}
-  }, []);
+  // Pos gerbang selalu menampilkan HARI INI (tanpa parameter tanggal), jadi
+  // kuncinya konstan. SSE di bawah menandainya basi setiap ada absensi berubah.
+  const { data: dataAbsensi, refetch } = useQuery({
+    queryKey: ['gerbang-absensi'],
+    queryFn: () => api.absensiToday({})
+  });
+  const rows = useMemo(() => (Array.isArray(dataAbsensi) ? dataAbsensi : (dataAbsensi?.rows ?? [])), [dataAbsensi]);
+
   useEffect(() => {
-    load();
     const eventSource = new EventSource('/api/absensi/stream');
     eventSource.onmessage = (event) => {
       try {
         const payload = JSON.parse(event.data);
         if (payload.type === 'absensi_changed') {
-          load();
+          queryClient.invalidateQueries({ queryKey: ['gerbang-absensi'] });
         }
       } catch {}
     };
@@ -56,7 +58,7 @@ export default function GerbangView({ toast }) {
       eventSource.close();
       stopCameraRef.current();
     };
-  }, [load]);
+  }, []);
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 30000);
     return () => clearInterval(id);
@@ -115,7 +117,7 @@ export default function GerbangView({ toast }) {
       setQr('');
       pushLog('ok', `${r.siswa.nama} menunggu ${r.penjemput.nama}`);
       toast('ok', r.siswa.nama + ' menunggu jemput');
-      load();
+      refetch();
     } catch (e) {
       const detail =
         e.code === 'ALREADY_WAITING'
@@ -144,7 +146,7 @@ export default function GerbangView({ toast }) {
       await api.pulangkan([target.siswa_id]);
       toast('ok', `${target.nama} dipulangkan`);
       pushLog('ok', 'Serah terima selesai');
-      load();
+      refetch();
     } catch (e) {
       toast('err', e.message);
       pushLog('err', e.message);
@@ -203,7 +205,7 @@ export default function GerbangView({ toast }) {
       pushLog('ok', `${r.siswa.nama} menunggu (manual)`);
       toast('ok', `${r.siswa.nama} menunggu jemput (manual)`);
       setManual((x) => ({ ...x, open: false, saving: false }));
-      load();
+      refetch();
     } catch (e) {
       toast('err', e.message);
       pushLog('err', e.message);
@@ -484,7 +486,13 @@ export default function GerbangView({ toast }) {
                 Finalkan setelah siswa bertemu penjemput yang valid.
               </p>
             </div>
-            <IconButton icon={RefreshCw} label="Refresh" onClick={load} variant="secondary" className="shrink-0" />
+            <IconButton
+              icon={RefreshCw}
+              label="Refresh"
+              onClick={() => refetch()}
+              variant="secondary"
+              className="shrink-0"
+            />
           </div>
 
           <div className="flex-1 divide-y divide-slate-100 overflow-y-auto dark:divide-white/[0.06] custom-scrollbar xl:max-h-[70dvh]">

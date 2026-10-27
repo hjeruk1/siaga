@@ -36,7 +36,7 @@
 | Item | Catatan |
 |------|---------|
 | 5.1 lanjutan | `BillingTab.jsx` (2698 baris) — seluruhnya satu komponen 2611 baris, tidak ada fungsi murni untuk diekstrak. Butuh refactor bertahap, bukan pemindahan mekanis. |
-| 4.2 | TanStack Query — 11 view + 3 panel selesai; ~20 berkas belum |
+| 4.2 | TanStack Query — 12 view + 3 panel selesai; ~18 berkas belum |
 
 
 **Angka akhir:** 405 test lulus (315 backend + 90 frontend) + 18 E2E,
@@ -309,7 +309,7 @@ Yang sudah ada:
   lokal dilaporkan ke satu handler yang didaftarkan `App.jsx` → `toast`.
   Klien sengaja singleton di tingkat modul karena provider harus membungkus
   App (termasuk layar login), sedangkan `toast` hidup di dalam App.
-- Sudah pindah (11 view + 3 panel): **LaporanTab**, **AuditTab**, **KalenderTab**
+- Sudah pindah (12 view + 3 panel): **LaporanTab**, **AuditTab**, **KalenderTab**
   (tiga bentuk berbeda — daftar berfilter + detail, daftar sederhana, daftar +
   state tampilan turunan), lalu **CabangTab**, **WaliTab**, **StaffTab**,
   **SiswaTab**, **RombelTab**, dan **KepsekView** (semua tabnya, termasuk

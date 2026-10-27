@@ -1517,9 +1517,17 @@ Sudah pindah:
 
 - Tab admin: LaporanTab, AuditTab, KalenderTab, CabangTab, WaliTab, StaffTab,
   SiswaTab, RombelTab, **BillingTab** (lima sumber billing + siswa).
-- Peran lain: **KepsekView** (semua tab), **GuruView** (daily record + absensi).
+- Peran lain: **KepsekView** (semua tab), **GuruView** (daily record + absensi),
+  **GerbangView** (pos gerbang; SSE menandai cache basi, bukan memanggil ulang).
 - Panel bersama (dipakai admin, kepsek, guru): **IzinPanel**,
   **PengumumanPanel**, **RekapAbsensiBulanan**.
+- Kartu admin: **PenyimpananCard**.
+
+**Sengaja belum dipindah** — bukan karena terlewat: `ConfigTab`,
+`RetensiCard`, dan `PengingatTagihanCard` memuat data yang **disunting di
+tempat** sebelum disimpan (`cfg`/`org`, form kebijakan). Menambah query di sana
+berarti menyalin hasil query ke state lokal lewat effect — upacara baru tanpa
+menghapus apa pun.
 
 Infrastruktur:
 

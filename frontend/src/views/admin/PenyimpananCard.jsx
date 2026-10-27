@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { api } from '../../api';
 import { HardDrive, Loader2, RefreshCw, TriangleAlert } from 'lucide-react';
 
@@ -17,26 +17,17 @@ function ukuran(bytes) {
   return `${(n / 1024 ** 3).toFixed(2)} GB`;
 }
 
-export default function PenyimpananCard({ toast }) {
-  const [data, setData] = useState(null);
-  const [memuat, setMemuat] = useState(true);
-  const toastRef = useRef(toast);
-  toastRef.current = toast;
-
-  const muat = useCallback(async () => {
-    setMemuat(true);
-    try {
-      setData(await api.storage());
-    } catch (e) {
-      toastRef.current?.('err', e.message);
-    } finally {
-      setMemuat(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    muat();
-  }, [muat]);
+export default function PenyimpananCard() {
+  // Angka penyimpanan hanya berubah saat ada unggahan/hapus, jadi cache pendek
+  // cukup; tombol "Segarkan" memaksa permintaan baru.
+  const {
+    data,
+    isPending: memuat,
+    refetch: muat
+  } = useQuery({
+    queryKey: ['storage'],
+    queryFn: () => api.storage()
+  });
 
   if (memuat && !data) {
     return (
