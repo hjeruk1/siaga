@@ -247,6 +247,8 @@ sudah ada di `AdminView.jsx` (shell kecil + lazy-load tab) — tinggal diterapka
 | TypeScript penuh | **Tunda** | Lever terbesar, tapi migrasi termahal. Jalan tengah: JSDoc + `// @ts-check` (Fase 2, bisa ditambahkan) |
 | Backend → ESM | **Tunda** | Kosmetik; mismatch CommonJS/ESM tidak menyebabkan bug |
 | bcryptjs → argon2 | **Tunda** | Prioritas rendah; kerjakan kalau menyentuh auth |
+| 19 advisory moderate `backend/` | **Tunda** | Semua dari `@sentry/node → @opentelemetry/*` dan `mammoth → argparse → sprintf-js`. 0 high, 0 critical; root dan frontend 0. Rantai pertama hanya aktif bila `SENTRY_DSN` diisi, rantai kedua hanya bila impor DOCX dipakai. Menutupnya butuh bump mayor pada dua dependensi yang justru dipakai untuk fitur opsional — risikonya lebih besar daripada paparannya |
+| Pecah `GuruView.jsx` (1.801), `guru/Editor.jsx` (1.366), `components/Shared.jsx` (1.272) | **Tunda** | Sisa blok di GuruView murni markup di atas state induk (`daily` 230 baris, `absensi` 500 baris, 21+ props). Memindahkannya tidak mengurangi keterkaitan dan tidak membuatnya bisa diuji terpisah — hanya memindahkan teks. `Shared.jsx` dipakai hampir semua view, jadi memecahnya berarti menyentuh puluhan impor sekaligus. BillingTab dan billing.js dikerjakan karena ukurannya (2.400 baris) melewati ambang di mana satu perubahan kecil menuntut membaca seluruh berkas; ketiga berkas ini belum |
 
 ---
 
