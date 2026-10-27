@@ -45,6 +45,24 @@ test.describe('admin', () => {
     expect(isi).toContain('Belum dibayar');
   });
 
+  // Tiga panel bersama (dipakai admin, kepsek, dan guru) — dulu satu-satunya
+  // yang memuat datanya lewat effect manual. Kalau salah satunya berhenti
+  // memuat, gejalanya "kerangka kosong" yang tidak terlihat dari build.
+  test('panel izin, pengumuman, dan rekap memuat isinya', async ({ page }) => {
+    await page.goto('/admin?tab=izin');
+    await expect(page.getByRole('heading', { name: 'Izin & sakit', exact: true })).toBeVisible({ timeout: 25_000 });
+
+    await page.goto('/admin?tab=pengumuman');
+    await expect(page.getByRole('heading', { name: 'Pengumuman', exact: true })).toBeVisible({ timeout: 25_000 });
+
+    await page.goto('/admin?tab=rekap');
+    await expect(page.getByRole('heading', { name: 'Rekap Absensi Bulanan', exact: true })).toBeVisible({
+      timeout: 25_000
+    });
+    // Matriks butuh data; angka kehadiran hanya muncul setelah rekap termuat.
+    await expect(page.getByText('KEHADIRAN')).toBeVisible();
+  });
+
   test('kartu pengingat, penyimpanan, dan retensi tampil di Konfigurasi', async ({ page }) => {
     await page.goto('/?view=admin&tab=config');
     await expect(page.getByText('Pengingat tagihan')).toBeVisible({ timeout: 25_000 });

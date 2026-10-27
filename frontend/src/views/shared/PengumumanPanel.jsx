@@ -4,7 +4,8 @@
 // masuk ke notifikasi, push, DAN WhatsApp orang tua. Salah kirim tidak bisa
 // ditarik kembali; yang bisa dilakukan hanya mengirim koreksi. Menampilkan
 // "akan dikirim ke 5 orang tua" sebelum tombol aktif adalah pengaman termurah.
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { api } from '../../api';
 import { CustomSelect, Modal } from '../../components/Shared';
 import { AlertTriangle, CheckCheck, Loader2, Megaphone, Send, Users } from 'lucide-react';
@@ -34,8 +35,7 @@ export default function PengumumanPanel({ user, toast }) {
   const [memuatJumlah, setMemuatJumlah] = useState(false);
   const [busy, setBusy] = useState(false);
   const [konfirmasi, setKonfirmasi] = useState(false);
-  const [daftar, setDaftar] = useState([]);
-  const [memuatDaftar, setMemuatDaftar] = useState(true);
+
   // Laporan pembaca: siapa yang sudah membuka pengumuman ini.
   const [pembaca, setPembaca] = useState(null);
 
@@ -51,21 +51,15 @@ export default function PengumumanPanel({ user, toast }) {
     }
   }
 
-  const muatDaftar = useCallback(async () => {
-    setMemuatDaftar(true);
-    try {
-      const d = await api.daftarPengumuman({ limit: 20, cabang_id: adminPusat ? cabangId || undefined : undefined });
-      setDaftar(d?.rows || []);
-    } catch (e) {
-      toast?.('err', e.message);
-    } finally {
-      setMemuatDaftar(false);
-    }
-  }, [cabangId, adminPusat, toast]);
-
-  useEffect(() => {
-    muatDaftar();
-  }, [muatDaftar]);
+  const {
+    data: dataDaftar,
+    isPending: memuatDaftar,
+    refetch: muatDaftar
+  } = useQuery({
+    queryKey: ['pengumuman', adminPusat ? cabangId || '' : 'semua'],
+    queryFn: () => api.daftarPengumuman({ limit: 20, cabang_id: adminPusat ? cabangId || undefined : undefined })
+  });
+  const daftar = dataDaftar?.rows ?? [];
 
   // Pratinjau jumlah penerima: dihitung server, bukan diperkirakan di browser.
   useEffect(() => {

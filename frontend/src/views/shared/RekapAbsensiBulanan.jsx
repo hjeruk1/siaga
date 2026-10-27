@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { api } from '../../api';
 import { CustomMonthPicker, CustomSelect, EmptyState, Modal, Spinner } from '../../components/Shared';
 import { SS } from '../../utils/status';
@@ -27,11 +28,6 @@ export default function RekapAbsensiBulanan({ user, toast }) {
   const [cabangId, setCabangId] = useState(isAdmin ? '' : user.cabang_id || '');
   const [rombelId, setRombelId] = useState('');
   const [q, setQ] = useState('');
-  const [cabang, setCabang] = useState([]);
-  const [rombels, setRombels] = useState([]);
-  const [rows, setRows] = useState([]);
-  const [hariSekolah, setHariSekolah] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState('');
   const [detail, setDetail] = useState(null);
 
@@ -43,43 +39,30 @@ export default function RekapAbsensiBulanan({ user, toast }) {
     toastRef.current = toast;
   }, [toast]);
 
-  useEffect(() => {
-    api
-      .cabang()
-      .then((res) => setCabang(res || []))
-      .catch(() => {});
-  }, []);
+  // Kunci `cabang` dipakai bersama layar lain — daftar cabang jarang berubah
+  // dan selalu sama di seluruh aplikasi.
+  const cabangQ = useQuery({ queryKey: ['cabang'], queryFn: () => api.cabang() });
+  const cabang = useMemo(() => cabangQ.data ?? [], [cabangQ.data]);
 
-  useEffect(() => {
-    api
-      .rombel(cabangId || undefined)
-      .then((res) => setRombels(res || []))
-      .catch(() => {});
-  }, [cabangId]);
+  const rombelQ = useQuery({
+    queryKey: ['rombel', cabangId || ''],
+    queryFn: () => api.rombel(cabangId || undefined)
+  });
+  const rombels = useMemo(() => rombelQ.data ?? [], [rombelQ.data]);
 
-  useEffect(() => {
-    let hidup = true;
-    setLoading(true);
-    api
-      .rekapBulanan({
+  const rekapQ = useQuery({
+    queryKey: ['rekap-bulanan', range.tahun, range.bulan, cabangId || '', rombelId || ''],
+    queryFn: () =>
+      api.rekapBulanan({
         tahun: range.tahun,
         bulan: range.bulan,
         cabang_id: cabangId || undefined,
         rombel_id: rombelId || undefined
       })
-      .then((res) => {
-        if (!hidup) return;
-        setRows(res.data || []);
-        setHariSekolah(res.hari_sekolah || []);
-      })
-      .catch((e) => toastRef.current('err', e.message || 'Gagal memuat rekap bulanan'))
-      .finally(() => {
-        if (hidup) setLoading(false);
-      });
-    return () => {
-      hidup = false;
-    };
-  }, [range, cabangId, rombelId]);
+  });
+  const rows = useMemo(() => rekapQ.data?.data ?? [], [rekapQ.data]);
+  const hariSekolah = useMemo(() => rekapQ.data?.hari_sekolah ?? [], [rekapQ.data]);
+  const loading = rekapQ.isPending;
 
   const terfilter = useMemo(() => filterRows(rows, q), [rows, q]);
   const ringkas = useMemo(() => summarize(terfilter, hariSekolah), [terfilter, hariSekolah]);

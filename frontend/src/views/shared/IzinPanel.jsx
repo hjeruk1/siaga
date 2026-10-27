@@ -4,7 +4,8 @@
 // ketiganya, jadi ketiganya harus punya layar untuk memutuskan. Isi daftar
 // dibatasi server (siswaScopeSql), bukan oleh komponen ini — guru hanya melihat
 // rombel yang diampu, kepsek hanya cabangnya, admin bisa memfilter cabang.
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { api } from '../../api';
 import { Modal } from '../../components/Shared';
 import { CheckCircle2, Clock, ExternalLink, Loader2, Paperclip, XCircle } from 'lucide-react';
@@ -29,28 +30,16 @@ function rentang(a, b) {
 export default function IzinTab({ user, toast }) {
   const { cabang, cabangId, setCabangId } = useMaster(user);
   const [status, setStatus] = useState('menunggu');
-  const [rows, setRows] = useState([]);
-  const [memuat, setMemuat] = useState(true);
   const [busyId, setBusyId] = useState(null);
   const [tolak, setTolak] = useState(null); // { id, nama }
   const [alasanTolak, setAlasanTolak] = useState('');
 
-  const muat = useCallback(async () => {
-    setMemuat(true);
-    try {
-      const d = await api.izinSekolah({ status, cabang_id: cabangId || undefined });
-      setRows(d?.rows || []);
-    } catch (e) {
-      toast?.('err', e.message);
-      setRows([]);
-    } finally {
-      setMemuat(false);
-    }
-  }, [status, cabangId, toast]);
-
-  useEffect(() => {
-    muat();
-  }, [muat]);
+  const { data, isPending, refetch } = useQuery({
+    queryKey: ['izin-sekolah', status, cabangId || ''],
+    queryFn: () => api.izinSekolah({ status, cabang_id: cabangId || undefined })
+  });
+  const rows = data?.rows ?? [];
+  const memuat = isPending;
 
   async function setujui(item) {
     setBusyId(item.id);
@@ -62,7 +51,7 @@ export default function IzinTab({ user, toast }) {
       if (r?.hariLibur) bagian.push(`${r.hariLibur} hari libur`);
       if (r?.hariDitutup) bagian.push(`${r.hariDitutup} hari sudah ditutup`);
       toast?.('ok', `Izin ${item.siswa_nama} disetujui${bagian.length ? ` — ${bagian.join(', ')}` : ''}.`);
-      await muat();
+      await refetch();
     } catch (e) {
       toast?.('err', e.message);
     } finally {
@@ -79,7 +68,7 @@ export default function IzinTab({ user, toast }) {
       toast?.('ok', `Pengajuan ${tolak.nama} ditolak.`);
       setTolak(null);
       setAlasanTolak('');
-      await muat();
+      await refetch();
     } catch (err) {
       toast?.('err', err.message);
     } finally {
@@ -110,7 +99,7 @@ export default function IzinTab({ user, toast }) {
         ))}
         <button
           type="button"
-          onClick={muat}
+          onClick={() => refetch()}
           className="ml-auto rounded-full bg-slate-100 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-slate-500 hover:bg-slate-200"
         >
           Muat ulang

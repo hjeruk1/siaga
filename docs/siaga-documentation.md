@@ -1510,13 +1510,16 @@ Uji: `e2e/rute.spec.js` (tautan lama, tombol Back, refresh di path dalam).
 
 ## 17b. Lapisan Data Frontend (React Query)
 
-Status: **sebelas view** sudah memakai React Query; sisanya masih pola manual
-(`useState` + `load` + `useEffect`).
+Status: **sebelas view + tiga panel bersama** sudah memakai React Query;
+sisanya masih pola manual (`useState` + `load` + `useEffect`).
 
-Sudah pindah: LaporanTab, AuditTab, KalenderTab, CabangTab, WaliTab, StaffTab,
-SiswaTab, RombelTab, **KepsekView** (seluruh tab dashboard kepala sekolah),
-**GuruView** (daftar daily record + daftar absensi), dan **BillingTab** (lima
-sumber billing + siswa).
+Sudah pindah:
+
+- Tab admin: LaporanTab, AuditTab, KalenderTab, CabangTab, WaliTab, StaffTab,
+  SiswaTab, RombelTab, **BillingTab** (lima sumber billing + siswa).
+- Peran lain: **KepsekView** (semua tab), **GuruView** (daily record + absensi).
+- Panel bersama (dipakai admin, kepsek, guru): **IzinPanel**,
+  **PengumumanPanel**, **RekapAbsensiBulanan**.
 
 Infrastruktur:
 
