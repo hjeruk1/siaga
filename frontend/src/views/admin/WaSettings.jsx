@@ -3,7 +3,8 @@
 // Dua bagian dalam satu layar karena saling bergantung: nomor yang ditambahkan
 // di bawah langsung memengaruhi status di atas. Memisahkannya ke dua menu
 // membuat admin harus menebak apakah nomor barunya sudah terpakai.
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -62,33 +63,30 @@ export default function WaSettings({ user, toast }) {
   const adminCabang = user.role === 'admin_cabang';
   const bolehKelola = admin || adminCabang;
 
-  const [data, setData] = useState(null);
-  const [akun, setAkun] = useState([]);
-  const [memuat, setMemuat] = useState(true);
   const [busy, setBusy] = useState(false);
   const [busyId, setBusyId] = useState(null);
   const [form, setForm] = useState(null);
   const [wizard, setWizard] = useState(false);
 
-  const muat = useCallback(async () => {
-    setMemuat(true);
-    try {
+  // Status kanal dan daftar akun selalu dibaca bersama; kuncinya dibedakan
+  // menurut hak kelola supaya admin cabang tidak menerima entri cache admin
+  // pusat yang berisi akun cabang lain.
+  const {
+    data: dataWa,
+    isPending: memuat,
+    refetch: muat
+  } = useQuery({
+    queryKey: ['wa-status', bolehKelola ? 'kelola' : 'lihat'],
+    queryFn: async () => {
       const [s, a] = await Promise.all([
         api.waStatus(),
         bolehKelola ? api.waAkun().catch(() => ({ rows: [] })) : Promise.resolve({ rows: [] })
       ]);
-      setData(s);
-      setAkun(a?.rows || []);
-    } catch (e) {
-      toast?.('err', e.message);
-    } finally {
-      setMemuat(false);
+      return { status: s, akun: a?.rows ?? [] };
     }
-  }, [bolehKelola, toast]);
-
-  useEffect(() => {
-    muat();
-  }, [muat]);
+  });
+  const data = dataWa?.status ?? null;
+  const akun = useMemo(() => dataWa?.akun ?? [], [dataWa]);
 
   const pantau = data?.pantau || {};
   const mode = pantau.mode || (data?.aktif ? 'env' : 'none');
@@ -107,7 +105,8 @@ export default function WaSettings({ user, toast }) {
     setBusy(true);
     try {
       const r = await api.waCheck();
-      if (r?.pantau) setData((d) => ({ ...(d || {}), pantau: r.pantau }));
+      // Tidak menambal state lokal: `waCheck` menulis hasilnya ke server, dan
+      // refetch di bawah mengambil kebenaran terbaru (termasuk rincian akun).
       const st = r?.pantau?.status;
       if (st === 'ok') toast?.('ok', 'Semua nomor siap.');
       else if (st === 'down') toast?.('err', 'Ada nomor yang terputus — lihat rinciannya.');

@@ -1521,7 +1521,9 @@ Sudah pindah:
   **GerbangView** (pos gerbang; SSE menandai cache basi, bukan memanggil ulang).
 - Panel bersama (dipakai admin, kepsek, guru): **IzinPanel**,
   **PengumumanPanel**, **RekapAbsensiBulanan**.
-- Kartu admin: **PenyimpananCard**.
+- Kartu admin: **PenyimpananCard**, **WaSettings** (`['wa-status', hak]` —
+  kunci dibedakan admin pusat vs cabang supaya entri cache tidak bocor
+  lintas-cabang).
 - Komponen pendukung: **KegiatanMingguanTab** (`['modul-ajar', cabang, tanggal]`),
   **SiswaDetailPanel** (`['tagihan-siswa', id]`, `['rombel', cabang]`),
   **Editor** (`['daily-edits', id]`).

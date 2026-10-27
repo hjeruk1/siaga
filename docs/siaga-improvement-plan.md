@@ -36,7 +36,7 @@
 | Item | Catatan |
 |------|---------|
 | 5.1 lanjutan | `BillingTab.jsx` (2698 baris) — seluruhnya satu komponen 2611 baris, tidak ada fungsi murni untuk diekstrak. Butuh refactor bertahap, bukan pemindahan mekanis. |
-| 4.2 | TanStack Query — 16 komponen selesai; sisa WaSettings + kartu form |
+| 4.2 | TanStack Query — 17 komponen selesai (pengecualian di §12) |
 
 
 **Angka akhir:** 405 test lulus (315 backend + 90 frontend) + 18 E2E,
@@ -299,8 +299,15 @@ Yang dikerjakan:
 
 ### 4.2 TanStack Query
 
-**Percontohan selesai, penyebaran belum.** Infrastruktur dan tiga tab pertama
-sudah jalan; sisanya dikerjakan bertahap dengan pola yang sama.
+**Selesai** untuk semua daftar yang memang layak di-cache: 17 komponen.
+Empat kelompok sengaja dibiarkan memakai pola lama, dengan alasan tertulis:
+
+| Yang tidak dipindah | Alasan |
+|---|---|
+| `ConfigTab`, `RetensiCard`, `PengingatTagihanCard` | data disunting di tempat sebelum disimpan; query hanya menambah penyalinan lewat effect |
+| `WaliView.loadBilling` | PIN-gated: `PIN_REQUIRED` harus membuka dialog, bukan toast |
+| `WaliView.dailyHistory` | paginasi 30/klik → `useInfiniteQuery` |
+| `WizardSesiWa` | dua timer saling bergantung (status + QR), tanpa uji otomatis; `refetchInterval` yang salah akan menghantam instance open-wa sekolah |
 
 Yang sudah ada:
 

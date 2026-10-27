@@ -16,7 +16,7 @@ test.describe('rute', () => {
     await page.goto('/?view=wali&tab=tagihan');
 
     await expect(page).toHaveURL(/\/wali\?tab=tagihan$/);
-    await expect(page.getByRole('tab', { name: /Tagihan/i })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByRole('tab', { name: 'Tagihan', exact: true })).toHaveAttribute('aria-selected', 'true');
   });
 
   test('tombol Back kembali ke tab sebelumnya', async ({ page }) => {
