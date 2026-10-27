@@ -39,11 +39,20 @@
 | 4.2 | TanStack Query — 17 komponen selesai (pengecualian di §12) |
 
 
-**Angka akhir:** 405 test lulus (315 backend + 90 frontend) + 18 E2E,
-lint 0 error dan **0 warning**, build hijau, `npm audit` 0 vulnerabilities (root + frontend).
-Backend masih 3 moderate dari rantai `mammoth → argparse → sprintf-js`
-(advisory mencakup semua versi sprintf-js; kode terdampak adalah CLI argparse
-yang tidak dipakai saat mammoth sebagai library).
+**Angka akhir:** 405 test lulus (315 backend + 90 frontend) + 19 E2E,
+lint 0 error dan **0 warning**, build hijau.
+
+`npm audit`: root + frontend **0 vulnerability**; backend **0 high**
+(`body-parser` dan `multer` sudah dinaikkan lewat `npm audit fix`). Sisa **19
+moderate** berasal dari rantai `@sentry/node → @opentelemetry/*` dan
+`mammoth → argparse → sprintf-js` — keduanya hanya aktif bila fitur opsionalnya
+dipakai, dan menutupnya butuh bump mayor.
+
+**Catatan proses:** `npm test` bukan hanya tes backend — beberapa berkas di
+`scripts/` memindai sumber frontend (`adminview-stabilization`). Suite ini
+sempat merah delapan commit karena setelah refactor frontend saya hanya
+menjalankan E2E + tes frontend. Aturannya sekarang: **setiap perubahan frontend
+tetap diakhiri `npm test`.**
 
 ---
 

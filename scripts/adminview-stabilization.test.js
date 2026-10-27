@@ -29,24 +29,22 @@ test('monthly billing preview does not hardcode a fallback period', () => {
 test('admin all-branch Wali and Billing tabs load without selected cabang', () => {
   // Inti yang dijaga: saat admin memilih "Semua Cabang" (m.cabangId kosong),
   // kedua tab tetap memuat data. Dulu keduanya berhenti karena effect dijaga
-  // `if (m.cabangId)`. Sekarang load dibungkus useCallback, jadi yang diperiksa
-  // adalah sifatnya, bukan bentuk tulisannya:
-  //   - ada effect yang memanggil load(), dan load-lah yang bergantung pada
-  //     cabang terpilih;
-  //   - tidak ada penjaga "berhenti bila cabang kosong" di kedua berkas.
+  // `if (m.cabangId)`. Daftarnya kini lewat React Query, jadi yang diperiksa
+  // adalah sifatnya — bukan bentuk tulisan `load()`:
+  //   - kunci query memuat m.cabangId (berpindah cabang = memuat ulang);
+  //   - tidak ada `enabled` yang mensyaratkan cabang terisi (kalau ada,
+  //     "Semua Cabang" berhenti memuat — regresi yang aslinya dijaga).
   for (const [nama, berkas] of [
     ['WaliTab', 'WaliTab.jsx'],
     ['BillingTab', 'BillingTab.jsx']
   ]) {
     const sumber = readFileSync(`${adminDir}/${berkas}`, 'utf8');
-    const badan = /const\s+load\s*=\s*useCallback\([\s\S]*?\n {2}\}, \[[^\]]*\]\);/.exec(sumber);
-    assert.ok(badan, `${nama}: load harus dibungkus useCallback`);
-    assert.match(badan[0], /\[[^\]]*m\.cabangId[^\]]*\]\);$/, `${nama}: load harus ikut cabang terpilih`);
-    assert.doesNotMatch(badan[0], /if\s*\(\s*!m\.cabangId\s*\)\s*return/, `${nama}: load berhenti saat cabang kosong`);
-    assert.match(
+    assert.match(sumber, /useQuery\(/, `${nama}: daftar harus lewat useQuery`);
+    assert.match(sumber, /queryKey:\s*\[[^\]]*m\.cabangId[^\]]*\]/, `${nama}: kunci query harus ikut cabang`);
+    assert.doesNotMatch(
       sumber,
-      /useEffect\(\(\)\s*=>\s*\{[\s\S]*?load\(\)[\s\S]*?\},\s*\[[^\]]*load[^\]]*\]\)/,
-      `${nama}: effect harus memanggil load()`
+      /enabled:\s*!{1,2}\s*m\.cabangId\b/,
+      `${nama}: jangan berhenti saat cabang belum dipilih`
     );
   }
 });
