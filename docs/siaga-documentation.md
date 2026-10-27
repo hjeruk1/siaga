@@ -1525,6 +1525,16 @@ Sudah pindah:
 - Komponen pendukung: **KegiatanMingguanTab** (`['modul-ajar', cabang, tanggal]`),
   **SiswaDetailPanel** (`['tagihan-siswa', id]`, `['rombel', cabang]`),
   **Editor** (`['daily-edits', id]`).
+- Portal wali: **WaliView** — `['wali-anak']`, `['wali-izin', anak]`,
+  `['wali-rekap', anak, bulan]`.
+
+**Portal wali: tagihan sengaja tetap imperatif.** `loadBilling` bukan daftar
+biasa — ia PIN-gated: jawaban `PIN_REQUIRED` harus membuka dialog PIN, bukan
+menampilkan toast merah. Kalau dipindah ke query, penangan error global akan
+memunculkan toast yang justru menakutkan wali. Bila nanti ingin dipindah,
+mekanismenya: `meta: { diam: true }` pada query dan penangan global melewatinya.
+Hal yang sama berlaku untuk riwayat catatan (paginasi 30 per klik) — itu
+`useInfiniteQuery`, bukan `useQuery`.
 
 **Sengaja belum dipindah** — bukan karena terlewat: `ConfigTab`,
 `RetensiCard`, dan `PengingatTagihanCard` memuat data yang **disunting di

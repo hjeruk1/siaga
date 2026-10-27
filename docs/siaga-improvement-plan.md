@@ -36,7 +36,7 @@
 | Item | Catatan |
 |------|---------|
 | 5.1 lanjutan | `BillingTab.jsx` (2698 baris) — seluruhnya satu komponen 2611 baris, tidak ada fungsi murni untuk diekstrak. Butuh refactor bertahap, bukan pemindahan mekanis. |
-| 4.2 | TanStack Query — 15 komponen selesai; sisa WaliView, WaSettings, kartu form |
+| 4.2 | TanStack Query — 16 komponen selesai; sisa WaSettings + kartu form |
 
 
 **Angka akhir:** 405 test lulus (315 backend + 90 frontend) + 18 E2E,

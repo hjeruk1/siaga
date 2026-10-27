@@ -2,6 +2,7 @@
 // dan sheet kabar. Semua data tetap berasal dari API utama SIAGA; scope wali
 // (anak yang terhubung) dijaga oleh backend.
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { api } from '../api';
 import { CalendarCheck2, CalendarDays, Camera, FileText, Receipt } from 'lucide-react';
 import HeroAnak from './wali/HeroAnak.jsx';
@@ -39,7 +40,6 @@ const TABS = [
 ];
 
 export default function WaliView({ user, toast }) {
-  const [siswa, setSiswa] = useState([]);
   const [selected, setSelected] = useState(null);
   const [history, setHistory] = useState([]);
   const [historyLimit, setHistoryLimit] = useState(30);
@@ -57,8 +57,6 @@ export default function WaliView({ user, toast }) {
   });
   const [billing, setBilling] = useState(null);
   // Izin/sakit: pengajuan milik anak yang sedang dipilih.
-  const [daftarIzin, setDaftarIzin] = useState([]);
-  const [loadingIzin, setLoadingIzin] = useState(false);
   // Apakah wali memasang PIN. Dipakai untuk TIDAK menarik data tagihan saat
   // aplikasi dibuka: kalau di-prefetch, dialog PIN langsung muncul di halaman
   // depan hanya karena orang tua membuka catatan harian anak. Data keuangan
@@ -71,35 +69,46 @@ export default function WaliView({ user, toast }) {
   // memasang PIN). Aksi asli dicoba lagi setelah PIN benar.
   const [pinDibutuhkan, setPinDibutuhkan] = useState(false);
   const [loadingBilling, setLoadingBilling] = useState(false);
-  const [rekap, setRekap] = useState(null);
   const [bulan, setBulan] = useState(bulanIni());
-  const [loadingRekap, setLoadingRekap] = useState(false);
-  const [memuat, setMemuat] = useState(true);
-  const [galat, setGalat] = useState(null);
   const [kabarOpen, setKabarOpen] = useState(false);
 
   const sapaan = useMemo(() => sapaanSekarang(), []);
 
-  async function loadChildren() {
-    try {
-      const s = await api.waliChildren();
-      setSiswa(s || []);
-      if (!selected && s?.length) setSelected(s[0]);
-    } catch (e) {
-      setGalat(e.message);
-      toast?.('err', e.message);
-    } finally {
-      setMemuat(false);
-    }
-  }
+  // Tiga daftar portal wali jadi tiga kunci cache. Izin per anak, rekap per
+  // anak+bulan — jadi berpindah anak lalu kembali tidak memuat ulang apa pun.
+  const anakQ = useQuery({ queryKey: ['wali-anak'], queryFn: () => api.waliChildren() });
+  const siswa = useMemo(() => anakQ.data ?? [], [anakQ.data]);
+  const memuat = anakQ.isPending;
+  const galat = anakQ.error?.message ?? null;
 
   useEffect(() => {
-    loadChildren();
+    if (!selected && siswa.length) setSelected(siswa[0]);
+  }, [selected, siswa]);
+
+  const izinQ = useQuery({
+    queryKey: ['wali-izin', selected?.id],
+    queryFn: () => api.izinSaya(selected.id),
+    enabled: !!selected?.id
+  });
+  const daftarIzin = useMemo(() => izinQ.data?.rows ?? [], [izinQ.data]);
+  const loadingIzin = izinQ.isPending;
+
+  const rekapQ = useQuery({
+    queryKey: ['wali-rekap', selected?.id, bulan],
+    queryFn: () => {
+      const [tahun, bln] = String(bulan).split('-');
+      return api.rekapBulanan({ tahun, bulan: bln });
+    },
+    enabled: !!selected?.id
+  });
+  const rekap = rekapQ.data ?? null;
+  const loadingRekap = rekapQ.isFetching;
+
+  useEffect(() => {
     api
       .notifikasi()
       .then((n) => setNotif(n || []))
       .catch(() => {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadBilling = useCallback(
@@ -120,38 +129,6 @@ export default function WaliView({ user, toast }) {
         toast?.('err', e.message);
       } finally {
         setLoadingBilling(false);
-      }
-    },
-    [toast]
-  );
-
-  const loadIzin = useCallback(
-    async (siswaId) => {
-      if (!siswaId) return;
-      setLoadingIzin(true);
-      try {
-        const d = await api.izinSaya(siswaId);
-        setDaftarIzin(d?.rows || []);
-      } catch (e) {
-        toast?.('err', e.message);
-      } finally {
-        setLoadingIzin(false);
-      }
-    },
-    [toast]
-  );
-
-  const loadRekap = useCallback(
-    async (b) => {
-      const [y, m] = String(b).split('-');
-      setLoadingRekap(true);
-      try {
-        const data = await api.rekapBulanan({ tahun: y, bulan: m });
-        setRekap(data);
-      } catch (e) {
-        toast?.('err', e.message);
-      } finally {
-        setLoadingRekap(false);
       }
     },
     [toast]
@@ -178,8 +155,6 @@ export default function WaliView({ user, toast }) {
       })
       .catch((e) => toast?.('err', e.message));
     if (waliPunyaPin === false) loadBilling(selected.id);
-    loadRekap(bulan);
-    loadIzin(selected.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected?.id, waliPunyaPin]);
 
@@ -213,10 +188,6 @@ export default function WaliView({ user, toast }) {
   }
 
   const bisaMuatLagi = !historyHabis && historyLimit < 120 && history.length >= historyLimit;
-
-  useEffect(() => {
-    loadRekap(bulan);
-  }, [bulan, loadRekap]);
 
   async function open(id) {
     try {
@@ -374,7 +345,7 @@ export default function WaliView({ user, toast }) {
               catatanHariIni={catatanHariIni}
               memuat={loadingRekap && !rekap}
               galat={null}
-              onMuatUlang={() => loadRekap(bulan)}
+              onMuatUlang={() => rekapQ.refetch()}
               komentar={comment}
               setKomentar={setComment}
               onKirimKomentar={send}
@@ -414,7 +385,7 @@ export default function WaliView({ user, toast }) {
             onGantiBulan={setBulan}
             memuat={loadingRekap}
             galat={null}
-            onMuatUlang={() => loadRekap(bulan)}
+            onMuatUlang={() => rekapQ.refetch()}
             onBukaLaporan={() => setActiveTab('laporan')}
           />
         ) : null}
@@ -424,7 +395,7 @@ export default function WaliView({ user, toast }) {
             siswa={selected}
             daftar={daftarIzin}
             memuat={loadingIzin}
-            onMuatUlang={() => selected && loadIzin(selected.id)}
+            onMuatUlang={() => izinQ.refetch()}
             toast={toast}
           />
         ) : null}
