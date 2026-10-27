@@ -38,9 +38,9 @@
 | 4.2 | TanStack Query — 17 komponen selesai (pengecualian di §12) |
 
 
-**Angka akhir:** 405 test lulus (315 backend + 90 frontend) + **53 E2E**
-(20 alur asap/kritikal + 33 uji deep-load), lint 0 error dan **0 warning**,
-build hijau.
+**Angka akhir:** 420 test lulus (315 backend + 90 frontend + 15 alur workflow)
++ **53 E2E** (20 alur asap/kritikal + 33 uji deep-load), lint 0 error dan
+**0 warning**, build hijau.
 
 `npm audit`: root + frontend **0 vulnerability**; backend **0 high**
 (`body-parser` dan `multer` sudah dinaikkan lewat `npm audit fix`). Sisa **19
@@ -164,9 +164,10 @@ worker kini per-build (sebelumnya cache build lama menumpuk selamanya).
 `dev.mjs` dan `build.mjs` sama-sama memakai `configFile: false` lalu mendeklarasi plugin sendiri.
 Tiga sumber konfigurasi, satu di antaranya mati.
 
-**Catatan 1.3:** ESLint dipasang **non-blocking** (aturan berat = `warn`). Belum dijadikan gate CI
-sampai kode bersih. Reformat Prettier massal dilakukan sebagai commit terpisah agar tidak
-mengaburkan diff logika.
+**Catatan 1.3:** ESLint dipasang **non-blocking** (aturan berat = `warn`) sampai kode bersih.
+Sejak 57 warning dibersihkan, `npm run lint` dan `npm run format:check` sudah jadi langkah
+**blocking** di `.github/workflows/ci.yml` — 0 error, 0 warning. Reformat Prettier massal
+dilakukan sebagai commit terpisah agar tidak mengaburkan diff logika.
 
 ---
 
@@ -252,7 +253,7 @@ sudah ada di `AdminView.jsx` (shell kecil + lazy-load tab) — tinggal diterapka
 
 Sebuah fase dianggap selesai bila:
 
-- [x] `npm run test:all` lulus (128 test, tidak flaky)
+- [x] `npm run test:all` lulus (420 test, tidak flaky)
 - [x] `npm run build --prefix frontend` hijau
 - [x] `npm run lint` 0 error
 - [x] `npm run format:check` bersih
