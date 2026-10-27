@@ -1522,6 +1522,9 @@ Sudah pindah:
 - Panel bersama (dipakai admin, kepsek, guru): **IzinPanel**,
   **PengumumanPanel**, **RekapAbsensiBulanan**.
 - Kartu admin: **PenyimpananCard**.
+- Komponen pendukung: **KegiatanMingguanTab** (`['modul-ajar', cabang, tanggal]`),
+  **SiswaDetailPanel** (`['tagihan-siswa', id]`, `['rombel', cabang]`),
+  **Editor** (`['daily-edits', id]`).
 
 **Sengaja belum dipindah** — bukan karena terlewat: `ConfigTab`,
 `RetensiCard`, dan `PengingatTagihanCard` memuat data yang **disunting di
@@ -1585,6 +1588,10 @@ Aturan yang dipakai:
 - **Kunci `siswa` dipakai bersama.** BillingTab butuh daftar siswa untuk
   pemilih pembayaran; endpoint-nya sama dengan tab Siswa, jadi keduanya memakai
   `['siswa', cabangId]` dan tidak memuat ulang daftar yang sama.
+- **Tiga keadaan, bukan dua.** `SiswaDetailPanel` dan `Editor` membedakan
+  `null` (masih memuat) dari `[]` (kosong). Menyederhanakannya jadi `[]` membuat
+  panel menampilkan "belum ada tagihan/riwayat" sekejap sebelum data tiba.
+  Polanya: `isPending ? null : (data ?? [])`.
 - **Urutan deklarasi berubah saat state jadi turunan.** Nilai yang dulu
   `useState` di atas komponen kini `const` turunan query; kode yang membaca
   nilai itu lebih awal (mis. `ref.current = list` di baris atas) akan melempar

@@ -1,6 +1,7 @@
 // Panel detail siswa: data, QR penjemput, dan aksi terkait.
 // Dipisah dari SiswaTab.jsx (sebelumnya 840 baris menumpuk dalam satu file).
 import { useEffect, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import QRCode from 'react-qr-code';
 import { api } from '../../../api';
 import { ActionButton, IconButton, LogoMark, Modal, CustomSelect, CustomDatePicker } from '../../../components/Shared';
@@ -40,13 +41,11 @@ export function SiswaDetailPanel({ user, m, detail, setDetail, toast, refresh, c
   const [move, setMove] = useState(initialMove);
   const [moveOpen, setMoveOpen] = useState(false);
   const [moveConfirmOpen, setMoveConfirmOpen] = useState(false);
-  const [targetRombel, setTargetRombel] = useState(m.rombel);
   const [pickupForm, setPickupForm] = useState(emptyPickup);
   const [pickupOpen, setPickupOpen] = useState(false);
   const [qrPreview, setQrPreview] = useState(null);
   const [qrReissueConfirm, setQrReissueConfirm] = useState(null);
   const [nfcConfirmOpen, setNfcConfirmOpen] = useState(false);
-  const [tagihanSiswa, setTagihanSiswa] = useState(null);
   const [showNfc, setShowNfc] = useState(false);
 
   // Photo states for Edit Mode
@@ -64,19 +63,24 @@ export function SiswaDetailPanel({ user, m, detail, setDetail, toast, refresh, c
     };
   }, [selectedFotoUrl]);
 
-  useEffect(() => {
-    if (move.cabang_id)
-      api
-        .rombel(move.cabang_id)
-        .then(setTargetRombel)
-        .catch(() => setTargetRombel(rombelRef.current));
-  }, [move.cabang_id]);
-  useEffect(() => {
-    api
-      .tagihan({ siswa_id: detail.id })
-      .then(setTagihanSiswa)
-      .catch(() => setTagihanSiswa([]));
-  }, [detail.id]);
+  // Kunci `rombel` dipakai bersama layar lain (rekap, rombel). Saat permintaan
+  // gagal, daftar cadangan dari useMaster dipakai — bukan array kosong.
+  const targetRombelQ = useQuery({
+    queryKey: ['rombel', move.cabang_id || ''],
+    queryFn: () => api.rombel(move.cabang_id),
+    enabled: !!move.cabang_id
+  });
+  const targetRombel = targetRombelQ.data ?? (move.cabang_id ? rombelRef.current : []);
+
+  const tagihanQ = useQuery({
+    queryKey: ['tagihan-siswa', detail.id],
+    queryFn: () => api.tagihan({ siswa_id: detail.id }),
+    enabled: !!detail.id
+  });
+  // Tiga keadaan dipakai tampilannya: null = masih memuat, [] = tidak ada
+  // tagihan, isi = daftar. Jangan disederhanakan jadi [] — panel akan
+  // menampilkan "belum ada tagihan" sekejap sebelum datanya tiba.
+  const tagihanSiswa = tagihanQ.isPending ? null : (tagihanQ.data ?? []);
   const moveRombel = targetRombel.filter(
     (r) =>
       (!move.jenjang_id || String(r.jenjang_id) === String(move.jenjang_id)) &&

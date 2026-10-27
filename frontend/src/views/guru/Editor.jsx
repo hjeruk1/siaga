@@ -1,6 +1,7 @@
 // Editor laporan harian guru. Dipisah dari GuruView.jsx (sebelumnya ~1130 baris
 // menumpuk dalam satu file bersama view induk).
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { api } from '../../api';
 import {
   ArrowLeft,
@@ -37,7 +38,6 @@ export function Editor({ row, detail, setDetail, onClose, onLanjut, user, toast 
   const [activityCustom, setActivityCustom] = useState('');
   const [domainCustom, setDomainCustom] = useState('');
   const [preview, setPreview] = useState(false);
-  const [edits, setEdits] = useState(null);
   const [mobileChecklistOpen, setMobileChecklistOpen] = useState(false);
   const activities = useMemo(() => (Array.isArray(detail.aktivitas) ? detail.aktivitas : []), [detail.aktivitas]);
   // Salinan terbaru `detail` untuk effect focus theme yang tidak boleh
@@ -58,14 +58,14 @@ export function Editor({ row, detail, setDetail, onClose, onLanjut, user, toast 
     { k: 'disiplin_tertib', l: 'Disiplin & Tertib' }
   ];
 
-  useEffect(() => {
-    if (detail.id)
-      api
-        .dailyEdits(detail.id)
-        .then(setEdits)
-        .catch(() => setEdits([]));
-    else setEdits(null);
-  }, [detail.id]);
+  const editsQ = useQuery({
+    queryKey: ['daily-edits', detail.id],
+    queryFn: () => api.dailyEdits(detail.id),
+    enabled: !!detail.id
+  });
+  // null = belum ada laporan (tidak ada riwayat untuk dimuat), [] = ada laporan
+  // tetapi belum pernah dikoreksi.
+  const edits = detail.id ? (editsQ.isPending ? null : (editsQ.data ?? [])) : null;
 
   useEffect(() => {
     let alive = true;
@@ -212,11 +212,7 @@ export function Editor({ row, detail, setDetail, onClose, onLanjut, user, toast 
       } else {
         setDetail((prev) => ({ ...prev, [field]: value }));
       }
-      if (detail.id)
-        api
-          .dailyEdits(detail.id)
-          .then(setEdits)
-          .catch(() => {});
+      if (detail.id) editsQ.refetch();
     } catch (e) {
       toast('err', e.message);
     } finally {

@@ -1,4 +1,5 @@
-import { useCallback, useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { api } from '../api';
 import { ActionButton, IconButton, CustomSelect, CustomDatePicker, Modal } from '../components/Shared';
 import { todayWIB } from '../utils/date';
@@ -124,7 +125,6 @@ export default function KegiatanMingguanTab({ user, toast }) {
     parsed_metadata: null
   };
 
-  const [rows, setRows] = useState([]);
   const [form, setForm] = useState(empty);
   const [openForm, setOpenForm] = useState(false);
   const [editForm, setEditForm] = useState(null);
@@ -312,21 +312,19 @@ export default function KegiatanMingguanTab({ user, toast }) {
     );
   };
 
+  const { data: dataModul, refetch } = useQuery({
+    queryKey: ['modul-ajar', m.cabangId || '', tanggal],
+    queryFn: () => api.modulAjar({ cabang_id: m.cabangId || '', tanggal }),
+    // Peran non-admin baru bisa memuat setelah cabangnya diketahui.
+    enabled: user.role === 'admin' || !!m.cabangId
+  });
+  const rows = useMemo(() => dataModul ?? [], [dataModul]);
+
   const filteredRows = rows.filter(
     (r) =>
       (!filterJenjang || String(r.jenjang_id) === String(filterJenjang)) &&
       (!filterRombel || String(r.rombel_id) === String(filterRombel))
   );
-
-  const load = useCallback(async () => {
-    if (user.role !== 'admin' && !m.cabangId) return;
-    const data = await api.modulAjar({ cabang_id: m.cabangId || '', tanggal });
-    setRows(data);
-  }, [user.role, m.cabangId, tanggal]);
-
-  useEffect(() => {
-    load().catch((e) => toast('err', e.message));
-  }, [load, toast]);
 
   useEffect(() => {
     setFilterRombel('');
@@ -415,7 +413,7 @@ export default function KegiatanMingguanTab({ user, toast }) {
         reset();
         setOpenForm(false);
       }
-      load();
+      refetch();
     } catch (e) {
       toast('err', e.message);
     } finally {
@@ -494,7 +492,12 @@ export default function KegiatanMingguanTab({ user, toast }) {
                 </option>
               ))}
           </CustomSelect>
-          <ActionButton icon={RefreshCw} onClick={load} variant="secondary" className="w-full col-span-2 sm:col-span-1">
+          <ActionButton
+            icon={RefreshCw}
+            onClick={() => refetch()}
+            variant="secondary"
+            className="w-full col-span-2 sm:col-span-1"
+          >
             Refresh
           </ActionButton>
         </div>
