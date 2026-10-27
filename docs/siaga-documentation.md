@@ -730,6 +730,34 @@ Catatan: penerima dihitung dari wali aktif yang punya anak aktif (`penerima()`),
 
 ## 9. Billing dan Keuangan
 
+### 9.0 Peta Modul Backend
+
+Route billing dulu satu berkas 2.389 baris (`backend/routes/billing.js`) yang
+memuat tarif sampai tata letak kuitansi PDF. Sekarang berkas itu tinggal 35
+baris berisi urutan pemasangan, dan isinya dipecah per kelompok:
+
+| Berkas | Isi |
+|---|---|
+| `billing/helpers.js` | tanda tangan tautan publik, jendela periode, akses siswa, pembukuan tagihan/kredit |
+| `billing/tarif.js` | tarif per jenjang + diskon per siswa (termasuk aturan diskon kembar) |
+| `billing/generate.js` | pratinjau dan simpan tagihan bulanan/kegiatan |
+| `billing/tagihan.js` | daftar, saldo kredit, koreksi, void |
+| `billing/pembayaran.js` | pratinjau alokasi FIFO, catat, verifikasi, tolak, void, sunting alokasi |
+| `billing/laporan.js` | ringkasan keuangan |
+| `billing/invoice.js` | penggabungan tagihan |
+| `billing/pdf.js` | invoice dan kuitansi (pdfkit), jalur login + tautan publik bertanda tangan |
+| `billing/wali.js` | konfirmasi pembayaran wali + rincian tagihan anak |
+| `billing/export.js` | ekspor CSV untuk pembukuan |
+
+Pemecahan ini tidak mengubah satu pun path: `router.use('/', …)` memasang
+setiap modul di akar yang sama, jadi `app.use('/api/billing', …)` di
+`server.js` tidak perlu disentuh. Yang berubah hanya siapa yang membaca apa —
+mengubah alokasi pembayaran tidak lagi menuntut membaca tata letak PDF.
+
+Aturan saat menambah route baru: taruh di modul yang sesuai kelompoknya, dan
+kalau butuh query yang sudah ada (mis. `paidAmount`, `creditBalance`), ambil
+dari `helpers.js` — jangan menyalinnya.
+
 ### 9.1 Scope Biaya
 
 Fase awal mencakup:

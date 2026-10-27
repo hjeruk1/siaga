@@ -24,6 +24,7 @@
 | 3.3 | Readiness check | Selesai |
 | 4.1 | React 18 → 19 + pemisahan vendor chunk | Selesai |
 | 5.1 | Pecah GuruView (2895→1341), SiswaTab (1943→1009), BillingTab (2408→1219) | Selesai |
+| 5.1b | Pecah `backend/routes/billing.js` (2.389 → 35 baris, 9 modul) | Selesai |
 | 5.2 | Rename `admin/shared.jsx` → `AdminShared.jsx` | Selesai |
 | 6.1 | Test unit frontend (37 test) | Selesai |
 | 6.2 | E2E alur kritikal (wajib ganti password, bayar→FIFO, QR penjemput) | Selesai |
@@ -293,6 +294,33 @@ dikendalikan induk (`tarifForm`, `diskonForm`, `payForm`, flag dirty), jadi
 memindahkannya berarti memindahkan state juga — keuntungannya kecil, risikonya
 justru besar. Ukuran berkas 1.219 baris sudah di bawah ambang yang menyulitkan
 navigasi.
+
+### 5.1b — `backend/routes/billing.js` (SELESAI)
+
+**2.389 → 35 baris.** Sisi server dari masalah yang sama: satu berkas memuat
+tarif, diskon, generate tagihan, tagihan, pembayaran, laporan, invoice, tata
+letak PDF, jalur wali, dan ekspor CSV. Sekarang isinya tinggal urutan
+pemasangan, dan sembilan modul di `backend/routes/billing/` memegang sisanya —
+peta lengkapnya di dokumentasi §9.0.
+
+Yang membuat pemecahan ini aman: `router.use('/', …)` memasang tiap modul di
+akar yang sama, jadi tidak satu pun path berubah dan `server.js` tidak
+disentuh. Diverifikasi dengan membandingkan daftar `router.<verb>('path'`
+sebelum dan sesudah — **identik**, 32 route.
+
+Dua hal yang ditemukan saat mengerjakan:
+
+1. **`requireCabang` tertinggal.** Modul wali memakainya di route `/export`,
+   tetapi tidak mengimpornya. `node --check` lolos (sintaks benar), suite unit
+   lolos (route itu tidak tersentuh), dan baru **ESLint** yang menangkapnya —
+   `no-undef`. Ini alasan aturan lint sebagai gate CI tetap dipertahankan.
+2. **`/export` bukan milik wali.** Route ekspor CSV untuk admin ternyata
+   menumpang di bagian akhir berkas, setelah route wali. Ia dipindah ke
+   `billing/export.js` sendiri, bukan dibiarkan ikut ke `wali.js` hanya karena
+   posisinya berdekatan.
+
+Setelah pemecahan: 315 test backend, 90 test frontend, 53 E2E hijau; lint dan
+prettier bersih.
 
 ### 4.3 React Router
 
