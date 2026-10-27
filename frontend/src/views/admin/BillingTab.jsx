@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { api } from '../../api';
 import {
   ActionButton,
@@ -62,12 +63,7 @@ export default function BillingTab({ user, toast }) {
     const start = month >= 7 ? year : year - 1;
     return `${start}/${start + 1}`;
   })();
-  const [tarif, setTarif] = useState([]);
-  const [diskon, setDiskon] = useState([]);
-  const [tagihan, setTagihan] = useState([]);
-  const [pembayaran, setPembayaran] = useState([]);
-  const [invoices, setInvoices] = useState([]);
-  const [siswa, setSiswa] = useState([]);
+
   const [selectedBills, setSelectedBills] = useState([]);
   const [preview, setPreview] = useState(null);
   const [alokasiPreview, setAlokasiPreview] = useState(null);
@@ -77,6 +73,50 @@ export default function BillingTab({ user, toast }) {
 
   const [localCabangIdDiskon, setLocalCabangIdDiskon] = useState('');
   const [localCabangIdPayment, setLocalCabangIdPayment] = useState('');
+
+  const [filterTahunAjaran, setFilterTahunAjaran] = useState(currentSchoolYear);
+
+  // Lima sumber data billing dimuat bersama: semuanya digambar di layar yang
+  // sama dan saling bergantung (tagihan butuh tarif, pembayaran butuh tagihan).
+  // Siswa dipisah karena endpoint-nya sama dengan tab Siswa — kunci `siswa`
+  // dipakai bersama, jadi berpindah tab tidak memuat ulang daftar yang sama.
+  const billingQ = useQuery({
+    queryKey: ['billing', m.cabangId || '', filterTahunAjaran],
+    queryFn: async () => {
+      const [tarifData, diskonData, tagihanData, pembayaranData, invoicesData] = await Promise.all([
+        api.tarif({ cabang_id: m.cabangId, tahun_ajaran: filterTahunAjaran }),
+        api.diskon({ cabang_id: m.cabangId, tahun_ajaran: filterTahunAjaran }),
+        api.tagihan({ cabang_id: m.cabangId }),
+        api.pembayaran({ cabang_id: m.cabangId }),
+        api.invoice({ cabang_id: m.cabangId })
+      ]);
+      return {
+        tarif: tarifData,
+        diskon: diskonData,
+        tagihan: tagihanData,
+        pembayaran: pembayaranData,
+        invoices: invoicesData
+      };
+    }
+  });
+  const siswaQ = useQuery({
+    queryKey: ['siswa', m.cabangId || ''],
+    queryFn: () => api.siswa({ cabang_id: m.cabangId, status: 'semua' })
+  });
+
+  const tarif = useMemo(() => billingQ.data?.tarif ?? [], [billingQ.data]);
+  const diskon = useMemo(() => billingQ.data?.diskon ?? [], [billingQ.data]);
+  const tagihan = useMemo(() => billingQ.data?.tagihan ?? [], [billingQ.data]);
+  const pembayaran = useMemo(() => billingQ.data?.pembayaran ?? [], [billingQ.data]);
+  const invoices = useMemo(() => billingQ.data?.invoices ?? [], [billingQ.data]);
+  const siswa = useMemo(() => siswaQ.data ?? [], [siswaQ.data]);
+
+  // Setiap mutasi memuat ulang kedua kunci — satu nama supaya pemanggil tidak
+  // perlu tahu bahwa daftar siswa punya kunci sendiri.
+  const muatUlang = useCallback(() => {
+    billingQ.refetch();
+    siswaQ.refetch();
+  }, [billingQ, siswaQ]);
 
   const filteredSiswaForPayment = useMemo(() => {
     if (!localCabangIdPayment) return siswa;
@@ -111,7 +151,6 @@ export default function BillingTab({ user, toast }) {
   const [editingDiskon, setEditingDiskon] = useState(null);
 
   // Filter state
-  const [filterTahunAjaran, setFilterTahunAjaran] = useState(currentSchoolYear);
   const [filterPeriode, setFilterPeriode] = useState('');
   const [billingSubTab, setBillingSubTab] = useState('ringkasan');
   const [showGenerate, setShowGenerate] = useState(false);
@@ -273,38 +312,6 @@ export default function BillingTab({ user, toast }) {
   const selectedPaymentStudent = siswa.find((s) => String(s.id) === String(payForm.siswa_id));
   const paymentCabangId = m.cabangId || selectedPaymentStudent?.cabang_id || '';
 
-  const load = useCallback(async () => {
-    try {
-      const [tarifData, diskonData, tagihanData, pembayaranData, invoicesData, siswaData] = await Promise.all([
-        api.tarif({ cabang_id: m.cabangId, tahun_ajaran: filterTahunAjaran }),
-        api.diskon({ cabang_id: m.cabangId, tahun_ajaran: filterTahunAjaran }),
-        api.tagihan({ cabang_id: m.cabangId }),
-        api.pembayaran({ cabang_id: m.cabangId }),
-        api.invoice({ cabang_id: m.cabangId }),
-        api.siswa({ cabang_id: m.cabangId, status: 'semua' })
-      ]);
-
-      setTarif(tarifData);
-      setDiskon(diskonData);
-      setTagihan(tagihanData);
-      setPembayaran(pembayaranData);
-      setInvoices(invoicesData);
-      setSiswa(siswaData);
-    } catch (e) {
-      setTarif([]);
-      setDiskon([]);
-      setTagihan([]);
-      setPembayaran([]);
-      setInvoices([]);
-      setSiswa([]);
-      toast('err', e.message);
-    }
-  }, [m.cabangId, filterTahunAjaran, toast]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
   // Debounced auto-fetch for payment allocation preview
   useEffect(() => {
     if (showPaymentModal && paymentCabangId && payForm.siswa_id && payForm.nominal && Number(payForm.nominal) > 0) {
@@ -347,7 +354,7 @@ export default function BillingTab({ user, toast }) {
       });
       toast('ok', 'Tarif tersimpan');
       closeTarifModal();
-      load();
+      muatUlang();
     } catch (e) {
       toast('err', e.message);
     } finally {
@@ -371,7 +378,7 @@ export default function BillingTab({ user, toast }) {
       });
       toast('ok', 'Tarif diperbarui');
       setEditingTarif(null);
-      load();
+      muatUlang();
     } catch (e) {
       toast('err', e.message);
     } finally {
@@ -404,7 +411,7 @@ export default function BillingTab({ user, toast }) {
       });
       toast('ok', 'Diskon tersimpan');
       closeDiskonModal();
-      load();
+      muatUlang();
     } catch (e) {
       toast('err', e.message);
     } finally {
@@ -429,7 +436,7 @@ export default function BillingTab({ user, toast }) {
       });
       toast('ok', 'Diskon diperbarui');
       setEditingDiskon(null);
-      load();
+      muatUlang();
     } catch (e) {
       toast('err', e.message);
     } finally {
@@ -478,7 +485,7 @@ export default function BillingTab({ user, toast }) {
         toast('ok', r.created_count + ' tagihan kegiatan dibuat');
       }
       setPreview(null);
-      load();
+      muatUlang();
     } catch (e) {
       toast('err', e.message);
     }
@@ -510,7 +517,7 @@ export default function BillingTab({ user, toast }) {
       });
       toast('ok', 'Pembayaran: ' + (r.receipt_no || r.status));
       closePaymentModal();
-      load();
+      muatUlang();
     } catch (e) {
       toast('err', e.message);
     } finally {
@@ -543,7 +550,7 @@ export default function BillingTab({ user, toast }) {
       await api.updateAlokasi(alokasiEdit.payment.id, { alokasi });
       toast('ok', 'Alokasi diperbarui');
       setAlokasiEdit(null);
-      load();
+      muatUlang();
     } catch (e) {
       toast('err', e.message);
     }
@@ -560,7 +567,7 @@ export default function BillingTab({ user, toast }) {
         try {
           await api.correctTagihan(t.id, { nominal_final: Number(v.nominal), reason: v.reason });
           toast('ok', 'Tagihan dikoreksi');
-          load();
+          muatUlang();
         } catch (e) {
           toast('err', e.message);
         }
@@ -577,7 +584,7 @@ export default function BillingTab({ user, toast }) {
         try {
           await api.voidTagihan(t.id, v.reason);
           toast('ok', 'Tagihan void');
-          load();
+          muatUlang();
         } catch (e) {
           toast('err', e.message);
         }
@@ -590,7 +597,7 @@ export default function BillingTab({ user, toast }) {
     try {
       const r = await api.verifyPembayaran(p.id);
       toast('ok', 'Terverifikasi: ' + r.receipt_no);
-      load();
+      muatUlang();
     } catch (e) {
       toast('err', e.message);
     }
@@ -604,7 +611,7 @@ export default function BillingTab({ user, toast }) {
         try {
           await api.rejectPembayaran(p.id, v.reason);
           toast('ok', 'Pembayaran ditolak');
-          load();
+          muatUlang();
         } catch (e) {
           toast('err', e.message);
         }
@@ -621,7 +628,7 @@ export default function BillingTab({ user, toast }) {
         try {
           await api.voidPembayaran(p.id, v.reason);
           toast('ok', 'Pembayaran void');
-          load();
+          muatUlang();
         } catch (e) {
           toast('err', e.message);
         }
@@ -635,7 +642,7 @@ export default function BillingTab({ user, toast }) {
       const r = await api.createInvoice(selectedBills);
       toast('ok', 'Invoice dibuat: ' + r.invoice_no);
       setSelectedBills([]);
-      load();
+      muatUlang();
     } catch (e) {
       toast('err', e.message);
     }

@@ -36,7 +36,7 @@
 | Item | Catatan |
 |------|---------|
 | 5.1 lanjutan | `BillingTab.jsx` (2698 baris) — seluruhnya satu komponen 2611 baris, tidak ada fungsi murni untuk diekstrak. Butuh refactor bertahap, bukan pemindahan mekanis. |
-| 4.2 | TanStack Query — 10 view selesai; ~24 berkas view belum |
+| 4.2 | TanStack Query — 11 view selesai; ~23 berkas view belum |
 
 
 **Angka akhir:** 405 test lulus (315 backend + 90 frontend) + 18 E2E,
@@ -309,13 +309,14 @@ Yang sudah ada:
   lokal dilaporkan ke satu handler yang didaftarkan `App.jsx` → `toast`.
   Klien sengaja singleton di tingkat modul karena provider harus membungkus
   App (termasuk layar login), sedangkan `toast` hidup di dalam App.
-- Sudah pindah (10): **LaporanTab**, **AuditTab**, **KalenderTab**
+- Sudah pindah (11): **LaporanTab**, **AuditTab**, **KalenderTab**
   (tiga bentuk berbeda — daftar berfilter + detail, daftar sederhana, daftar +
   state tampilan turunan), lalu **CabangTab**, **WaliTab**, **StaffTab**,
   **SiswaTab**, **RombelTab**, dan **KepsekView** (semua tabnya, termasuk
   monitoring yang disegarkan SSE lewat `invalidateQueries`), dan **GuruView**
   (daily record + absensi; antrean offline kini memberi tahu cache lewat
-  `onTersinkron`).
+  `onTersinkron`), dan **BillingTab** (lima sumber billing; daftar siswa
+  berbagi kunci dengan tab Siswa).
 - **ConfigTab sengaja belum** — datanya disunting di tempat (`cfg`, `org`)
   sebelum disimpan; query + salinan lokal hanya menambah upacara.
 

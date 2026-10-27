@@ -1510,12 +1510,13 @@ Uji: `e2e/rute.spec.js` (tautan lama, tombol Back, refresh di path dalam).
 
 ## 17b. Lapisan Data Frontend (React Query)
 
-Status: **sepuluh view** sudah memakai React Query; sisanya masih pola manual
+Status: **sebelas view** sudah memakai React Query; sisanya masih pola manual
 (`useState` + `load` + `useEffect`).
 
 Sudah pindah: LaporanTab, AuditTab, KalenderTab, CabangTab, WaliTab, StaffTab,
-SiswaTab, RombelTab, **KepsekView** (seluruh tab dashboard kepala sekolah), dan
-**GuruView** (daftar daily record + daftar absensi).
+SiswaTab, RombelTab, **KepsekView** (seluruh tab dashboard kepala sekolah),
+**GuruView** (daftar daily record + daftar absensi), dan **BillingTab** (lima
+sumber billing + siswa).
 
 Infrastruktur:
 
@@ -1570,6 +1571,9 @@ Aturan yang dipakai:
   ke `absensiQ.refetch()`. Sebelum ini, guru yang check-in tanpa sinyal melihat
   status lama sampai ia melakukan hal lain — toast "terkirim" muncul, tetapi
   daftarnya tidak berubah.
+- **Kunci `siswa` dipakai bersama.** BillingTab butuh daftar siswa untuk
+  pemilih pembayaran; endpoint-nya sama dengan tab Siswa, jadi keduanya memakai
+  `['siswa', cabangId]` dan tidak memuat ulang daftar yang sama.
 - **Urutan deklarasi berubah saat state jadi turunan.** Nilai yang dulu
   `useState` di atas komponen kini `const` turunan query; kode yang membaca
   nilai itu lebih awal (mis. `ref.current = list` di baris atas) akan melempar
