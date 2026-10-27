@@ -35,7 +35,7 @@
 
 | Item | Catatan |
 |------|---------|
-| 5.1 lanjutan | `BillingTab.jsx` (2698 baris) — seluruhnya satu komponen 2611 baris, tidak ada fungsi murni untuk diekstrak. Butuh refactor bertahap, bukan pemindahan mekanis. |
+| 5.1 lanjutan | `BillingTab.jsx` — **berjalan bertahap**. 2.408 → 2.329 baris: `PreviewGenerateModal` sudah keluar. Sisa bagian terbesar: `renderTagihanTab` (444 baris), `renderPembayaranTab` (257), `renderTarifTab` (218), `renderInvoiceTab` (139), `renderRingkasanTab` (83), dan modal tarif/diskon/edit. Setiap bagian punya 8–20 dependensi state induk, jadi satu bagian per commit dengan verifikasi browser. |
 | 4.2 | TanStack Query — 17 komponen selesai (pengecualian di §12) |
 
 
